@@ -1,8 +1,9 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { Avatar } from '@/components/Components'
-import { fetchRepliesFromSheet, writeReply, saveNotes } from '@/lib/api-client'
+import { fetchRepliesFromSheet, writeReply, saveNotes, setIdVenta } from '@/lib/api-client'
 import { parseDate } from '@/lib/utils'
+import { CFG } from '@/lib/config'
 
 const IMGBB_KEY = '2307574d43689522feabd27cff3443df'
 const MAX_IMGS  = 10
@@ -169,6 +170,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const notasLoadedRef = useRef(null)
   const aiImgFileRef   = useRef(null)
 
+  // ── Crear pedido (botón que lee la conversación y crea el pedido en el CRM de IND) ──
+  const [pedidoLoading, setPedidoLoading] = useState(false)
+  const [pedidoRes,     setPedidoRes]     = useState(null)
+
   useEffect(() => {
     if (repliesLoaded) return
     fetchRepliesFromSheet().then(data => { setReplies(data || []); setRepliesLoaded(true) })
@@ -180,6 +185,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
       notasLoadedRef.current = activeConv.telefono
       setNotasInput(contactInfo?.notas || '')
       setNotasSaved(false)
+      setPedidoRes(null)
     }
   }, [activeConv, contactInfo])
 
@@ -235,6 +241,34 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     try { const u=await uploadToImgbb(f); if(u){ setAiImgUrl(u); setAiImgPrev(u) } }
     finally { setAiImgUploading(false) }
   }
+  const crearPedido = async () => {
+    if (pedidoLoading || !activeConv) return
+    // Armamos el transcript desde la conversación que el inbox ya tiene en memoria
+    const msgs = (activeConv.msgs || []).filter(m => String(m.mensaje || '').trim())
+    const transcript = msgs.map(m => `${m.direccion === 'SALIENTE' ? 'VENDEDOR' : 'CLIENTE'}: ${m.mensaje}`).join('\n')
+    if (!transcript) { setPedidoRes({ ok: false, error: 'La conversación está vacía' }); return }
+    setPedidoLoading(true); setPedidoRes(null)
+    try {
+      const r = await fetch(CFG.AGENT_CREAR_PEDIDO_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: activeConv.telefono, transcript }),
+      })
+      const res = await r.json()
+      setPedidoRes(res)
+      if (res?.ok && res.pedidoId) {
+        // Persiste el pedido en NOTAS y marca idVenta → queda en 💰 Ventas y no se pierde el link
+        const linea = `📦 Pedido ${res.pedidoId} · $${res.montoTotal}\n${res.url || ''}`.trim()
+        const base = String(notasInput || '')
+        const nueva = base.includes(res.pedidoId) ? base : (base.trim() ? `${base.trim()}\n${linea}` : linea)
+        setNotasInput(nueva)
+        saveNotes(activeConv.telefono, contactInfo?.nombre || activeConv.nombre, nueva).catch(() => {})
+        setIdVenta(activeConv.telefono, res.pedidoId).catch(() => {})
+      }
+    } catch {
+      setPedidoRes({ ok: false, error: 'No se pudo conectar con el agente IND' })
+    } finally { setPedidoLoading(false) }
+  }
+
   const handleSaveNotas = async () => {
     if(notasSaving) return; setNotasSaving(true)
     try { await saveNotes(activeConv.telefono, contactInfo?.nombre||activeConv.nombre, notasInput); setNotasSaved(true); setTimeout(()=>setNotasSaved(false),2500) }
@@ -276,6 +310,42 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
           {countdown&&windowOpen&&<span style={{ fontFamily:'monospace', fontSize:12, fontWeight:800, color:parseInt(countdown.split(':')[0])===0&&parseInt(countdown.split(':')[1])<30?'#f87171':C.cream }}>⏱ {countdown}</span>}
           {!windowOpen&&<span style={{ fontFamily:'monospace', fontSize:11, color:C.creamFaint }}>Expirada</span>}
         </div>
+      </div>
+
+      {/* ── CREAR PEDIDO ── */}
+      <div style={{ flexShrink:0, padding:'10px 12px', borderBottom:`1px solid ${C.border}` }}>
+        <button onClick={crearPedido} disabled={pedidoLoading}
+          style={{ ...btnBase, width:'100%', padding:'9px', background: pedidoLoading?C.surface2:'linear-gradient(135deg,#10b981,#059669)', border:'1px solid rgba(16,185,129,.4)', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, cursor: pedidoLoading?'default':'pointer', letterSpacing:'.03em' }}>
+          {pedidoLoading ? '⏳ Leyendo conversación y creando…' : '🧾 CREAR PEDIDO'}
+        </button>
+
+        {pedidoRes?.ok && (
+          <div style={{ marginTop:8, padding:'9px 10px', background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.3)', borderRadius:8 }}>
+            <div style={{ fontSize:12, fontWeight:800, color:'#10b981' }}>✅ Pedido creado: {pedidoRes.pedidoId}</div>
+            <div style={{ fontSize:11, color:C.creamDim, marginTop:2 }}>Total ${pedidoRes.montoTotal} · {pedidoRes.diasCalculado} días</div>
+            {pedidoRes.url && <a href={pedidoRes.url} target="_blank" rel="noreferrer" style={{ display:'inline-block', marginTop:6, padding:'5px 10px', background:'rgba(16,185,129,.15)', border:'1px solid rgba(16,185,129,.35)', color:'#10b981', borderRadius:6, fontSize:11, fontWeight:700, textDecoration:'none' }}>📄 Ver pedido</a>}
+          </div>
+        )}
+
+        {pedidoRes && !pedidoRes.ok && pedidoRes.faltan && (
+          <div style={{ marginTop:8, padding:'9px 10px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.3)', borderRadius:8 }}>
+            <div style={{ fontSize:11, fontWeight:800, color:'#f59e0b' }}>⚠️ Faltan datos: {pedidoRes.faltan.join(', ')}</div>
+            <textarea readOnly value={pedidoRes.sugerencia || ''} rows={3}
+              style={{ width:'100%', marginTop:6, ...inputBase, fontSize:11, resize:'vertical', whiteSpace:'pre-wrap' }} />
+            <div style={{ display:'flex', gap:5, marginTop:5 }}>
+              <button onClick={() => onSendText && onSendText(pedidoRes.sugerencia)} disabled={!windowOpen}
+                style={{ ...btnBase, flex:1, padding:'6px', background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.25)`, color:C.cream, borderRadius:6, fontSize:11, fontWeight:700 }}>📤 Enviar al cliente</button>
+              <button onClick={() => onSendText && onSendText(null, pedidoRes.sugerencia)}
+                style={{ ...btnBase, flex:1, padding:'6px', background:`rgba(244,241,236,.04)`, border:`1px solid ${C.border}`, color:C.creamDim, borderRadius:6, fontSize:11 }}>✏️ Editar</button>
+            </div>
+          </div>
+        )}
+
+        {pedidoRes && !pedidoRes.ok && !pedidoRes.faltan && (
+          <div style={{ marginTop:8, padding:'8px 10px', background:'rgba(248,113,113,.08)', border:'1px solid rgba(248,113,113,.3)', borderRadius:8, fontSize:11, color:'#f87171' }}>
+            ❌ {pedidoRes.error || 'No se pudo crear el pedido'}
+          </div>
+        )}
       </div>
 
       {/* SUGERENCIA IA — acordeón */}
@@ -405,6 +475,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
           📝 NOTAS
           {notasSaved&&<span style={{ fontSize:8, background:`rgba(244,241,236,.1)`, color:C.cream, borderRadius:10, padding:'1px 6px' }}>Guardado ✓</span>}
         </p>
+        {(() => { const u = (String(notasInput || '').match(/https?:\/\/\S+\/dashboard\/pedido\/\S+/) || [])[0]; return u ? (
+          <a href={u} target="_blank" rel="noreferrer" style={{ display:'inline-block', marginBottom:6, padding:'4px 9px', background:'rgba(16,185,129,.15)', border:'1px solid rgba(16,185,129,.35)', color:'#10b981', borderRadius:6, fontSize:11, fontWeight:700, textDecoration:'none' }}>📄 Ver pedido</a>
+        ) : null })()}
         <textarea value={notasInput} onChange={e=>{setNotasInput(e.target.value);setNotasSaved(false)}} placeholder="Ej: Falta que envíe la foto del pago..." rows={2}
           style={{ width:'100%', ...inputBase, resize:'vertical', fontSize:11, minHeight:46, whiteSpace:'pre-wrap' }}
           onFocus={e=>e.target.style.borderColor='#f59e0b'} onBlur={e=>e.target.style.borderColor=C.border} />

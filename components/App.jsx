@@ -114,24 +114,52 @@ export default function App() {
   const prevMsgLen = useRef(0)
   const [refreshKey, setRefreshKey] = useState(0)
   const localStatusRef = useRef({})
+  const pendingRef     = useRef({}) // mensajes optimistas por teléfono, hasta que Make los registre
 
   const load = useCallback(async () => {
     const [rows, ctList] = await Promise.all([fetchRows(), fetchContacts()])
-    setConvs(buildConvs(rows))
-    const ctMap = {}
-    ctList.forEach(c => { ctMap[c.telefono] = c })
-    const now = Date.now()
-    Object.entries(localStatusRef.current).forEach(([tel, override]) => {
-      if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], estado: override.estado }
-    })
-    setContacts(ctMap)
+
+    // rows === null → hubo ERROR (no "vacío"): conservar lo previo, no parpadear a blanco
+    if (Array.isArray(rows)) {
+      let next = buildConvs(rows)
+      // Re-inyectar mensajes optimistas que aún no están en la hoja
+      const now = Date.now()
+      const pend = pendingRef.current
+      Object.keys(pend).forEach(tel => {
+        const conv = next.find(c => c.telefono === tel)
+        pend[tel] = (pend[tel] || []).filter(pm => {
+          if (now - pm._pendingAt > 90000) return false // expira a los 90s
+          // dropear cuando ya aparece un SALIENTE real con el mismo texto
+          const yaEsta = conv?.msgs.some(m => m.direccion === 'SALIENTE' && !String(m.id).startsWith('tmp_') && String(m.mensaje).trim() === String(pm.mensaje).trim())
+          return !yaEsta
+        })
+        if (pend[tel].length && conv) {
+          next = next.map(c => c.telefono === tel
+            ? { ...c, msgs: [...c.msgs, ...pend[tel]], last: pend[tel][pend[tel].length - 1] }
+            : c)
+        }
+        if (!pend[tel].length) delete pend[tel]
+      })
+      setConvs(next)
+    }
+
+    if (Array.isArray(ctList)) {
+      const ctMap = {}
+      ctList.forEach(c => { ctMap[c.telefono] = c })
+      const now = Date.now()
+      Object.entries(localStatusRef.current).forEach(([tel, override]) => {
+        if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], estado: override.estado }
+      })
+      setContacts(ctMap)
+    }
+
     setLastSync(new Date())
     setLoading(false)
   }, [])
 
   useEffect(() => {
     load()
-    pollRef.current = setInterval(load, 4000)
+    pollRef.current = setInterval(load, 8000)
     return () => clearInterval(pollRef.current)
   }, [load])
 
@@ -176,20 +204,26 @@ export default function App() {
 
   const activeConv     = convs.find(c => c.telefono === active) || null
   const totalUnread    = convs.reduce((s, c) => s + c.unread, 0)
-  const hasVenta       = (tel) => { const c = contacts[tel] || {}; return String(c.idVenta || '').trim() !== '' || c.estado === 'venta' }
-  const getStatus      = (tel) => hasVenta(tel) ? 'venta' : (contacts[tel]?.estado || 'pendiente')
+  // VENTA desacoplada del estado de flujo:
+  // - getStatus = SOLO el estado real (pendiente/atendido/…), NO se fuerza 'venta'.
+  // - "Venta" = tiene un PEDIDO CREADO (idVenta, col H). La pestaña 💰 filtra por eso
+  //   y excluye archivados. Así un cliente con venta que vuelve a escribir aparece en
+  //   Pendiente Y en Ventas (conviven); al archivar, sale de Ventas.
+  const hasVenta      = (tel) => String(contacts[tel]?.idVenta || '').trim() !== ''
+  const getStatus     = (tel) => contacts[tel]?.estado || 'pendiente'
+  const esVentaActiva = (tel) => hasVenta(tel) && getStatus(tel) !== 'archivado'
 
   const searched = convs.filter(c => {
     const alias = contacts[c.telefono]?.alias || ''
     return c.nombre.toLowerCase().includes(search.toLowerCase()) || alias.toLowerCase().includes(search.toLowerCase()) || c.telefono.includes(search)
   })
-  const filtered = searched.filter(c => getStatus(c.telefono) === filter)
+  const filtered = searched.filter(c => filter === 'venta' ? esVentaActiva(c.telefono) : getStatus(c.telefono) === filter)
   const counts = {
     pendiente:    searched.filter(c => getStatus(c.telefono) === 'pendiente').length,
     atendido:     searched.filter(c => getStatus(c.telefono) === 'atendido').length,
     archivado:    searched.filter(c => getStatus(c.telefono) === 'archivado').length,
     ventaproceso: searched.filter(c => getStatus(c.telefono) === 'ventaproceso').length,
-    venta:        searched.filter(c => getStatus(c.telefono) === 'venta').length,
+    venta:        searched.filter(c => esVentaActiva(c.telefono)).length,
   }
 
   const lastIncoming = activeConv ? [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE') : null
@@ -220,8 +254,9 @@ export default function App() {
     const t = (text || input).trim()
     if (!t || !activeConv || sending) return
     setInput(''); setSending(true); setToast(null); autoScroll.current = true
-    const tmpMsg = { id: 'tmp_' + Date.now(), telefono: activeConv.telefono, nombre: activeConv.nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado' }
+    const tmpMsg = { id: 'tmp_' + Date.now(), telefono: activeConv.telefono, nombre: activeConv.nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
     setConvs(prev => prev.map(c => c.telefono === activeConv.telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+    pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
     // Dar tiempo a React para renderizar el tmpMsg antes de hacer el fetch
     await new Promise(r => setTimeout(r, 0))
     const [result] = await Promise.all([
@@ -341,8 +376,9 @@ export default function App() {
     const validBtns = btnTexts.map((t,i) => ({ id:`btn_${i+1}`, title:t.trim() })).filter(b=>b.title)
     if (validBtns.length === 0) return
     setSendingBtns(true)
-    const tmpMsg = { id:'tmp_'+Date.now(), telefono:activeConv.telefono, nombre:activeConv.nombre, mensaje:`${input.trim()}\n${validBtns.map(b=>`[ ${b.title} ]`).join('  ')}`, direccion:'SALIENTE', timestamp:new Date().toISOString(), estado:'enviado' }
+    const tmpMsg = { id:'tmp_'+Date.now(), telefono:activeConv.telefono, nombre:activeConv.nombre, mensaje:`${input.trim()}\n${validBtns.map(b=>`[ ${b.title} ]`).join('  ')}`, direccion:'SALIENTE', timestamp:new Date().toISOString(), estado:'enviado', _pendingAt: Date.now() }
     setConvs(prev=>prev.map(c=>c.telefono===activeConv.telefono?{...c,msgs:[...c.msgs,tmpMsg],last:tmpMsg}:c))
+    pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
     const result = await sendInteractiveButtons(activeConv.telefono, activeConv.nombre, input.trim(), validBtns)
     setSendingBtns(false); setToast(result); setTimeout(()=>setToast(null),4000)
     if (result.ok) { setInput(''); setBtnTexts(['','','']); setShowBtnPanel(false); await changeStatus(activeConv.telefono, currentStatus==='ventaproceso'?'ventaproceso':'atendido'); setTimeout(load,4000) }

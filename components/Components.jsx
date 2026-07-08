@@ -1,6 +1,15 @@
 'use client'
 import { useState } from 'react'
-import { colorFor, initialsFor, fmtTime, parseDate } from '@/lib/utils'
+import { colorFor, initialsFor, fmtTime, parseDate, hashWamid } from '@/lib/utils'
+
+// URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
+// Drive y demás pasan sin cambios.
+const esMeta = (u) => /lookaside\.fbsbx\.com|fbcdn\.net|whatsapp\.net|graph\.facebook\.com/i.test(String(u || ''))
+function viaProxy(url, mediaId) {
+  if (url && esMeta(url)) return `/api/media?url=${encodeURIComponent(url)}`
+  if (!url && mediaId)    return `/api/media?id=${encodeURIComponent(mediaId)}`
+  return url
+}
 
 // Paleta IND
 const C = {
@@ -108,39 +117,41 @@ export function ContactRow({ conv, isActive, onClick }) {
 }
 
 // ── MEDIA CONTENT ────────────────────────────────────────────────
-function MediaContent({ tipo, mediaUrl }) {
-  const url = mediaUrl || ''
-  const previewUrl = url.includes('drive.google.com/uc') ? url.replace('export=download', 'export=view') : url
-  const isImage    = ['image', 'sticker'].includes(tipo) || !!url.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
-  const isAudio    = tipo === 'audio' || !!url.match(/\.(ogg|mp3|aac|m4a|opus)(\?|$)/i)
-  const isVideo    = tipo === 'video' || !!url.match(/\.(mp4|mov|webm)(\?|$)/i)
-  const isDocument = tipo === 'document' || !!url.match(/\.(pdf|doc|docx|xls|xlsx)(\?|$)/i)
+function MediaContent({ tipo, mediaUrl, mediaId }) {
+  const raw = mediaUrl || ''
+  const driveFixed = raw.includes('drive.google.com/uc') ? raw.replace('export=download', 'export=view') : raw
+  const src = viaProxy(driveFixed, mediaId)   // Meta→/api/media ; Drive/otros→igual
+  const hasSrc = !!src
+  const isImage    = ['image', 'sticker'].includes(tipo) || !!raw.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
+  const isAudio    = tipo === 'audio' || !!raw.match(/\.(ogg|mp3|aac|m4a|opus)(\?|$)/i)
+  const isVideo    = tipo === 'video' || !!raw.match(/\.(mp4|mov|webm)(\?|$)/i)
+  const isDocument = tipo === 'document' || !!raw.match(/\.(pdf|doc|docx|xls|xlsx)(\?|$)/i)
 
-  if (url && isImage) return (
-    <a href={previewUrl} target="_blank" rel="noreferrer" style={{ display: 'block', marginBottom: 6 }}>
-      <img src={previewUrl} alt="imagen" style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 10, display: 'block', objectFit: 'cover', border: `1px solid ${C.border2}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
+  if (hasSrc && isImage) return (
+    <a href={src} target="_blank" rel="noreferrer" style={{ display: 'block', marginBottom: 6 }}>
+      <img src={src} alt="imagen" style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 10, display: 'block', objectFit: 'cover', border: `1px solid ${C.border2}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
     </a>
   )
-  if (url && isAudio) return (
-    <a href={url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
+  if (hasSrc && isAudio) return (
+    <a href={src} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
       <span style={{ fontSize: 22 }}>🎵</span>
       <span style={{ fontSize: 13, color: C.cream, fontWeight: 600 }}>Escuchar audio</span>
     </a>
   )
-  if (url && isVideo) return (
-    <a href={url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
+  if (hasSrc && isVideo) return (
+    <a href={src} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
       <span style={{ fontSize: 22 }}>🎬</span>
       <span style={{ fontSize: 13, color: C.cream, fontWeight: 600 }}>Ver video</span>
     </a>
   )
-  if (url && isDocument) return (
-    <a href={url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
+  if (hasSrc && isDocument) return (
+    <a href={src} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
       <span style={{ fontSize: 22 }}>📄</span>
       <span style={{ fontSize: 13, color: C.cream, fontWeight: 600 }}>Documento adjunto</span>
     </a>
   )
-  if (url && tipo && !['text', 'texto', 'reaction'].includes(tipo)) return (
-    <a href={url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
+  if (hasSrc && tipo && !['text', 'texto', 'reaction'].includes(tipo)) return (
+    <a href={src} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
       <span style={{ fontSize: 20 }}>📎</span>
       <span style={{ fontSize: 13, color: C.cream, fontWeight: 600 }}>Abrir {tipo}</span>
     </a>
@@ -152,17 +163,19 @@ function MediaContent({ tipo, mediaUrl }) {
 function QuotedMessage({ contextoId, allMsgs }) {
   if (!contextoId || !allMsgs) return null
   if (!contextoId.startsWith('wamid.')) return null
-  const cited = allMsgs.find(m => m.id === contextoId)
+  // Comparar por HASH del wamid (el envoltorio difiere aunque sea el mismo mensaje)
+  const cited = allMsgs.find(m => hashWamid(m.id) === hashWamid(contextoId))
   if (!cited) return null
   const isImage = ['image','sticker'].includes(cited.tipo) || !!cited.mediaUrl?.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
+  const citedSrc = viaProxy(cited.mediaUrl, cited.mediaId)
   return (
     <div style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, overflow: 'hidden' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: C.cream, marginBottom: 2 }}>
         {cited.direccion === 'SALIENTE' ? 'Tú' : cited.nombre || cited.telefono}
       </div>
-      {isImage && cited.mediaUrl ? (
+      {isImage && citedSrc ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <img src={cited.mediaUrl} alt="img citada" style={{ width: 36, height: 36, borderRadius: 5, objectFit: 'cover', flexShrink: 0 }} onError={e => { e.currentTarget.style.display = 'none' }} />
+          <img src={citedSrc} alt="img citada" style={{ width: 36, height: 36, borderRadius: 5, objectFit: 'cover', flexShrink: 0 }} onError={e => { e.currentTarget.style.display = 'none' }} />
           {cited.mensaje && <span style={{ fontSize: 12, color: C.creamDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cited.mensaje}</span>}
         </div>
       ) : (
@@ -177,7 +190,7 @@ function QuotedMessage({ contextoId, allMsgs }) {
 // ── MESSAGE BUBBLE ────────────────────────────────────────────────
 export function MessageBubble({ msg, allMsgs }) {
   const isMe     = msg.direccion === 'SALIENTE'
-  const hasMedia = !!msg.mediaUrl
+  const hasMedia = !!msg.mediaUrl || !!msg.mediaId
   const hasText  = !!msg.mensaje
 
   return (
@@ -191,7 +204,7 @@ export function MessageBubble({ msg, allMsgs }) {
         border: isMe ? `1px solid rgba(244,241,236,.12)` : `1px solid ${C.border}`,
       }}>
         {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} />}
-        {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} />}
+        {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} />}
         {hasText && <p style={{ margin: 0, fontSize: 14, color: C.cream, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.mensaje}</p>}
         {!hasText && !hasMedia && <p style={{ margin: 0, fontSize: 13, color: C.creamFaint, fontStyle: 'italic' }}>{msg.tipo ? `[${msg.tipo}]` : '[mensaje]'}</p>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5, marginTop: 4 }}>
