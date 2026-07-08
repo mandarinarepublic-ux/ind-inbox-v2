@@ -224,6 +224,7 @@ export default function App() {
     archivado:    searched.filter(c => getStatus(c.telefono) === 'archivado').length,
     ventaproceso: searched.filter(c => getStatus(c.telefono) === 'ventaproceso').length,
     venta:        searched.filter(c => esVentaActiva(c.telefono)).length,
+    soporte:      searched.filter(c => getStatus(c.telefono) === 'soporte').length,
   }
 
   const lastIncoming = activeConv ? [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE') : null
@@ -486,10 +487,21 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              {/* Archivados colapsado */}
-              <div style={{ marginTop:4 }}>
+              {/* Soporte + Archivados colapsados */}
+              <div style={{ marginTop:4, display:'flex', gap:4 }}>
+                <button onClick={() => setFilter('soporte')} style={{
+                  flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
+                  background:filter==='soporte'?`rgba(167,139,250,.18)`:'transparent',
+                  border:`1px solid ${filter==='soporte'?'rgba(167,139,250,.4)':C.border}`,
+                  color:filter==='soporte'?'#a78bfa':C.creamFaint,
+                  borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
+                  display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                }}>
+                  🎧 Soporte
+                  {counts['soporte']>0 && <span style={{ background:filter==='soporte'?'#a78bfa':C.border2, color:filter==='soporte'?C.bg:C.creamDim, borderRadius:10, padding:'0 5px', fontSize:8, fontWeight:800 }}>{counts['soporte']}</span>}
+                </button>
                 <button onClick={() => setFilter('archivado')} style={{
-                  width:'100%', padding:'4px 8px', fontSize:9, fontWeight:700,
+                  flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
                   background:filter==='archivado'?`rgba(160,154,144,.18)`:'transparent',
                   border:`1px solid ${filter==='archivado'?'rgba(160,154,144,.4)':C.border}`,
                   color:filter==='archivado'?C.creamDim:C.creamFaint,
@@ -539,6 +551,7 @@ export default function App() {
                     { s:'ventaproceso', icon:'🟡', label:'En proceso', activeColor:'#f59e0b' },
                     { s:'venta',        icon:'💰', label:'Venta',      activeColor:'#10b981' },
                     { s:'atendido',     icon:'🟢', label:'Atendido',   activeColor:'#4ade80' },
+                    { s:'soporte',      icon:'🎧', label:'Soporte',    activeColor:'#a78bfa' },
                     { s:'archivado',    icon:'⚫', label:'Archivar',   activeColor:C.creamDim },
                   ].map(({ s, icon, label, activeColor }) => (
                     <button key={s} onClick={() => changeStatus(activeConv.telefono, s)} title={label} style={{
