@@ -457,7 +457,7 @@ export default function App() {
                     <div style={{ fontSize:13, fontWeight:800, color:C.cream }}>INDLOVERS CHAT</div>
                     <div style={{ fontSize:10, fontWeight:700, color:C.creamDim, display:'flex', alignItems:'center', gap:3, marginTop:1 }}>
                       <span style={{ animation:'pulse 2s infinite', display:'inline-block', width:5, height:5, borderRadius:'50%', background:'#4ade80' }} />
-                      {`En vivo · ${totalUnread} sin leer`}
+                      {`En vivo · ${counts.pendiente} pendiente${counts.pendiente === 1 ? '' : 's'}`}
                     </div>
                   </div>
                 </div>
