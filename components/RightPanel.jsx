@@ -125,7 +125,7 @@ function MultiImgEditor({ urls, onChange }) {
   )
 }
 
-export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, contactInfo, onUpdateContact, windowOpen }) {
+export default function RightPanel({ activeConv, onQuickReply, onSendText, contactInfo, onUpdateContact, windowOpen }) {
   const [countdown, setCountdown] = useState('')
 
   useEffect(() => {
@@ -153,22 +153,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [sending,       setSending]       = useState(null)
   const [editAlias,     setEditAlias]     = useState(false)
   const [aliasInput,    setAliasInput]    = useState('')
-  const [aiText,        setAiText]        = useState('')
-  const [aiSending,     setAiSending]     = useState(false)
-  const [aiSent,        setAiSent]        = useState(false)
-  const [lastAiMsg,     setLastAiMsg]     = useState('')
-  const [aiImgUrl,      setAiImgUrl]      = useState('')
-  const [aiImgPrev,     setAiImgPrev]     = useState('')
-  const [aiImgUploading,setAiImgUploading]= useState(false)
-  const [aiImgSending,  setAiImgSending]  = useState(false)
-  const [aiImgSent,     setAiImgSent]     = useState(false)
-  const [lastAiImgSrc,  setLastAiImgSrc]  = useState('')
-  const [openIA,        setOpenIA]        = useState(true)
   const [notasInput,    setNotasInput]    = useState('')
   const [notasSaving,   setNotasSaving]   = useState(false)
   const [notasSaved,    setNotasSaved]    = useState(false)
   const notasLoadedRef = useRef(null)
-  const aiImgFileRef   = useRef(null)
 
   // ── Crear pedido (botón que lee la conversación y crea el pedido en el CRM de IND) ──
   const [pedidoLoading, setPedidoLoading] = useState(false)
@@ -190,13 +178,6 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   }, [activeConv, contactInfo])
 
   if (!activeConv) return null
-
-  const lastIncoming = [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE')
-  const aiSuggestion = lastIncoming?.respuestaIA || ''
-  const aiImgShopify = lastIncoming?.imagenProducto || ''
-
-  if (aiSuggestion && aiSuggestion !== lastAiMsg) { setLastAiMsg(aiSuggestion); setAiText(aiSuggestion); setAiSent(false) }
-  if (aiImgShopify && aiImgShopify !== lastAiImgSrc) { setLastAiImgSrc(aiImgShopify); setAiImgUrl(aiImgShopify); setAiImgPrev(aiImgShopify); setAiImgSent(false) }
 
   const startEdit = (idx) => {
     setEditingIdx(idx)
@@ -224,23 +205,6 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   }
 
   const handleSendQuick = async (idx) => { setSending(idx); await onQuickReply(replies[idx]); setSending(null) }
-  const handleSendAI = async () => {
-    if (!aiText.trim()||aiSending) return
-    setAiSending(true); await onSendText(aiText.trim()); setAiSending(false); setAiSent(true)
-  }
-  const handleSendAIImage = async () => {
-    if (!aiImgUrl||aiImgSending) return
-    setAiImgSending(true)
-    try { if(onSendImage) await onSendImage(aiImgUrl); setAiImgSent(true) }
-    finally { setAiImgSending(false) }
-  }
-  const handleAiImgReplace = async (e) => {
-    const f = e.target.files[0]; if(!f) return
-    setAiImgPrev(URL.createObjectURL(f)); setAiImgSent(false)
-    setAiImgUploading(true)
-    try { const u=await uploadToImgbb(f); if(u){ setAiImgUrl(u); setAiImgPrev(u) } }
-    finally { setAiImgUploading(false) }
-  }
   const crearPedido = async () => {
     if (pedidoLoading || !activeConv) return
     // Armamos el transcript desde la conversación que el inbox ya tiene en memoria
@@ -348,51 +312,22 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
         )}
       </div>
 
-      {/* SUGERENCIA IA — acordeón */}
-      <div style={{ flexShrink:0, borderBottom:`1px solid ${C.border}` }}>
-        <button onClick={()=>setOpenIA(p=>!p)} style={{ width:'100%', padding:'8px 12px', background:'transparent', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', fontFamily:'inherit' }}>
-          <span style={{ fontSize:10, color:'#6366f1', fontWeight:700, letterSpacing:'.08em', display:'flex', alignItems:'center', gap:5 }}>
-            🤖 SUGERENCIA IA
-            {aiSuggestion&&<span style={{ fontSize:8, background:'rgba(99,102,241,.15)', color:'#818cf8', borderRadius:10, padding:'1px 6px' }}>Gemini</span>}
-          </span>
-          <span style={{ color:C.creamFaint, fontSize:10 }}>{openIA?'▲':'▼'}</span>
+      {/* ── NOTAS (primera posición, después de CREAR PEDIDO) ── */}
+      <div style={{ flexShrink:0, padding:'10px 12px', borderBottom:`1px solid ${C.border}`, background:C.bg }}>
+        <p style={{ fontSize:10, color:'#f59e0b', fontWeight:700, letterSpacing:'.08em', marginBottom:6, display:'flex', alignItems:'center', gap:5 }}>
+          📝 NOTAS
+          {notasSaved&&<span style={{ fontSize:8, background:`rgba(244,241,236,.1)`, color:C.cream, borderRadius:10, padding:'1px 6px' }}>Guardado ✓</span>}
+        </p>
+        {(() => { const u = (String(notasInput || '').match(/https?:\/\/\S+\/dashboard\/pedido\/\S+/) || [])[0]; return u ? (
+          <a href={u} target="_blank" rel="noreferrer" style={{ display:'inline-block', marginBottom:6, padding:'4px 9px', background:'rgba(16,185,129,.15)', border:'1px solid rgba(16,185,129,.35)', color:'#10b981', borderRadius:6, fontSize:11, fontWeight:700, textDecoration:'none' }}>📄 Ver pedido</a>
+        ) : null })()}
+        <textarea value={notasInput} onChange={e=>{setNotasInput(e.target.value);setNotasSaved(false)}} placeholder="Ej: Falta que envíe la foto del pago..." rows={2}
+          style={{ width:'100%', ...inputBase, resize:'vertical', fontSize:11, minHeight:46, whiteSpace:'pre-wrap' }}
+          onFocus={e=>e.target.style.borderColor='#f59e0b'} onBlur={e=>e.target.style.borderColor=C.border} />
+        <button onClick={handleSaveNotas} disabled={notasSaving}
+          style={{ ...btnBase, width:'100%', marginTop:5, padding:'6px', background:notasSaving?C.bg:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.3)', color:'#f59e0b', borderRadius:7, fontSize:11, fontWeight:700, cursor:notasSaving?'default':'pointer' }}>
+          {notasSaving?'⏳ Guardando...':'💾 Guardar nota'}
         </button>
-        {openIA&&(
-          <div style={{ padding:'0 12px 10px' }}>
-            {aiSuggestion ? (
-              <>
-                {(aiImgPrev||aiImgShopify)&&(
-                  <div style={{ marginBottom:7, position:'relative', borderRadius:8, overflow:'hidden', border:`1px solid ${C.border2}` }}>
-                    <img src={aiImgPrev||aiImgShopify} alt="" style={{ width:'100%', height:90, objectFit:'cover', display:'block' }} onError={e=>e.currentTarget.style.display='none'} />
-                    {aiImgUploading&&<div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:C.cream }}>Subiendo...</div>}
-                    <div style={{ position:'absolute', bottom:4, right:4, display:'flex', gap:3 }}>
-                      <button onClick={()=>aiImgFileRef.current?.click()} style={{ ...btnBase, background:'rgba(0,0,0,.7)', border:`1px solid rgba(255,255,255,.2)`, color:C.cream, borderRadius:5, padding:'2px 6px', fontSize:9 }}>🔄 Cambiar</button>
-                      <button onClick={()=>{setAiImgUrl('');setAiImgPrev('');setAiImgSent(false)}} style={{ ...btnBase, background:'rgba(0,0,0,.7)', border:`1px solid rgba(255,255,255,.2)`, color:'#f87171', borderRadius:5, padding:'2px 6px', fontSize:9 }}>✕</button>
-                    </div>
-                    <input ref={aiImgFileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleAiImgReplace} />
-                  </div>
-                )}
-                {aiImgUrl&&(
-                  <button onClick={handleSendAIImage} disabled={aiImgSending||aiImgSent||!windowOpen}
-                    style={{ ...btnBase, width:'100%', marginBottom:5, padding:'5px', background:aiImgSent?`rgba(244,241,236,.1)`:aiImgSending?C.bg:'rgba(99,102,241,.12)', border:`1px solid ${aiImgSent?'rgba(244,241,236,.25)':'rgba(99,102,241,.3)'}`, color:aiImgSent?C.cream:'#818cf8', borderRadius:7, fontSize:10, fontWeight:700, cursor:aiImgSent||aiImgSending?'default':'pointer' }}>
-                    {aiImgSent?'✓ Foto enviada':aiImgSending?'⏳ Enviando...':'🖼 Enviar foto del producto'}
-                  </button>
-                )}
-                <textarea value={aiText} onChange={e=>{setAiText(e.target.value);setAiSent(false)}} rows={3}
-                  style={{ width:'100%', background:`rgba(244,241,236,.04)`, border:`1px solid ${aiSent?'rgba(244,241,236,.25)':'rgba(99,102,241,.25)'}`, borderRadius:8, color:C.cream, fontSize:12, padding:'7px 9px', resize:'none', outline:'none', fontFamily:'inherit', lineHeight:1.5, whiteSpace:'pre-wrap' }} />
-                <div style={{ display:'flex', gap:5, marginTop:5 }}>
-                  <button onClick={handleSendAI} disabled={aiSending||aiSent||!aiText.trim()||!windowOpen}
-                    style={{ ...btnBase, flex:2, padding:'6px', background:aiSent?`rgba(244,241,236,.1)`:aiSending?C.bg:'linear-gradient(135deg,#6366f1,#4f46e5)', border:`1px solid ${aiSent?'rgba(244,241,236,.25)':'rgba(99,102,241,.4)'}`, color:aiSent?C.cream:'#fff', borderRadius:7, fontSize:11, fontWeight:700, cursor:aiSent||aiSending?'default':'pointer' }}>
-                    {aiSent?'✓ Enviado':aiSending?'⏳...':'📤 Enviar texto'}
-                  </button>
-                  <button onClick={()=>onSendText&&onSendText(null,aiText)} style={{ ...btnBase, flex:1, padding:'6px', background:`rgba(244,241,236,.04)`, border:`1px solid ${C.border}`, color:C.creamDim, borderRadius:7, fontSize:11, cursor:'pointer' }}>✏️ Editar</button>
-                </div>
-              </>
-            ) : (
-              <div style={{ padding:'12px', textAlign:'center', color:C.creamFaint, fontSize:11, background:`rgba(244,241,236,.02)`, borderRadius:8, border:`1px dashed ${C.border2}` }}>Esperando mensaje...</div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* RESPUESTAS RÁPIDAS */}
@@ -469,23 +404,6 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
         </div>
       </div>
 
-      {/* NOTAS */}
-      <div style={{ flexShrink:0, padding:'10px 12px', borderTop:`1px solid ${C.border}`, background:C.bg }}>
-        <p style={{ fontSize:10, color:'#f59e0b', fontWeight:700, letterSpacing:'.08em', marginBottom:6, display:'flex', alignItems:'center', gap:5 }}>
-          📝 NOTAS
-          {notasSaved&&<span style={{ fontSize:8, background:`rgba(244,241,236,.1)`, color:C.cream, borderRadius:10, padding:'1px 6px' }}>Guardado ✓</span>}
-        </p>
-        {(() => { const u = (String(notasInput || '').match(/https?:\/\/\S+\/dashboard\/pedido\/\S+/) || [])[0]; return u ? (
-          <a href={u} target="_blank" rel="noreferrer" style={{ display:'inline-block', marginBottom:6, padding:'4px 9px', background:'rgba(16,185,129,.15)', border:'1px solid rgba(16,185,129,.35)', color:'#10b981', borderRadius:6, fontSize:11, fontWeight:700, textDecoration:'none' }}>📄 Ver pedido</a>
-        ) : null })()}
-        <textarea value={notasInput} onChange={e=>{setNotasInput(e.target.value);setNotasSaved(false)}} placeholder="Ej: Falta que envíe la foto del pago..." rows={2}
-          style={{ width:'100%', ...inputBase, resize:'vertical', fontSize:11, minHeight:46, whiteSpace:'pre-wrap' }}
-          onFocus={e=>e.target.style.borderColor='#f59e0b'} onBlur={e=>e.target.style.borderColor=C.border} />
-        <button onClick={handleSaveNotas} disabled={notasSaving}
-          style={{ ...btnBase, width:'100%', marginTop:5, padding:'6px', background:notasSaving?C.bg:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.3)', color:'#f59e0b', borderRadius:7, fontSize:11, fontWeight:700, cursor:notasSaving?'default':'pointer' }}>
-          {notasSaving?'⏳ Guardando...':'💾 Guardar nota'}
-        </button>
-      </div>
     </div>
   )
 }
