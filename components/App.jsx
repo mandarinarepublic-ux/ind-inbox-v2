@@ -19,7 +19,6 @@ const C = {
 }
 
 const IMGBB_KEY    = '2307574d43689522feabd27cff3443df'
-const MAKE_WEBHOOK = 'https://hook.us2.make.com/fm5f8e9ow7k5vtykqhihcjt7yg25v9u9'
 
 async function toJpeg(file) {
   return new Promise((resolve) => {
@@ -81,6 +80,11 @@ function EmojiPicker({ onSelect, onClose }) {
   )
 }
 
+// Persistencia del "visto" por conversación → alimenta el badge de no leídos.
+const SEEN_KEY  = 'ind_seen_v1'
+const loadSeen  = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}') } catch { return {} } }
+const saveSeen  = (m) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify(m)) } catch {} }
+
 export default function App() {
   const [convs,        setConvs]        = useState([])
   const [contacts,     setContacts]     = useState({})
@@ -115,13 +119,15 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   const localStatusRef = useRef({})
   const pendingRef     = useRef({}) // mensajes optimistas por teléfono, hasta que Make los registre
+  const seenRef        = useRef(null) // { telefono: epochMs } — última vez que se vio cada chat
+  if (seenRef.current === null) seenRef.current = loadSeen()
 
   const load = useCallback(async () => {
     const [rows, ctList] = await Promise.all([fetchRows(), fetchContacts()])
 
     // rows === null → hubo ERROR (no "vacío"): conservar lo previo, no parpadear a blanco
     if (Array.isArray(rows)) {
-      let next = buildConvs(rows)
+      let next = buildConvs(rows, seenRef.current)
       // Re-inyectar mensajes optimistas que aún no están en la hoja
       const now = Date.now()
       const pend = pendingRef.current
@@ -166,6 +172,8 @@ export default function App() {
   useEffect(() => {
     const activeConv = convs.find(c => c.telefono === active)
     if (!activeConv) return
+    // Chat abierto = visto: mueve el marcador para que lo entrante no quede "no leído".
+    if (document.visibilityState === 'visible') { seenRef.current[active] = Date.now(); saveSeen(seenRef.current) }
     const newLen = activeConv.msgs.length
     const hadNewMsg = newLen > prevMsgLen.current
     prevMsgLen.current = newLen
@@ -199,6 +207,7 @@ export default function App() {
 
   const openConv = (telefono) => {
     setActive(telefono); setShowSidebar(false); autoScroll.current = true; prevMsgLen.current = 0
+    seenRef.current[telefono] = Date.now(); saveSeen(seenRef.current)
     setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, unread: 0 } : c))
   }
 
@@ -277,7 +286,7 @@ export default function App() {
   const handleKey = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSend() } }
 
   const sendImageUrl = async (imageUrl) => {
-    const res = await fetch(MAKE_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ Telefono: activeConv.telefono, Nombre: activeConv.nombre, ImagenURL: imageUrl }) })
+    const res = await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imageUrl)
     return res.ok
   }
 
@@ -349,7 +358,7 @@ export default function App() {
 
   const handleSendAIImage = async (imageUrl) => {
     if (!activeConv || !imageUrl) return
-    const res = await fetch(MAKE_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ Telefono: activeConv.telefono, Nombre: activeConv.nombre, ImagenURL: imageUrl }) })
+    const res = await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imageUrl)
     if (res.ok) await changeStatus(activeConv.telefono, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido')
   }
 
