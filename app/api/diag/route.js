@@ -35,8 +35,15 @@ export async function GET() {
     me: await graph('me?fields=id,name'),
     // el nodo del phone id → valida que el token pueda usar ESE número
     phone: await graph(`${META_PHONE_ID}?fields=display_phone_number,verified_name,quality_rating`),
-    // Números de la WABA → aquí sale el phone_number_id CORRECTO
-    waba_phone_numbers: await graph('2151783152331852/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating'),
+    // phone_number_id REAL capturado del webhook entrante (MENSAJES!Z1) + test de acceso del token
+    real: await (async () => {
+      let cap = ''
+      try { const rows = await readSheet('MENSAJES'); cap = rows?.[0]?.[25] || '' } catch (e) { return { error: e.message } }
+      if (!cap) return { capturado: '(aun sin capturar - manda un WhatsApp entrante)' }
+      const phoneId = String(cap).split('|')[0]
+      const acceso = await graph(`${phoneId}?fields=display_phone_number,verified_name`)
+      return { capturado: cap, phoneId, token_puede_acceder: acceso }
+    })(),
   }
   return NextResponse.json(out)
 }
