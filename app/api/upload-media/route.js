@@ -6,7 +6,9 @@ export const dynamic = 'force-dynamic'
 // El token vive SOLO en el servidor (env) — nunca viaja al navegador.
 // Antes esto se hacía desde el cliente con el token hardcodeado en lib/api-client.js.
 const META_TOKEN    = process.env.META_TOKEN || ''
-const META_PHONE_ID = process.env.META_PHONE_ID || '1092674123940116'
+// Phone ID nuevo de IND (el número se migró a la WABA "Indstore"). El viejo
+// 1092674123940116 quedó MUERTO. Ideal: setear META_PHONE_ID en Vercel.
+const META_PHONE_ID = process.env.META_PHONE_ID || '1135333936337730'
 
 export async function POST(req) {
   try {
