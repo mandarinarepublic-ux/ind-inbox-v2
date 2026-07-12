@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { appendRow } from '@/lib/sheets'
 
 export const dynamic = 'force-dynamic'
@@ -108,25 +109,16 @@ export async function POST(req) {
 
     const wamid = data.messages[0].id
 
-    // Registrar en MENSAJES (columnas: A=ID B=Telefono C=Nombre D=Tipo E=Contenido
-    //  F=MediaURL G=Fecha H=Direccion I=MediaID J=RespuestaIA K=FotoIA L=ContextoID)
-    try {
-      await appendRow('MENSAJES', [
-        wamid,
-        soloDigitos(body.Telefono),
-        body.Nombre || '',
-        tipo,
-        contenido,
-        mediaUrl,
-        new Date().toISOString(),
-        'SALIENTE',
-        mediaId,
-        '', '', '',
-      ])
-    } catch (e) {
-      // El mensaje YA se envió por WhatsApp; si falla el log no revertimos.
-      console.error('[/api/saliente] Enviado pero no se pudo registrar en Sheets:', e.message)
-    }
+    // Registrar la salida en MENSAJES en SEGUNDO PLANO (waitUntil): respondemos al
+    // instante en cuanto Meta acepta, y la escritura a Sheets (lenta) no retrasa la
+    // respuesta. A=ID B=Telefono C=Nombre D=Tipo E=Contenido F=MediaURL G=Fecha
+    //  H=Direccion I=MediaID J=RespuestaIA K=FotoIA L=ContextoID
+    waitUntil(
+      appendRow('MENSAJES', [
+        wamid, soloDigitos(body.Telefono), body.Nombre || '', tipo, contenido, mediaUrl,
+        new Date().toISOString(), 'SALIENTE', mediaId, '', '', '',
+      ]).catch(e => console.error('[/api/saliente] Enviado pero no se pudo registrar en Sheets:', e.message))
+    )
 
     return NextResponse.json({ ok: true, wamid })
   } catch (err) {

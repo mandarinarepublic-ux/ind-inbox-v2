@@ -240,7 +240,7 @@ export function Toast({ result }) {
         color: result.ok ? C.cream : '#f87171',
         border: `1px solid ${result.ok ? 'rgba(244,241,236,.2)' : 'rgba(239,68,68,.2)'}`,
       }}>
-        {result.ok ? '✓ Mensaje enviado por WhatsApp vía Make' : '✗ Error al enviar — revisa tu escenario en Make'}
+        {result.ok ? '✓ Enviado' : '✗ No se pudo enviar — reintenta'}
       </span>
     </div>
   )

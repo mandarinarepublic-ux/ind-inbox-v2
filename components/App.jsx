@@ -260,21 +260,21 @@ export default function App() {
     await updateContact(tel, activeConv.nombre, currentStatus, alias)
   }
 
-  const handleSend = async (text) => {
+  const handleSend = (text) => {
     const t = (text || input).trim()
-    if (!t || !activeConv || sending) return
-    setInput(''); setSending(true); setToast(null); autoScroll.current = true
-    const tmpMsg = { id: 'tmp_' + Date.now(), telefono: activeConv.telefono, nombre: activeConv.nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
-    setConvs(prev => prev.map(c => c.telefono === activeConv.telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
-    pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
-    // Dar tiempo a React para renderizar el tmpMsg antes de hacer el fetch
-    await new Promise(r => setTimeout(r, 0))
-    const [result] = await Promise.all([
-      sendReply(activeConv.telefono, activeConv.nombre, t),
-      changeStatus(activeConv.telefono, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido'),
-    ])
-    setSending(false); setToast(result)
-    setTimeout(() => setToast(null), 4000)
+    if (!t || !activeConv) return
+    const tel = activeConv.telefono, nombre = activeConv.nombre
+    setInput(''); setToast(null); autoScroll.current = true
+    // 1) Render optimista INSTANTÁNEO — el mensaje aparece ya, sin esperar al servidor.
+    const tmpMsg = { id: 'tmp_' + Date.now(), telefono: tel, nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+    setConvs(prev => prev.map(c => c.telefono === tel ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+    pendingRef.current[tel] = [ ...(pendingRef.current[tel] || []), tmpMsg ]
+    // 2) Estado → atendido (optimista, no bloquea la UI)
+    changeStatus(tel, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido')
+    // 3) Enviar en segundo plano; solo avisamos si FALLA (no congela el input ni el botón)
+    sendReply(tel, nombre, t)
+      .then(result => { if (result && result.ok === false) { setToast(result); setTimeout(() => setToast(null), 4000) } })
+      .catch(() => {})
     setTimeout(load, 4000)
   }
 
