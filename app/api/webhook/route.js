@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { readSheet, appendRow } from '@/lib/sheets'
+import { readSheet, appendRow, updateCell } from '@/lib/sheets'
 import { registrarContactoEntrante } from '@/lib/contactos'
 
 export const dynamic = 'force-dynamic'
@@ -59,9 +59,14 @@ export async function POST(req) {
 
     // Recolecta los mensajes entrantes (ignora statuses de entrega/lectura)
     const nuevos = []
+    let metaInfo = ''
     for (const entry of entries) {
       for (const change of entry?.changes || []) {
         const value    = change?.value || {}
+        // DIAG TEMPORAL: capturar el phone_number_id real que manda Meta
+        if (value?.metadata?.phone_number_id) {
+          metaInfo = `${value.metadata.phone_number_id}|${value.metadata.display_phone_number || ''}|${entry?.id || ''}`
+        }
         const contacts = value?.contacts || []
         const nombreDe = {}
         for (const c of contacts) nombreDe[c.wa_id] = c.profile?.name || ''
@@ -99,6 +104,9 @@ export async function POST(req) {
         catch (e) { console.error('[/api/webhook] contacto:', e.message) }
       }
     }
+
+    // DIAG TEMPORAL: guardar el phone_number_id real en MENSAJES!Z1 (celda no usada)
+    if (metaInfo) { try { await updateCell('MENSAJES', 1, 'Z', metaInfo) } catch {} }
 
     // Meta exige 200 rápido o reintenta
     return NextResponse.json({ ok: true })

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { readSheet } from '@/lib/sheets'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -34,9 +35,11 @@ export async function GET() {
     me: await graph('me?fields=id,name'),
     // el nodo del phone id → valida que el token pueda usar ESE número
     phone: await graph(`${META_PHONE_ID}?fields=display_phone_number,verified_name,quality_rating`),
-    // DESCUBRIR el Phone Number ID correcto por varias rutas
-    businesses: await graph('me/businesses?fields=id,name'),
-    nested: await graph('me?fields=businesses.limit(5){id,name,owned_whatsapp_business_accounts.limit(5){id,name,phone_numbers.limit(10){id,display_phone_number,verified_name}}}'),
+    // phone_number_id REAL capturado del último webhook entrante (MENSAJES!Z1)
+    capturado_del_webhook: await (async () => {
+      try { const rows = await readSheet('MENSAJES'); return (rows?.[0]?.[25]) || '(aun sin capturar - espera un mensaje entrante)' }
+      catch (e) { return `error: ${e.message}` }
+    })(),
   }
   return NextResponse.json(out)
 }
