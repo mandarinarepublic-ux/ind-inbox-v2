@@ -344,7 +344,17 @@ export default function App() {
 
   const handleQuickReply = async (reply) => {
     if (!activeConv) return
-    if (reply.text) await handleSend(reply.text)
+    const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
+    if (botones.length && reply.text) {
+      // Respuesta rápida CON botones interactivos
+      const validBtns = botones.map((t, i) => ({ id: `btn_${i + 1}`, title: t }))
+      const tmpMsg = { id: 'tmp_' + Date.now(), telefono: activeConv.telefono, nombre: activeConv.nombre, mensaje: `${reply.text}\n${validBtns.map(b => `[ ${b.title} ]`).join('  ')}`, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+      setConvs(prev => prev.map(c => c.telefono === activeConv.telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+      pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
+      sendInteractiveButtons(activeConv.telefono, activeConv.nombre, reply.text, validBtns).catch(() => {})
+    } else if (reply.text) {
+      await handleSend(reply.text)
+    }
     // Recoger hasta 10 imágenes
     const imgs = Array.from({length: 10}, (_, i) =>
       i === 0 ? reply.imageUrl : reply[`imageUrl${i+1}`]
@@ -353,7 +363,7 @@ export default function App() {
       await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imgs[i])
       if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 800))
     }
-    await changeStatus(activeConv.telefono, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido')
+    changeStatus(activeConv.telefono, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido')
   }
 
   const handleSendAIImage = async (imageUrl) => {
