@@ -9,9 +9,10 @@ export const revalidate = 0
 // la Graph API. Luego registra la salida en la hoja MENSAJES (lo que antes hacía
 // Make con un "Add Row"). Token y phone id viven SOLO server-side.
 const META_TOKEN    = process.env.META_TOKEN || ''
-// Phone ID nuevo de IND (el número se migró a la WABA "Indstore"). El viejo
-// 1092674123940116 quedó MUERTO. Ideal: setear META_PHONE_ID en Vercel.
-const META_PHONE_ID = process.env.META_PHONE_ID || '1135333936337730'
+// Phone ID del número IND (WhatsApp Manager lo muestra como 1092674123940116).
+// CONFIRMA el valor real en la app → WhatsApp → API Setup y setéalo en Vercel
+// como META_PHONE_ID (no dependas de este fallback).
+const META_PHONE_ID = process.env.META_PHONE_ID || '1092674123940116'
 const GRAPH_URL     = `https://graph.facebook.com/v19.0/${META_PHONE_ID}/messages`
 
 const soloDigitos = (s) => String(s || '').replace(/\D/g, '')
