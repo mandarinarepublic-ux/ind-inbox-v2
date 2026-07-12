@@ -34,8 +34,9 @@ export async function GET() {
     me: await graph('me?fields=id,name'),
     // el nodo del phone id → valida que el token pueda usar ESE número
     phone: await graph(`${META_PHONE_ID}?fields=display_phone_number,verified_name,quality_rating`),
-    // DESCUBRIR el Phone Number ID correcto: WABAs asignadas a este system user
-    wabas: await graph('me?fields=assigned_whatsapp_business_accounts{id,name,phone_numbers{id,display_phone_number,verified_name}}'),
+    // DESCUBRIR el Phone Number ID correcto por varias rutas
+    businesses: await graph('me/businesses?fields=id,name'),
+    nested: await graph('me?fields=businesses.limit(5){id,name,owned_whatsapp_business_accounts.limit(5){id,name,phone_numbers.limit(10){id,display_phone_number,verified_name}}}'),
   }
   return NextResponse.json(out)
 }
