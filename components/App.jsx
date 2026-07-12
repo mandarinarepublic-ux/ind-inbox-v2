@@ -94,6 +94,7 @@ export default function App() {
   const [loading,      setLoading]      = useState(true)
   const [lastSync,     setLastSync]     = useState(null)
   const [search,       setSearch]       = useState('')
+  const [searchMode,   setSearchMode]   = useState('contacto') // 'contacto' | 'mensaje'
   const [toast,        setToast]        = useState(null)
   const [showSidebar,  setShowSidebar]  = useState(true)
   const [showRight,    setShowRight]    = useState(false)
@@ -222,11 +223,42 @@ export default function App() {
   const getStatus     = (tel) => contacts[tel]?.estado || 'pendiente'
   const esVentaActiva = (tel) => hasVenta(tel) && getStatus(tel) !== 'archivado'
 
-  const searched = convs.filter(c => {
-    const alias = contacts[c.telefono]?.alias || ''
-    return c.nombre.toLowerCase().includes(search.toLowerCase()) || alias.toLowerCase().includes(search.toLowerCase()) || c.telefono.includes(search)
-  })
-  const filtered = searched.filter(c => filter === 'venta' ? esVentaActiva(c.telefono) : getStatus(c.telefono) === filter)
+  // Búsqueda tolerante de teléfono (Ecuador): 0987… == 593987… (últimos 9 díg).
+  const soloDig  = (s) => String(s || '').replace(/\D/g, '')
+  const telLocal = (s) => soloDig(s).replace(/^593/, '').replace(/^0+/, '')
+  const phoneMatch = (telefono, query) => {
+    const p = soloDig(telefono), qy = soloDig(query)
+    if (!qy) return false
+    if (p.includes(qy)) return true
+    const pl = telLocal(p), ql = telLocal(qy)
+    return ql.length >= 7 && pl.endsWith(ql)
+  }
+
+  const q = search.trim().toLowerCase()
+  const isSearching = q.length > 0
+  const searchingMsgs = isSearching && searchMode === 'mensaje'
+
+  // Fragmento del mensaje más reciente que contiene la búsqueda (modo Mensajes)
+  const matchSnippet = (c) => {
+    const m = [...(c.msgs || [])].reverse().find(m => (m.mensaje || '').toLowerCase().includes(q))
+    if (!m) return ''
+    const t = String(m.mensaje || '')
+    const i = t.toLowerCase().indexOf(q)
+    const start = Math.max(0, i - 28), end = i + q.length + 42
+    return (start > 0 ? '…' : '') + t.slice(start, end) + (end < t.length ? '…' : '')
+  }
+
+  const searched = !isSearching ? convs
+    : searchingMsgs
+      ? convs.filter(c => (c.msgs || []).some(m => (m.mensaje || '').toLowerCase().includes(q)))
+      : convs.filter(c => {
+          const alias = (contacts[c.telefono]?.alias || '').toLowerCase()
+          return c.nombre.toLowerCase().includes(q) || alias.includes(q) || phoneMatch(c.telefono, search)
+        })
+  // Al BUSCAR mostramos TODOS los resultados sin importar la pestaña activa.
+  const filtered = isSearching
+    ? searched
+    : searched.filter(c => filter === 'venta' ? esVentaActiva(c.telefono) : getStatus(c.telefono) === filter)
   const counts = {
     pendiente:    searched.filter(c => getStatus(c.telefono) === 'pendiente').length,
     atendido:     searched.filter(c => getStatus(c.telefono) === 'atendido').length,
@@ -483,10 +515,22 @@ export default function App() {
                 </div>
                 <a href="/dashboard" title="Dashboard" style={{ background:'rgba(96,165,250,.14)', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', textDecoration:'none', flexShrink:0 }}>📊</a>
               </div>
-              <div style={{ position:'relative', marginBottom:10 }}>
+              <div style={{ position:'relative', marginBottom:6 }}>
                 <span style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:C.creamFaint, fontSize:12, pointerEvents:'none' }}>🔍</span>
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
-                  style={{ width:'100%', padding:'7px 10px 7px 28px', background:C.surface2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontSize:12, outline:'none' }} />
+                <input value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder={searchMode === 'mensaje' ? 'Buscar en mensajes (ej: Hoodie)...' : 'Buscar nombre o número...'}
+                  style={{ width:'100%', padding:'7px 28px 7px 28px', background:C.surface2, border:`1px solid ${searchMode==='mensaje'?'rgba(96,165,250,.4)':C.border}`, borderRadius:8, color:C.cream, fontSize:12, outline:'none' }} />
+                {search && <button onClick={() => setSearch('')} style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:13, padding:0, lineHeight:1 }}>✕</button>}
+              </div>
+              <div style={{ display:'flex', gap:4, marginBottom:10 }}>
+                {[{ key:'contacto', label:'👤 Contactos' }, { key:'mensaje', label:'💬 Mensajes' }].map(({ key, label }) => (
+                  <button key={key} onClick={() => setSearchMode(key)} style={{
+                    flex:1, padding:'5px 2px', fontSize:10, fontWeight:700, borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
+                    background: searchMode===key ? 'rgba(96,165,250,.15)' : 'transparent',
+                    border: `1px solid ${searchMode===key ? 'rgba(96,165,250,.45)' : C.border}`,
+                    color: searchMode===key ? '#60a5fa' : C.creamFaint,
+                  }}>{label}</button>
+                ))}
               </div>
               <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                 {[
@@ -540,10 +584,20 @@ export default function App() {
                   <Spinner size={24} /><span style={{ fontSize:11, color:C.creamFaint }}>Cargando...</span>
                 </div>
               ) : filtered.length === 0 ? (
-                <div style={{ padding:28, textAlign:'center', color:C.creamFaint, fontSize:12 }}>Sin conversaciones</div>
-              ) : filtered.map(conv => (
-                <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => openConv(conv.telefono)} />
-              ))}
+                <div style={{ padding:28, textAlign:'center', color:C.creamFaint, fontSize:12 }}>
+                  {isSearching ? (searchingMsgs ? `Ningún mensaje dice "${search.trim()}"` : `Sin resultados para "${search.trim()}"`) : 'Sin conversaciones'}
+                </div>
+              ) : (<>
+                {isSearching && (
+                  <div style={{ padding:'8px 16px 4px', fontSize:10, fontWeight:800, letterSpacing:'.06em', color:C.creamDim }}>
+                    {filtered.length} {searchingMsgs ? (filtered.length===1?'CHAT CON':'CHATS CON') : `RESULTADO${filtered.length===1?'':'S'}`}{searchingMsgs ? ' ESE MENSAJE' : ' · TODAS LAS BANDEJAS'}
+                  </div>
+                )}
+                {filtered.map(conv => (
+                  <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => openConv(conv.telefono)}
+                    search={search} estado={getStatus(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null} />
+                ))}
+              </>)}
             </div>
 
             <div style={{ padding:'7px 14px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>

@@ -71,8 +71,33 @@ export function StatusPill({ estado }) {
 }
 
 // ── CONTACT ROW ──────────────────────────────────────────────────
-export function ContactRow({ conv, isActive, onClick }) {
+// Resalta coincidencias de búsqueda
+function highlight(text, query) {
+  const t = String(text ?? '')
+  const q = String(query || '').trim().toLowerCase()
+  if (!q) return t
+  const lt = t.toLowerCase(); const parts = []; let last = 0, idx, key = 0
+  while ((idx = lt.indexOf(q, last)) !== -1) {
+    if (idx > last) parts.push(t.slice(last, idx))
+    parts.push(<mark key={key++} style={{ background:'#60a5fa33', color:'#93c5fd', borderRadius:3, padding:'0 1px' }}>{t.slice(idx, idx + q.length)}</mark>)
+    last = idx + q.length
+  }
+  if (last < t.length) parts.push(t.slice(last))
+  return parts.length ? parts : t
+}
+const ESTADO_INFO = {
+  pendiente:    { label:'Pendiente',  color:'#f87171' },
+  atendido:     { label:'Atendido',   color:'#4ade80' },
+  ventaproceso: { label:'En proceso', color:'#f59e0b' },
+  venta:        { label:'Venta',      color:'#10b981' },
+  soporte:      { label:'Soporte',    color:'#a78bfa' },
+  archivado:    { label:'Archivado',  color:'#64748b' },
+}
+
+export function ContactRow({ conv, isActive, onClick, search = '', estado, msgSnippet = null }) {
   const [hovered, setHovered] = useState(false)
+  const searching = String(search || '').trim().length > 0
+  const info = ESTADO_INFO[estado] || null
   return (
     <div
       onClick={onClick}
@@ -90,27 +115,44 @@ export function ContactRow({ conv, isActive, onClick }) {
       <Avatar name={conv.nombre} phone={conv.telefono} size={46} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 700, fontSize: 14, color: C.cream }}>{conv.nombre}</span>
+          <span style={{ fontWeight: 700, fontSize: 14, color: C.cream }}>{highlight(conv.nombre, search)}</span>
           <span style={{ fontSize: 11, color: C.creamFaint, flexShrink: 0, marginLeft: 6 }}>{fmtTime(conv.last?.timestamp)}</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
-          <span style={{
-            fontSize: 12,
-            color: conv.unread > 0 ? C.creamDim : C.creamFaint,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            maxWidth: 175, fontWeight: conv.unread > 0 ? 600 : 400,
-          }}>
-            {conv.last?.direccion === 'SALIENTE' ? 'Tú: ' : ''}
-            {conv.last?.mensaje}
-          </span>
-          {conv.unread > 0 && (
+        {msgSnippet != null ? (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, color: C.creamFaint, fontFamily: 'monospace' }}>+{conv.telefono}</span>
+              {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
+            </div>
+            <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.4 }}>
+              💬 {highlight(msgSnippet, search)}
+            </div>
+          </div>
+        ) : searching ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: C.creamDim, whiteSpace: 'nowrap' }}>📱 {highlight('+' + conv.telefono, search)}</span>
+            {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
             <span style={{
-              background: C.cream, color: C.bg,
-              borderRadius: 10, fontSize: 11, fontWeight: 800,
-              padding: '1px 7px', marginLeft: 6, flexShrink: 0,
-            }}>{conv.unread}</span>
-          )}
-        </div>
+              fontSize: 12,
+              color: conv.unread > 0 ? C.creamDim : C.creamFaint,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              maxWidth: 175, fontWeight: conv.unread > 0 ? 600 : 400,
+            }}>
+              {conv.last?.direccion === 'SALIENTE' ? 'Tú: ' : ''}
+              {conv.last?.mensaje}
+            </span>
+            {conv.unread > 0 && (
+              <span style={{
+                background: C.cream, color: C.bg,
+                borderRadius: 10, fontSize: 11, fontWeight: 800,
+                padding: '1px 7px', marginLeft: 6, flexShrink: 0,
+              }}>{conv.unread}</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
