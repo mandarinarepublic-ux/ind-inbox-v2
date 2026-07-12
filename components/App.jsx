@@ -690,6 +690,13 @@ export default function App() {
                             onFocus={e=>e.target.style.borderColor=C.cream} onBlur={e=>e.target.style.borderColor=C.border} />
                         </div>
                       ))}
+                      {btnTexts.some(t=>t.trim()) && !input.trim() ? (
+                        <div style={{ marginTop:5, padding:'5px 9px', background:'rgba(245,158,11,.14)', border:'1px solid rgba(245,158,11,.35)', borderRadius:7, fontSize:10, color:'#f59e0b', fontWeight:600 }}>
+                          ⚠️ Falta escribir el mensaje (va arriba de los botones) — luego dale a ➤
+                        </div>
+                      ) : (
+                        <div style={{ fontSize:9, color:C.creamFaint, marginTop:3 }}>Escribe el mensaje abajo y dale a enviar · Máx 3 botones</div>
+                      )}
                     </div>
                   )}
 
@@ -701,14 +708,24 @@ export default function App() {
                   </div>
 
                   <div style={{ display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
-                    {showBtnPanel && btnTexts.some(t=>t.trim()) && (
-                      <button onClick={handleSendButtons} disabled={sendingBtns||!input.trim()||!windowOpen}
-                        style={{ width:42, height:42, background:sendingBtns?C.surface2:`rgba(244,241,236,.15)`, border:`1px solid rgba(244,241,236,.3)`, borderRadius:11, cursor:sendingBtns?'default':'pointer', fontSize:14, color:C.cream, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s' }}>
-                        {sendingBtns?'⏳':'🔘'}
-                      </button>
-                    )}
-                    <button onClick={() => handleSend()} disabled={!input.trim()||sending||!windowOpen}
-                      style={{ width:42, height:42, flexShrink:0, background:input.trim()&&windowOpen?C.cream:C.surface2, border:'none', borderRadius:11, cursor:input.trim()&&windowOpen?'pointer':'default', fontSize:17, color:input.trim()&&windowOpen?C.bg:C.creamFaint, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s', boxShadow:input.trim()&&windowOpen?`0 4px 14px rgba(244,241,236,.2)`:'none' }}>➤</button>
+                    {(() => {
+                      // UN SOLO botón: manda CON botones si el panel tiene botones; si no, solo texto.
+                      const conBotones = showBtnPanel && btnTexts.some(t => t.trim())
+                      const busy = sending || sendingBtns
+                      const activo = !!input.trim() && windowOpen && !busy
+                      return (
+                        <button
+                          onClick={() => { if (conBotones) handleSendButtons(); else handleSend() }}
+                          disabled={!activo}
+                          title={conBotones ? 'Enviar con botones' : 'Enviar'}
+                          style={{ width:42, height:42, flexShrink:0, border:'none', borderRadius:11, cursor: activo ? 'pointer' : 'default', fontSize: conBotones ? 15 : 17, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s',
+                            background: activo ? (conBotones ? '#f59e0b' : C.cream) : C.surface2,
+                            color: activo ? (conBotones ? '#fff' : C.bg) : C.creamFaint,
+                            boxShadow: activo ? (conBotones ? '0 4px 14px rgba(245,158,11,.3)' : `0 4px 14px rgba(244,241,236,.2)`) : 'none' }}>
+                          {busy ? '⏳' : (conBotones ? '🔘' : '➤')}
+                        </button>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>
