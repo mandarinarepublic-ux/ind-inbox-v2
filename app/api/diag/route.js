@@ -34,8 +34,8 @@ export async function GET() {
     me: await graph('me?fields=id,name'),
     // el nodo del phone id → valida que el token pueda usar ESE número
     phone: await graph(`${META_PHONE_ID}?fields=display_phone_number,verified_name,quality_rating`),
-    // los números que SÍ puede ver el token (vía debug del token)
-    debug: await graph(`debug_token?input_token=${encodeURIComponent(META_TOKEN)}`),
+    // DESCUBRIR el Phone Number ID correcto: WABAs asignadas a este system user
+    wabas: await graph('me?fields=assigned_whatsapp_business_accounts{id,name,phone_numbers{id,display_phone_number,verified_name}}'),
   }
   return NextResponse.json(out)
 }
