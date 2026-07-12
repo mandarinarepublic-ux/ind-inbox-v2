@@ -6,9 +6,9 @@ export const dynamic = 'force-dynamic'
 // El token vive SOLO en el servidor (env) — nunca viaja al navegador.
 // Antes esto se hacía desde el cliente con el token hardcodeado en lib/api-client.js.
 const META_TOKEN    = process.env.META_TOKEN || ''
-// Phone ID del número IND (WhatsApp Manager: 1092674123940116). Confirma en
-// API Setup y setea META_PHONE_ID en Vercel; no dependas del fallback.
-const META_PHONE_ID = process.env.META_PHONE_ID || '1092674123940116'
+// Phone ID de la WABA que el token controla (IND STORE 1003593902536446). Setea
+// META_PHONE_ID en Vercel; no dependas del fallback.
+const META_PHONE_ID = process.env.META_PHONE_ID || '1135333936337730'
 
 export async function POST(req) {
   try {
