@@ -35,11 +35,8 @@ export async function GET() {
     me: await graph('me?fields=id,name'),
     // el nodo del phone id → valida que el token pueda usar ESE número
     phone: await graph(`${META_PHONE_ID}?fields=display_phone_number,verified_name,quality_rating`),
-    // phone_number_id REAL capturado del último webhook entrante (MENSAJES!Z1)
-    capturado_del_webhook: await (async () => {
-      try { const rows = await readSheet('MENSAJES'); return (rows?.[0]?.[25]) || '(aun sin capturar - espera un mensaje entrante)' }
-      catch (e) { return `error: ${e.message}` }
-    })(),
+    // Números de la WABA → aquí sale el phone_number_id CORRECTO
+    waba_phone_numbers: await graph('2151783152331852/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating'),
   }
   return NextResponse.json(out)
 }
