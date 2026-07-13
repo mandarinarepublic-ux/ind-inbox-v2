@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { appendRow } from '@/lib/sheets'
+import { dualWrite } from '@/lib/supabase'
+import { guardarMensajeSupabase } from '@/lib/inbox-supabase'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -113,11 +115,19 @@ export async function POST(req) {
     // instante en cuanto Meta acepta, y la escritura a Sheets (lenta) no retrasa la
     // respuesta. A=ID B=Telefono C=Nombre D=Tipo E=Contenido F=MediaURL G=Fecha
     //  H=Direccion I=MediaID J=RespuestaIA K=FotoIA L=ContextoID
+    const fechaSal = new Date().toISOString()
     waitUntil(
-      appendRow('MENSAJES', [
-        wamid, soloDigitos(body.Telefono), body.Nombre || '', tipo, contenido, mediaUrl,
-        new Date().toISOString(), 'SALIENTE', mediaId, '', '', '',
-      ]).catch(e => console.error('[/api/saliente] Enviado pero no se pudo registrar en Sheets:', e.message))
+      dualWrite(
+        () => appendRow('MENSAJES', [
+          wamid, soloDigitos(body.Telefono), body.Nombre || '', tipo, contenido, mediaUrl,
+          fechaSal, 'SALIENTE', mediaId, '', '', '',
+        ]),
+        () => guardarMensajeSupabase({
+          id: wamid, telefono: soloDigitos(body.Telefono), nombre: body.Nombre || '', tipo,
+          mensaje: contenido, mediaUrl, timestamp: fechaSal, direccion: 'SALIENTE', mediaId,
+        }),
+        'saliente',
+      ).catch(e => console.error('[/api/saliente] Enviado pero no se pudo registrar:', e.message))
     )
 
     return NextResponse.json({ ok: true, wamid })

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getMensajes } from '@/lib/mensajes'
 import { parseDate } from '@/lib/utils'
+import { usaSupabaseLectura } from '@/lib/supabase'
+import { getConversacionSupabase } from '@/lib/inbox-supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +20,11 @@ export async function GET(req) {
     const phone  = soloDigitos(searchParams.get('phone') || '')
     const limite = parseInt(searchParams.get('limite') || '40', 10)
     if (!phone) return NextResponse.json({ error: 'Falta phone' }, { status: 400 })
+
+    // Modo Supabase: el hilo sale de inbox.mensajes (así el bot lee Supabase sin cambios).
+    if (usaSupabaseLectura()) {
+      return NextResponse.json(await getConversacionSupabase(phone, limite))
+    }
 
     const all = await getMensajes()
     const msgs = all

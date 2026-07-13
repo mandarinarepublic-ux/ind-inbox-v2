@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { readSheet, appendRow } from '@/lib/sheets'
 import { registrarContactoEntrante } from '@/lib/contactos'
+import { usaSupabaseLectura, dualWrite } from '@/lib/supabase'
+import { existeWamidSupabase, guardarMensajeSupabase } from '@/lib/inbox-supabase'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -81,19 +83,35 @@ export async function POST(req) {
     }
 
     if (nuevos.length) {
-      // Dedup por wamid: Meta reintenta la entrega, evita filas duplicadas
-      const rows  = await readSheet('MENSAJES').catch(() => [])
-      const vistos = new Set(rows.map(r => String(r[0] || '')))
+      // Dedup por wamid: Meta reintenta la entrega, evita filas duplicadas.
+      // En modo supabase se consulta por wamid en Supabase; si no, por la hoja MENSAJES.
+      let vistos = null
+      if (!usaSupabaseLectura()) {
+        const rows = await readSheet('MENSAJES').catch(() => [])
+        vistos = new Set(rows.map(r => String(r[0] || '')))
+      }
 
       for (const m of nuevos) {
-        if (m.wamid && vistos.has(m.wamid)) continue
-        vistos.add(m.wamid)
+        if (m.wamid) {
+          const dup = vistos ? vistos.has(m.wamid) : await existeWamidSupabase(m.wamid)
+          if (dup) continue
+          if (vistos) vistos.add(m.wamid)
+        }
+        // Escribe el mensaje entrante en el backend activo (+ espejo best-effort).
         // MENSAJES: A=ID B=Telefono C=Nombre D=Tipo E=Contenido F=MediaURL
         //           G=Fecha H=Direccion I=MediaID J=RespuestaIA K=FotoIA L=ContextoID
-        await appendRow('MENSAJES', [
-          m.wamid, m.telefono, m.nombre, m.tipo, m.contenido, '',
-          m.fecha, 'ENTRANTE', m.mediaId, '', '', '',
-        ])
+        await dualWrite(
+          () => appendRow('MENSAJES', [
+            m.wamid, m.telefono, m.nombre, m.tipo, m.contenido, '',
+            m.fecha, 'ENTRANTE', m.mediaId, '', '', '',
+          ]),
+          () => guardarMensajeSupabase({
+            id: m.wamid, telefono: m.telefono, nombre: m.nombre, tipo: m.tipo,
+            mensaje: m.contenido, mediaUrl: '', timestamp: m.fecha,
+            direccion: 'ENTRANTE', mediaId: m.mediaId,
+          }),
+          'webhook.entrante',
+        )
         // Upsert del contacto (no pisa nombre/alias editados a mano)
         try { await registrarContactoEntrante(m.telefono, m.nombre, m.telefono) }
         catch (e) { console.error('[/api/webhook] contacto:', e.message) }
