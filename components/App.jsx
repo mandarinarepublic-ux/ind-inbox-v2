@@ -639,7 +639,7 @@ export default function App() {
                 )}
                 {filtered.map(conv => (
                   <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => openConv(conv.telefono)}
-                    search={search} estado={getStatus(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null} />
+                    search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null} />
                 ))}
               </>)}
             </div>
