@@ -98,6 +98,7 @@ export default function App() {
   const [toast,        setToast]        = useState(null)
   const [showSidebar,  setShowSidebar]  = useState(true)
   const [showRight,    setShowRight]    = useState(false)
+  const [rightWidth,   setRightWidth]   = useState(300) // ancho del panel derecho (px), redimensionable
   const [imgFiles,     setImgFiles]     = useState([]) // array de { file, preview }
   const [imgUploading, setImgUploading] = useState(false)
   const [imgProgress,  setImgProgress]  = useState(0)  // cuántas enviadas
@@ -121,6 +122,45 @@ export default function App() {
   const localStatusRef = useRef({})
   const pendingRef     = useRef({}) // mensajes optimistas por teléfono, hasta que Make los registre
   const seenRef        = useRef(null) // { telefono: epochMs } — última vez que se vio cada chat
+
+  // ── Panel derecho redimensionable (arrastra el borde izquierdo) ──
+  const rightWidthRef = useRef(300)
+  const resizingRef   = useRef(false)
+  useEffect(() => { rightWidthRef.current = rightWidth }, [rightWidth])
+  useEffect(() => {
+    try {
+      const v = parseInt(localStorage.getItem('ind_right_width') || '', 10)
+      if (v >= 260 && v <= 680) setRightWidth(v)
+    } catch {}
+    const clamp = (w) => Math.min(680, Math.max(260, w))
+    const onMove = (e) => {
+      if (!resizingRef.current) return
+      const x = e.touches ? e.touches[0].clientX : e.clientX
+      setRightWidth(clamp(window.innerWidth - x)) // panel pegado al borde derecho
+    }
+    const onUp = () => {
+      if (!resizingRef.current) return
+      resizingRef.current = false
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      try { localStorage.setItem('ind_right_width', String(rightWidthRef.current)) } catch {}
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onUp)
+    }
+  }, [])
+  const startResize = () => {
+    resizingRef.current = true
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+  }
   if (seenRef.current === null) seenRef.current = loadSeen()
 
   const load = useCallback(async () => {
@@ -807,10 +847,21 @@ export default function App() {
             </div>
           )}
 
-          {/* RIGHT PANEL desktop */}
+          {/* RIGHT PANEL desktop — redimensionable */}
           {activeConv && (
-            <div className="desktop-right right-col">
-              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} />
+            <div className="desktop-right" style={{ width: rightWidth, flexShrink:0, display:'flex', position:'relative' }}>
+              {/* Asa de arrastre para ensanchar/adelgazar */}
+              <div
+                onMouseDown={startResize}
+                onTouchStart={startResize}
+                title="Arrastra para ajustar el ancho"
+                style={{ width:6, flexShrink:0, cursor:'col-resize', background:C.border, borderLeft:`1px solid ${C.border2}`, transition:'background .15s', touchAction:'none' }}
+                onMouseEnter={e => e.currentTarget.style.background = C.cream}
+                onMouseLeave={e => e.currentTarget.style.background = C.border}
+              />
+              <div className="right-col" style={{ width:'auto', flex:1, borderLeft:'none' }}>
+                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} />
+              </div>
             </div>
           )}
           {showRight && activeConv && (
