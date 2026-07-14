@@ -159,9 +159,14 @@ function ProductCard({ p, sending, windowOpen, onSendFoto, onSendInfo }) {
         <span style={{ fontSize:11, color:C.creamDim, fontWeight:600, lineHeight:1.25, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', minHeight:28 }}>
           {p.title}
         </span>
-        {p.variants?.length > 0 && (
+        {p.fuente === 'sucursal' ? (
+          <span style={{ fontSize:9, color:C.creamFaint }}>
+            {[p.talla, p.color].filter(Boolean).join(' · ')}{(p.talla || p.color) ? ' · ' : ''}
+            <span style={{ color: p.stock > 0 ? '#10b981' : '#f87171', fontWeight:700 }}>{p.stock > 0 ? `${p.stock} en stock` : 'sin stock'}</span>
+          </span>
+        ) : p.variants?.length > 0 ? (
           <span style={{ fontSize:9, color:C.creamFaint }}>{p.variants.length} variante{p.variants.length === 1 ? '' : 's'}</span>
-        )}
+        ) : null}
         <div style={{ display:'flex', gap:3, marginTop:'auto' }}>
           <button onClick={() => onSendFoto(p)} disabled={sending || !windowOpen}
             title={windowOpen ? 'Enviar solo la foto' : 'Ventana cerrada'}
@@ -186,6 +191,8 @@ const TABS = [
   { id: 'ventas',     icon: '📦', label: 'Ventas' },
   { id: 'tienda',     icon: '🛍️', label: 'Tienda' },
 ]
+// Etiqueta del catálogo online en el selector de la pestaña Tienda (este inbox = INDLOVERS).
+const CATALOGO_LABEL = 'INDLOVERS'
 
 export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, contactInfo, onUpdateContact, windowOpen }) {
   const [tab, setTab] = useState('respuestas')
@@ -228,10 +235,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [pedidoRes,     setPedidoRes]     = useState(null)
 
   // ── Catálogo TIENDA (Shopify INDSTORE) ───────────────────────
-  const [productos,       setProductos]       = useState(null)  // null = cargando
-  const [productosLoaded, setProductosLoaded] = useState(false)
+  const [fuente,          setFuente]          = useState('shopify') // 'shopify' | 'sucursal'
+  const [prodCache,       setProdCache]       = useState({})        // { shopify:[...], sucursal:[...] }
   const [prodQuery,       setProdQuery]       = useState('')
-  const [prodSending,     setProdSending]     = useState(null)  // { id, modo }
+  const [prodSending,     setProdSending]     = useState(null)      // { id, modo }
+  const productos = prodCache[fuente] ?? null                       // null = cargando
 
   useEffect(() => {
     if (repliesLoaded) return
@@ -248,16 +256,15 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     }
   }, [activeConv, contactInfo])
 
-  // Cargar el catálogo la PRIMERA vez que se abre la pestaña Tienda (perezoso)
+  // Cargar el catálogo de la fuente activa la PRIMERA vez (perezoso, cacheado por fuente)
   useEffect(() => {
-    if (tab !== 'tienda' || productosLoaded) return
+    if (tab !== 'tienda' || prodCache[fuente]) return
     let cancel = false
-    setProductos(null)
-    fetchProductos().then(list => {
-      if (!cancel) { setProductos(list || []); setProductosLoaded(true) }
+    fetchProductos('', fuente).then(list => {
+      if (!cancel) setProdCache(prev => ({ ...prev, [fuente]: list || [] }))
     })
     return () => { cancel = true }
-  }, [tab, productosLoaded])
+  }, [tab, fuente, prodCache])
 
   if (!activeConv) return null
 
@@ -546,8 +553,22 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
         {/* ═══════════ TIENDA: CATÁLOGO SHOPIFY (INDSTORE) ═══════════ */}
         {tab === 'tienda' && (
           <div style={{ display:'flex', flexDirection:'column', minHeight:'100%' }}>
-            {/* Buscador */}
+            {/* Selector de fuente + buscador */}
             <div style={{ position:'sticky', top:0, zIndex:2, padding:'10px 12px', background:C.surface, borderBottom:`1px solid ${C.border}` }}>
+              <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+                {[{ id:'shopify', label:CATALOGO_LABEL, icon:'🛍️' }, { id:'sucursal', label:'Sucursal', icon:'🏬' }].map(f => {
+                  const on = fuente === f.id
+                  return (
+                    <button key={f.id} onClick={() => setFuente(f.id)}
+                      style={{ flex:1, padding:'6px 8px', borderRadius:8, fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+                        border:`1px solid ${on ? 'rgba(244,241,236,.5)' : C.border}`,
+                        background: on ? 'rgba(244,241,236,.1)' : 'transparent',
+                        color: on ? C.cream : C.creamFaint, transition:'all .15s' }}>
+                      {f.icon} {f.label}
+                    </button>
+                  )
+                })}
+              </div>
               <div style={{ position:'relative' }}>
                 <span style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', fontSize:12, color:C.creamFaint }}>🔍</span>
                 <input value={prodQuery} onChange={e => setProdQuery(e.target.value)} placeholder="Buscar producto…"
@@ -560,7 +581,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
               {productos !== null && (
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
                   <span style={{ fontSize:9, color:C.creamFaint }}>{productosFiltrados.length} producto{productosFiltrados.length === 1 ? '' : 's'}</span>
-                  <span onClick={() => setProductosLoaded(false)} title="Recargar catálogo" style={{ marginLeft:'auto', color:C.creamFaint, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
+                  <span onClick={() => setProdCache(prev => { const n = { ...prev }; delete n[fuente]; return n })} title="Recargar catálogo" style={{ marginLeft:'auto', color:C.creamFaint, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
                 </div>
               )}
             </div>

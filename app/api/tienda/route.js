@@ -1,49 +1,71 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 
-// Catálogo Shopify para la pestaña TIENDA del panel derecho. Lee la tabla
-// `crm.productos_shopify` (mismo proyecto Supabase, schema `crm`), que el sync del
-// CRM mantiene fresca. Solo productos con foto (el objetivo es ENVIAR la imagen al
-// cliente como si fuera una respuesta rápida). La imagen es una URL pública de
-// cdn.shopify.com → se envía directo por /api/saliente sin proxy.
+// Catálogo para la pestaña TIENDA del panel derecho. Dos fuentes (?fuente=):
+//  - 'shopify' (default): catálogo online `crm.productos_shopify` (lo llena el sync del CRM).
+//  - 'sucursal': inventario físico `crm.sucursal` (stock/talla/color, foto en Cloudinary).
+// Ambas en el mismo proyecto Supabase (schema `crm`). Solo items con foto (el objetivo
+// es ENVIAR la imagen al cliente). Filtro por tienda con ilike (maneja INDSTORE/Indstore).
 export const dynamic = 'force-dynamic'
 
-// Este inbox es IND → SIEMPRE tienda 'INDSTORE' en el catálogo.
-// Fijo (NO por env): el env de Vercel de este proyecto trae INBOX_TIENDA=MANDARINA
-// heredado de MANDI, que traería el catálogo equivocado. Hardcodeado a INDSTORE.
+// Este inbox es IND → SIEMPRE tienda 'INDSTORE' (fijo, NO por env: el env de Vercel de
+// este proyecto trae INBOX_TIENDA=MANDARINA heredado de MANDI y traería el catálogo equivocado).
 const TIENDA = 'INDSTORE'
 
 export async function GET(req) {
   try {
-    const q = (new URL(req.url).searchParams.get('q') || '').trim()
+    const sp     = new URL(req.url).searchParams
+    const q      = (sp.get('q') || '').trim()
+    const fuente = (sp.get('fuente') || 'shopify').toLowerCase()
+    const sb     = getSupabase()
 
-    // getSupabase() está scopeado al schema `inbox`; para el catálogo saltamos a `crm`.
-    let query = getSupabase()
-      .schema('crm')
-      .from('productos_shopify')
+    if (fuente === 'sucursal') {
+      // Inventario físico de sucursal.
+      let query = sb.schema('crm').from('sucursal')
+        .select('id, nombre, precio, talla, color, stock, reservado, foto_url')
+        .eq('activo', true)
+        .ilike('tienda', TIENDA)
+      if (q) query = query.ilike('nombre', `%${q}%`)
+      query = query.order('nombre').limit(500)
+      const { data, error } = await query
+      if (error) throw error
+      const products = (data || [])
+        .filter((p) => p.foto_url)
+        .map((p) => ({
+          id: p.id,
+          title: p.nombre || '',
+          price: p.precio !== null && p.precio !== undefined ? String(p.precio) : '',
+          image: p.foto_url,
+          talla: p.talla || '',
+          color: p.color || '',
+          stock: p.stock,
+          fuente: 'sucursal',
+        }))
+      return NextResponse.json({ products })
+    }
+
+    // Catálogo online Shopify (default).
+    let query = sb.schema('crm').from('productos_shopify')
       .select('id, title, price, image, variants')
       .eq('activo', true)
       .ilike('tienda', TIENDA)
     if (q) query = query.ilike('title', `%${q}%`)
     query = query.order('title').limit(400)
-
     const { data, error } = await query
     if (error) throw error
-
     const products = (data || [])
-      .filter((p) => p.image) // sin foto no sirve para enviar
+      .filter((p) => p.image)
       .map((p) => ({
         id: p.id,
         title: p.title || '',
         price: p.price !== null && p.price !== undefined ? String(p.price) : '',
         image: p.image,
         variants: Array.isArray(p.variants) ? p.variants : [],
+        fuente: 'shopify',
       }))
-
     return NextResponse.json({ products })
   } catch (e) {
     console.error('[/api/tienda]', e.message)
-    // Degradar suave: la pestaña muestra "sin resultados" en vez de romper el panel.
     return NextResponse.json({ products: [], error: e.message })
   }
 }
