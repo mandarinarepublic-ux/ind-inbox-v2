@@ -4,6 +4,7 @@ import { readSheet, appendRow } from '@/lib/sheets'
 import { registrarContactoEntrante, getModoIA } from '@/lib/contactos'
 import { usaSupabaseLectura, dualWrite } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase } from '@/lib/inbox-supabase'
+import { archivarFoto } from '@/lib/media-archive'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -161,6 +162,13 @@ export async function POST(req) {
           }),
           'webhook.entrante',
         )
+        // Archivar la foto entrante a Supabase Storage (URL estable en media_url).
+        // En background (no frena el 200 a Meta). Solo en modo supabase, donde la
+        // fila ya quedó insertada por el dualWrite de arriba.
+        if (usaSupabaseLectura() && (m.tipo === 'imagen' || m.tipo === 'sticker') && m.mediaId) {
+          waitUntil(archivarFoto({ mediaId: m.mediaId, wamid: m.wamid }))
+        }
+
         // Upsert del contacto (no pisa nombre/alias editados a mano)
         try { await registrarContactoEntrante(m.telefono, m.nombre, m.telefono) }
         catch (e) { console.error('[/api/webhook] contacto:', e.message) }
