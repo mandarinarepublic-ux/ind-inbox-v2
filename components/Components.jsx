@@ -164,10 +164,10 @@ function MediaContent({ tipo, mediaUrl, mediaId }) {
   const driveFixed = raw.includes('drive.google.com/uc') ? raw.replace('export=download', 'export=view') : raw
   const src = viaProxy(driveFixed, mediaId)   // Meta→/api/media ; Drive/otros→igual
   const hasSrc = !!src
-  const isImage    = ['image', 'sticker'].includes(tipo) || !!raw.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
-  const isAudio    = tipo === 'audio' || !!raw.match(/\.(ogg|mp3|aac|m4a|opus)(\?|$)/i)
-  const isVideo    = tipo === 'video' || !!raw.match(/\.(mp4|mov|webm)(\?|$)/i)
-  const isDocument = tipo === 'document' || !!raw.match(/\.(pdf|doc|docx|xls|xlsx)(\?|$)/i)
+  const isImage    = ['image', 'sticker', 'imagen', 'foto'].includes(tipo) || !!raw.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
+  const isAudio    = ['audio'].includes(tipo) || !!raw.match(/\.(ogg|mp3|aac|m4a|opus)(\?|$)/i)
+  const isVideo    = ['video'].includes(tipo) || !!raw.match(/\.(mp4|mov|webm)(\?|$)/i)
+  const isDocument = ['document', 'documento'].includes(tipo) || !!raw.match(/\.(pdf|doc|docx|xls|xlsx)(\?|$)/i)
 
   if (hasSrc && isImage) return (
     <a href={src} target="_blank" rel="noreferrer" style={{ display: 'block', marginBottom: 6 }}>
@@ -208,7 +208,7 @@ function QuotedMessage({ contextoId, allMsgs }) {
   // Comparar por HASH del wamid (el envoltorio difiere aunque sea el mismo mensaje)
   const cited = allMsgs.find(m => hashWamid(m.id) === hashWamid(contextoId))
   if (!cited) return null
-  const isImage = ['image','sticker'].includes(cited.tipo) || !!cited.mediaUrl?.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
+  const isImage = ['image','sticker','imagen','foto'].includes(cited.tipo) || !!cited.mediaUrl?.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
   const citedSrc = viaProxy(cited.mediaUrl, cited.mediaId)
   return (
     <div style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, overflow: 'hidden' }}>
