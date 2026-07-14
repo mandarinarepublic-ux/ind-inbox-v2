@@ -256,12 +256,12 @@ export default function App() {
   const totalUnread    = convs.reduce((s, c) => s + c.unread, 0)
   // VENTA desacoplada del estado de flujo:
   // - getStatus = SOLO el estado real (pendiente/atendido/…), NO se fuerza 'venta'.
-  // - "Venta" = tiene un PEDIDO CREADO (idVenta, col H). La pestaña 💰 filtra por eso
-  //   y excluye archivados. Así un cliente con venta que vuelve a escribir aparece en
-  //   Pendiente Y en Ventas (conviven); al archivar, sale de Ventas.
+  // - "Venta" = tiene un PEDIDO CREADO (idVenta, col H) O fue marcado a mano con el
+  //   botón 💰 Venta (estado='venta'). La pestaña 💰 filtra por eso y excluye archivados.
+  //   Antes solo contaba idVenta → marcar Venta a mano hacía DESAPARECER el chat.
   const hasVenta      = (tel) => String(contacts[tel]?.idVenta || '').trim() !== ''
   const getStatus     = (tel) => contacts[tel]?.estado || 'pendiente'
-  const esVentaActiva = (tel) => hasVenta(tel) && getStatus(tel) !== 'archivado'
+  const esVentaActiva = (tel) => (hasVenta(tel) || getStatus(tel) === 'venta') && getStatus(tel) !== 'archivado'
 
   // Búsqueda tolerante de teléfono (Ecuador): 0987… == 593987… (últimos 9 díg).
   const soloDig  = (s) => String(s || '').replace(/\D/g, '')
@@ -342,7 +342,7 @@ export default function App() {
     setConvs(prev => prev.map(c => c.telefono === tel ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
     pendingRef.current[tel] = [ ...(pendingRef.current[tel] || []), tmpMsg ]
     // 2) Estado → atendido (optimista, no bloquea la UI)
-    changeStatus(tel, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido')
+    changeStatus(tel, ['ventaproceso','venta'].includes(currentStatus) ? currentStatus : 'atendido')
     // 3) Enviar en segundo plano; solo avisamos si FALLA (no congela el input ni el botón)
     sendReply(tel, nombre, t)
       .then(result => { if (result && result.ok === false) { setToast(result); setTimeout(() => setToast(null), 4000) } })
@@ -401,7 +401,7 @@ export default function App() {
         }
       }
       setImgResult({ ok: allOk })
-      await changeStatus(activeConv.telefono, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido')
+      await changeStatus(activeConv.telefono, ['ventaproceso','venta'].includes(currentStatus) ? currentStatus : 'atendido')
       setTimeout(() => { setImgFiles([]); setImgResult(null); setIsVideo(false); setImgProgress(0); if (fileRef.current) fileRef.current.value = '' }, 1500)
       setTimeout(load, 4000)
     } catch { setImgResult({ ok: false }) }
@@ -438,13 +438,13 @@ export default function App() {
       await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imgs[i])
       if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 800))
     }
-    changeStatus(activeConv.telefono, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido')
+    changeStatus(activeConv.telefono, ['ventaproceso','venta'].includes(currentStatus) ? currentStatus : 'atendido')
   }
 
   const handleSendAIImage = async (imageUrl) => {
     if (!activeConv || !imageUrl) return
     const res = await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imageUrl)
-    if (res.ok) await changeStatus(activeConv.telefono, currentStatus === 'ventaproceso' ? 'ventaproceso' : 'atendido')
+    if (res.ok) await changeStatus(activeConv.telefono, ['ventaproceso','venta'].includes(currentStatus) ? currentStatus : 'atendido')
   }
 
   const getModoIA = (tel) => {
@@ -477,7 +477,7 @@ export default function App() {
     pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
     const result = await sendInteractiveButtons(activeConv.telefono, activeConv.nombre, input.trim(), validBtns)
     setSendingBtns(false); setToast(result); setTimeout(()=>setToast(null),4000)
-    if (result.ok) { setInput(''); setBtnTexts(['','','']); setShowBtnPanel(false); await changeStatus(activeConv.telefono, currentStatus==='ventaproceso'?'ventaproceso':'atendido'); setTimeout(load,4000) }
+    if (result.ok) { setInput(''); setBtnTexts(['','','']); setShowBtnPanel(false); await changeStatus(activeConv.telefono, ['ventaproceso','venta'].includes(currentStatus)?currentStatus:'atendido'); setTimeout(load,4000) }
   }
 
   const currentContact     = activeConv ? contacts[activeConv.telefono] : null
