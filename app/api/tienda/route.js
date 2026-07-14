@@ -8,8 +8,10 @@ import { getSupabase } from '@/lib/supabase'
 // cdn.shopify.com → se envía directo por /api/saliente sin proxy.
 export const dynamic = 'force-dynamic'
 
-// Este inbox es IND → tienda 'INDSTORE' en el catálogo. Override por env si hace falta.
-const TIENDA = process.env.INBOX_TIENDA || 'INDSTORE'
+// Este inbox es IND → SIEMPRE tienda 'INDSTORE' en el catálogo.
+// Fijo (NO por env): el env de Vercel de este proyecto trae INBOX_TIENDA=MANDARINA
+// heredado de MANDI, que traería el catálogo equivocado. Hardcodeado a INDSTORE.
+const TIENDA = 'INDSTORE'
 
 export async function GET(req) {
   try {
