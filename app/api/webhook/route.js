@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { readSheet, appendRow } from '@/lib/sheets'
-import { registrarContactoEntrante } from '@/lib/contactos'
+import { registrarContactoEntrante, getModoIA } from '@/lib/contactos'
 import { usaSupabaseLectura, dualWrite } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase } from '@/lib/inbox-supabase'
 
@@ -15,6 +16,54 @@ export const revalidate = 0
 //   https://<tu-app>.vercel.app/api/webhook
 // y usa como Verify Token el valor de WHATSAPP_VERIFY_TOKEN.
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || ''
+
+// ── Auto-respuesta IA (indx-agent) — APAGADA por defecto ──────────────────────
+// DOBLE CANDADO para responder automáticamente:
+//   1) master switch  IA_AUTORESPUESTA='on'  (default OFF → nada auto-responde)
+//   2) el chat en ModoIA='IA'  (se enciende por conversación desde el inbox)
+// El agente DEVUELVE el texto; nosotros lo enviamos por /api/saliente (que lo manda
+// a Meta y lo registra en inbox.mensajes → así Indi tiene memoria del hilo).
+// Tolerante a BOM/espacios/mayúsculas (el `vercel env add` por PowerShell mete BOM).
+const IA_ON     = String(process.env.IA_AUTORESPUESTA || '').replace(/[^a-z]/gi, '').toLowerCase() === 'on'
+const AGENT_URL = process.env.INDX_AGENT_URL || 'https://indx-agent.vercel.app/api/agent'
+const AGENT_KEY = process.env.INDX_AGENT_KEY || 'mandi_republic_2024'
+const RE_IMG = /https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s)]*)?/gi
+
+async function enviarSaliente(origin, body) {
+  return fetch(`${origin}/api/saliente`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(e => console.error('[webhook IA] envío falló:', e.message))
+}
+
+async function responderConIA(origin, phone, name, message) {
+  try {
+    const r = await fetch(AGENT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-mandi-key': AGENT_KEY },
+      body: JSON.stringify({ phone, name: name || '', message, source: 'webhook' }),
+      signal: AbortSignal.timeout(28000),
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) { console.error('[webhook IA] agente', r.status, data?.error || ''); return }
+    const reply = String(data?.reply_clean || data?.reply || '').trim()
+    if (!reply) return
+
+    // Las URLs de imagen que Indi incluyó se envían como FOTOS aparte.
+    const imagenes = [...new Set(reply.match(RE_IMG) || [])]
+    let texto = reply
+    for (const u of imagenes) texto = texto.split(u).join('')
+    texto = texto.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+
+    if (texto) await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: texto })
+    for (const url of imagenes) {
+      await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', ImagenURL: url })
+    }
+  } catch (e) {
+    console.error('[webhook IA] agente falló:', e.message)
+  }
+}
 
 // ── Verificación del webhook (GET) ────────────────────────────────────────────
 export async function GET(req) {
@@ -115,6 +164,17 @@ export async function POST(req) {
         // Upsert del contacto (no pisa nombre/alias editados a mano)
         try { await registrarContactoEntrante(m.telefono, m.nombre, m.telefono) }
         catch (e) { console.error('[/api/webhook] contacto:', e.message) }
+
+        // ── Auto-respuesta IA (doble candado) — solo TEXTO; media la ve un humano ──
+        if (IA_ON && m.tipo === 'texto' && String(m.contenido || '').trim()) {
+          const encendida = await getModoIA(m.telefono).catch(() => false)
+          if (encendida) {
+            const host  = req.headers.get('x-forwarded-host') || req.headers.get('host')
+            const proto = req.headers.get('x-forwarded-proto') || 'https'
+            // En segundo plano: Meta recibe su 200 al instante, la IA responde detrás.
+            waitUntil(responderConIA(`${proto}://${host}`, m.telefono, m.nombre, m.contenido))
+          }
+        }
       }
     }
 
