@@ -248,7 +248,26 @@ export function MessageBubble({ msg, allMsgs }) {
         {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} />}
         {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} />}
         {hasText && <p style={{ margin: 0, fontSize: 14, color: C.cream, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.mensaje}</p>}
-        {!hasText && !hasMedia && <p style={{ margin: 0, fontSize: 13, color: C.creamFaint, fontStyle: 'italic' }}>{msg.tipo ? `[${msg.tipo}]` : '[mensaje]'}</p>}
+        {/* Botones interactivos enviados por nosotros */}
+        {isMe && msg.botones && (() => {
+          try {
+            const btns = typeof msg.botones === 'string' ? JSON.parse(msg.botones) : msg.botones
+            if (!Array.isArray(btns) || btns.length === 0) return null
+            return (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:7 }}>
+                {btns.map((btn, i) => (
+                  <div key={i} style={{
+                    padding:'5px 12px', borderRadius:20,
+                    border:'1px solid rgba(245,158,11,.45)',
+                    color:'#f59e0b', fontSize:12, fontWeight:600,
+                    background:'rgba(245,158,11,.08)',
+                  }}>[ {btn.title} ]</div>
+                ))}
+              </div>
+            )
+          } catch { return null }
+        })()}
+        {!hasText && !hasMedia && !msg.botones && <p style={{ margin: 0, fontSize: 13, color: C.creamFaint, fontStyle: 'italic' }}>{msg.tipo ? `[${msg.tipo}]` : '[mensaje]'}</p>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5, marginTop: 4 }}>
           <span style={{ fontSize: 10, color: C.creamFaint }}>
           {(() => {

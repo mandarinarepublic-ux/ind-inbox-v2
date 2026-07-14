@@ -380,7 +380,10 @@ export default function App() {
     if (botones.length && reply.text) {
       // Respuesta rápida CON botones interactivos
       const validBtns = botones.map((t, i) => ({ id: `btn_${i + 1}`, title: t }))
-      const tmpMsg = { id: 'tmp_' + Date.now(), telefono: activeConv.telefono, nombre: activeConv.nombre, mensaje: `${reply.text}\n${validBtns.map(b => `[ ${b.title} ]`).join('  ')}`, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+      // El servidor guarda SOLO el cuerpo en `mensaje`; los botones van aparte en `botones`
+      // (así el texto optimista coincide con lo guardado → la reconciliación descarta el
+      // temporal sin duplicar, y la burbuja pinta los botones desde `botones`).
+      const tmpMsg = { id: 'tmp_' + Date.now(), telefono: activeConv.telefono, nombre: activeConv.nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
       setConvs(prev => prev.map(c => c.telefono === activeConv.telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
       pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
       sendInteractiveButtons(activeConv.telefono, activeConv.nombre, reply.text, validBtns).catch(() => {})
@@ -428,7 +431,8 @@ export default function App() {
     const validBtns = btnTexts.map((t,i) => ({ id:`btn_${i+1}`, title:t.trim() })).filter(b=>b.title)
     if (validBtns.length === 0) return
     setSendingBtns(true)
-    const tmpMsg = { id:'tmp_'+Date.now(), telefono:activeConv.telefono, nombre:activeConv.nombre, mensaje:`${input.trim()}\n${validBtns.map(b=>`[ ${b.title} ]`).join('  ')}`, direccion:'SALIENTE', timestamp:new Date().toISOString(), estado:'enviado', _pendingAt: Date.now() }
+    // mensaje = solo el cuerpo (igual a lo que guarda el servidor) + botones aparte → sin duplicado.
+    const tmpMsg = { id:'tmp_'+Date.now(), telefono:activeConv.telefono, nombre:activeConv.nombre, mensaje:input.trim(), botones:validBtns, direccion:'SALIENTE', timestamp:new Date().toISOString(), estado:'enviado', _pendingAt: Date.now() }
     setConvs(prev=>prev.map(c=>c.telefono===activeConv.telefono?{...c,msgs:[...c.msgs,tmpMsg],last:tmpMsg}:c))
     pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
     const result = await sendInteractiveButtons(activeConv.telefono, activeConv.nombre, input.trim(), validBtns)
