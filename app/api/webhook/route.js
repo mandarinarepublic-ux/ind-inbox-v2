@@ -3,7 +3,7 @@ import { waitUntil } from '@vercel/functions'
 import { readSheet, appendRow } from '@/lib/sheets'
 import { registrarContactoEntrante, getModoIA } from '@/lib/contactos'
 import { usaSupabaseLectura, dualWrite } from '@/lib/supabase'
-import { existeWamidSupabase, guardarMensajeSupabase } from '@/lib/inbox-supabase'
+import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase } from '@/lib/inbox-supabase'
 import { archivarFoto } from '@/lib/media-archive'
 
 export const dynamic = 'force-dynamic'
@@ -130,6 +130,12 @@ export async function POST(req) {
     const body = await req.json().catch(() => ({}))
     const entries = body?.entry || []
 
+    // Respaldo crudo (histórico tipo Make): guarda el POST COMPLETO tal cual llegó,
+    // antes de parsear. En background: Meta recibe su 200 al instante. Best-effort.
+    if (usaSupabaseLectura() && (body?.entry || []).length) {
+      waitUntil(guardarEventoCrudoSupabase(body))
+    }
+
     // Recolecta los mensajes entrantes (ignora statuses de entrega/lectura)
     const nuevos = []
     for (const entry of entries) {
@@ -147,6 +153,7 @@ export async function POST(req) {
             telefono,
             nombre: nombreDe[telefono] || '',
             tipo, contenido, mediaId, referral,
+            raw: msg, // respaldo: objeto crudo del mensaje tal cual de Meta
             fecha: msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : new Date().toISOString(),
           })
         }
@@ -179,7 +186,7 @@ export async function POST(req) {
           () => guardarMensajeSupabase({
             id: m.wamid, telefono: m.telefono, nombre: m.nombre, tipo: m.tipo,
             mensaje: m.contenido, mediaUrl: '', timestamp: m.fecha,
-            direccion: 'ENTRANTE', mediaId: m.mediaId, referral: m.referral,
+            direccion: 'ENTRANTE', mediaId: m.mediaId, referral: m.referral, raw: m.raw,
           }),
           'webhook.entrante',
         )
