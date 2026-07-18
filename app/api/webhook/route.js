@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { readSheet, appendRow } from '@/lib/sheets'
-import { registrarContactoEntrante, getModoIA } from '@/lib/contactos'
+import { registrarContactoEntrante, getModoIA, getContactos } from '@/lib/contactos'
 import { usaSupabaseLectura, dualWrite } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase } from '@/lib/inbox-supabase'
 import { archivarFoto } from '@/lib/media-archive'
+import { getAutomatizaciones } from '@/lib/automatizaciones'
+
+const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -129,6 +132,9 @@ export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}))
     const entries = body?.entry || []
+    const _host  = req.headers.get('x-forwarded-host') || req.headers.get('host')
+    const _proto = req.headers.get('x-forwarded-proto') || 'https'
+    const origin = `${_proto}://${_host}`
 
     // Respaldo crudo (histórico tipo Make): guarda el POST COMPLETO tal cual llegó,
     // antes de parsear. En background: Meta recibe su 200 al instante. Best-effort.
@@ -169,6 +175,32 @@ export async function POST(req) {
         vistos = new Set(rows.map(r => String(r[0] || '')))
       }
 
+      // ── Saludos automáticos: config + SNAPSHOT de contactos leído ANTES de
+      // guardar los mensajes de este lote (para detectar "nuevo" y "reactivación").
+      const auto = await getAutomatizaciones().catch(() => null)
+      const contactosSnap = await getContactos().catch(() => [])
+      const modoIAde  = (phone) => { const c = contactosSnap.find(c => tail9(c.telefono) === tail9(phone)); return c ? c.modoIA !== false : false }
+      const esNuevoDe = (phone) => !contactosSnap.find(c => tail9(c.telefono) === tail9(phone))
+      const ultimoEntranteAtDe = (phone) => { const c = contactosSnap.find(c => tail9(c.telefono) === tail9(phone)); return c?.ultimoEntranteAt ? new Date(c.ultimoEntranteAt).getTime() : 0 }
+      const agenteResponde = (phone) => IA_ON && modoIAde(phone) // ¿el bot va a contestar?
+      const saludados = new Set()
+      async function saludarSiCorresponde(phone, name) {
+        if (!auto || agenteResponde(phone)) return // si el bot responde, él saluda → evita doble msg
+        const t = tail9(phone)
+        if (saludados.has(t)) return
+        if (esNuevoDe(phone)) {
+          const s = auto.saludo_nuevo
+          if (s?.activo && String(s.texto || '').trim()) { saludados.add(t); await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: s.texto.trim() }) }
+          return
+        }
+        const s = auto.saludo_reactivacion
+        if (s?.activo && String(s.texto || '').trim()) {
+          const horas = Number(s.horas) || 12
+          const prevMs = ultimoEntranteAtDe(phone)
+          if (prevMs && Date.now() - prevMs >= horas * 3600 * 1000) { saludados.add(t); await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: s.texto.trim() }) }
+        }
+      }
+
       for (const m of nuevos) {
         if (m.wamid) {
           const dup = vistos ? vistos.has(m.wamid) : await existeWamidSupabase(m.wamid)
@@ -201,14 +233,16 @@ export async function POST(req) {
         try { await registrarContactoEntrante(m.telefono, m.nombre, m.telefono) }
         catch (e) { console.error('[/api/webhook] contacto:', e.message) }
 
+        // Saludo automático (bienvenida a nuevo / "hola de vuelta" al reactivarse).
+        // En background: no frena el 200 a Meta. Solo dispara si el bot NO va a responder.
+        waitUntil(saludarSiCorresponde(m.telefono, m.nombre).catch(e => console.error('[/api/webhook] saludo:', e.message)))
+
         // ── Auto-respuesta IA (doble candado) — solo TEXTO; media la ve un humano ──
         if (IA_ON && m.tipo === 'texto' && String(m.contenido || '').trim()) {
           const encendida = await getModoIA(m.telefono).catch(() => false)
           if (encendida) {
-            const host  = req.headers.get('x-forwarded-host') || req.headers.get('host')
-            const proto = req.headers.get('x-forwarded-proto') || 'https'
             // En segundo plano: Meta recibe su 200 al instante, la IA responde detrás.
-            waitUntil(responderConIA(`${proto}://${host}`, m.telefono, m.nombre, m.contenido))
+            waitUntil(responderConIA(origin, m.telefono, m.nombre, m.contenido))
           }
         }
       }

@@ -4,6 +4,8 @@ import { fetchRows, fetchContacts, sendReply, sendImageUrl as sendImageUrlApi, u
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
+import Contactos, { PlantillaModal } from '@/components/Contactos'
+import Automatizaciones from '@/components/Automatizaciones'
 import { actualizarNoLeidos } from '@/lib/notif'
 
 // Paleta IND
@@ -86,6 +88,9 @@ const loadSeen  = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)
 const saveSeen  = (m) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify(m)) } catch {} }
 
 export default function App() {
+  const [vista,        setVista]        = useState('CHAT') // 'CHAT' | 'CONTACTOS' | 'AUTO'
+  const [showTplModal, setShowTplModal] = useState(false)  // plantilla desde el chat (fuera de 24h)
+  const [tplToast,     setTplToast]     = useState(null)
   const [convs,        setConvs]        = useState([])
   const [contacts,     setContacts]     = useState({})
   const [active,       setActive]       = useState(null)
@@ -250,6 +255,15 @@ export default function App() {
     setActive(telefono); setShowSidebar(false); autoScroll.current = true; prevMsgLen.current = 0
     seenRef.current[telefono] = Date.now(); saveSeen(seenRef.current)
     setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, unread: 0 } : c))
+  }
+
+  // Desde la pestaña CONTACTOS: vuelve al chat y abre la conversación (match por
+  // últimos 9 dígitos, por si el formato del directorio difiere).
+  const abrirChatDesdeContactos = (telefono) => {
+    const t9 = String(telefono).replace(/\D/g, '').slice(-9)
+    const conv = convs.find(c => String(c.telefono).replace(/\D/g, '').slice(-9) === t9)
+    setVista('CHAT')
+    openConv(conv ? conv.telefono : telefono)
   }
 
   const activeConv     = convs.find(c => c.telefono === active) || null
@@ -531,16 +545,25 @@ export default function App() {
 
       <div style={{ display:'flex', flexDirection:'column', height:'100dvh', overflow:'hidden' }}>
 
-        {/* ══════ HEADER ══════ */}
-        <div style={{ display:'flex', justifyContent:'center', alignItems:'center', flexShrink:0, height:42, background:C.bg, borderBottom:`1px solid ${C.border}`, zIndex:200 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:28, height:28, background:C.cream, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:900, color:C.bg, letterSpacing:'-0.5px' }}>IND</div>
-            <span style={{ fontSize:13, fontWeight:800, color:C.cream, letterSpacing:'2px' }}>INDLOVERS CHAT</span>
-            <div style={{ width:6, height:6, borderRadius:'50%', background:C.cream, animation:'pulse 2s infinite', opacity:.6 }} />
-          </div>
+        {/* ══════ HEADER + PESTAÑAS ══════ */}
+        <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:12, flexShrink:0, height:42, background:C.bg, borderBottom:`1px solid ${C.border}`, zIndex:200, overflowX:'auto' }}>
+          <div style={{ width:26, height:26, background:C.cream, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:900, color:C.bg, letterSpacing:'-0.5px', flexShrink:0 }}>IND</div>
+          {[
+            { id:'CHAT',      label:'💬 CHAT' },
+            { id:'CONTACTOS', label:'👥 CONTACTOS' },
+            { id:'AUTO',      label:'⚙️ AUTOS' },
+          ].map(({ id, label }) => (
+            <button key={id} onClick={() => setVista(id)} style={{
+              padding:'4px 14px', border:'none', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, height:'100%',
+              background: vista===id ? 'rgba(244,241,236,.1)' : 'transparent',
+              borderTop:'2px solid transparent',
+              borderBottom: vista===id ? `2px solid ${C.cream}` : '2px solid transparent',
+              color: vista===id ? C.cream : C.creamFaint, fontWeight:800, fontSize:11, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
+            }}>{label}</button>
+          ))}
         </div>
 
-        <div className="app-shell" style={{ flex:1, minHeight:0, height:0 }}>
+        <div className="app-shell" style={{ flex:1, minHeight:0, height:0, display: vista==='CHAT' ? 'flex' : 'none' }}>
 
           {/* ══════ SIDEBAR ══════ */}
           <div className={`sidebar${showSidebar ? ' open' : ''}`}>
@@ -557,7 +580,10 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                <a href="/dashboard" title="Dashboard" style={{ background:'rgba(96,165,250,.14)', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', textDecoration:'none', flexShrink:0 }}>📊</a>
+                <div style={{ display:'flex', gap:5, flexShrink:0 }}>
+                  <button onClick={() => setVista('AUTO')} title="Mensajes de saludo (automatizaciones)" style={{ background:'rgba(245,158,11,.14)', border:'1px solid rgba(245,158,11,.35)', color:'#f59e0b', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>👋</button>
+                  <a href="/dashboard" title="Dashboard" style={{ background:'rgba(96,165,250,.14)', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', textDecoration:'none' }}>📊</a>
+                </div>
               </div>
               <div style={{ position:'relative', marginBottom:6 }}>
                 <span style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:C.creamFaint, fontSize:12, pointerEvents:'none' }}>🔍</span>
@@ -729,8 +755,9 @@ export default function App() {
               {/* Input bar */}
               <div className="input-bar" style={{ position:'relative' }}>
                 {!windowOpen && lastIncoming && (
-                  <div style={{ marginBottom:8, padding:'5px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)', borderRadius:8, fontSize:11, color:'#fbbf24', textAlign:'center' }}>
-                    ⚠️ Ventana de 24h cerrada
+                  <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)', borderRadius:8, fontSize:11, color:'#fbbf24', display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexWrap:'wrap' }}>
+                    <span>⚠️ Ventana de 24h cerrada — solo plantilla</span>
+                    <button onClick={() => setShowTplModal(true)} style={{ background:'linear-gradient(135deg,#f59e0b,#f97316)', border:'none', color:'#0b1220', fontWeight:800, fontSize:11, padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>📋 Enviar plantilla</button>
                   </div>
                 )}
                 {imgFiles.length > 0 && (
@@ -873,8 +900,34 @@ export default function App() {
             </div>
           )}
 
-        </div>
+        </div>{/* fin app-shell */}
+
+        {/* ══════ CONTACTOS ══════ */}
+        {vista === 'CONTACTOS' && (
+          <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
+            <Contactos active={vista==='CONTACTOS'} onOpenChat={abrirChatDesdeContactos} />
+          </div>
+        )}
+        {/* ══════ AUTOMATIZACIONES ══════ */}
+        {vista === 'AUTO' && (
+          <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
+            <Automatizaciones active={vista==='AUTO'} />
+          </div>
+        )}
       </div>
+
+      {/* Modal de plantilla desde el chat (ventana de 24h cerrada) */}
+      {showTplModal && activeConv && (
+        <PlantillaModal
+          telefono={activeConv.telefono}
+          nombre={activeConv.nombre}
+          onClose={() => setShowTplModal(false)}
+          flash={(m) => { setTplToast(m); setTimeout(() => setTplToast(null), 3000) }}
+        />
+      )}
+      {tplToast && (
+        <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:C.surface2, border:`1px solid ${C.border2}`, color:C.cream, padding:'10px 18px', borderRadius:10, fontSize:13, fontWeight:700, zIndex:600, boxShadow:'0 8px 30px rgba(0,0,0,.6)', maxWidth:'86vw', textAlign:'center' }}>{tplToast}</div>
+      )}
     </>
   )
 }
