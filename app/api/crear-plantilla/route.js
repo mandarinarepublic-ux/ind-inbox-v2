@@ -33,7 +33,14 @@ async function crear() {
     body: JSON.stringify(TEMPLATE),
   })
   const data = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, wabaId, data, enviado: TEMPLATE }
+  // Estado real de la plantilla (exista ya o recién creada).
+  let estado = null
+  try {
+    const q = await fetch(`${GRAPH}/${wabaId}/message_templates?name=${TEMPLATE.name}&fields=name,status,language,category&access_token=${encodeURIComponent(META_TOKEN)}`)
+    const qd = await q.json().catch(() => ({}))
+    estado = (qd?.data || []).map((t) => ({ name: t.name, status: t.status, language: t.language, category: t.category }))
+  } catch {}
+  return { ok: res.ok, creado_ahora: res.ok, wabaId, meta: data?.error?.error_user_msg || data, estado }
 }
 
 async function handle(req) {
