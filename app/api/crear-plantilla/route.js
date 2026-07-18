@@ -14,7 +14,7 @@ const TEMPLATE = {
   language: 'es',
   category: 'MARKETING',
   components: [
-    { type: 'HEADER', format: 'TEXT', text: 'Esto te va a encantar 👀' },
+    { type: 'HEADER', format: 'TEXT', text: 'Esto te va a encantar' },
     {
       type: 'BODY',
       text: 'Hola {{1}} 😎\n\nNos llegaron nuevos diseños de {{2}} 🔥\nY honestamente… están demasiado buenos 👀\n\nMíralos aquí:\n{{3}}\n\n¿Quieres que te recomiende uno según tu estilo?',
