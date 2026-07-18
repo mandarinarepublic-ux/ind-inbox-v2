@@ -581,7 +581,7 @@ export default function App() {
                   </div>
                 </div>
                 <div style={{ display:'flex', gap:5, flexShrink:0 }}>
-                  <button onClick={() => setVista('AUTO')} title="Mensajes de saludo (automatizaciones)" style={{ background:'rgba(245,158,11,.14)', border:'1px solid rgba(245,158,11,.35)', color:'#f59e0b', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>👋</button>
+                  <button onClick={() => setVista('AUTO')} title="Mensajes de saludo (automatizaciones)" style={{ background:'rgba(244,241,236,.1)', border:'1px solid rgba(244,241,236,.28)', color:C.cream, borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>👋</button>
                   <a href="/dashboard" title="Dashboard" style={{ background:'rgba(96,165,250,.14)', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', textDecoration:'none' }}>📊</a>
                 </div>
               </div>
@@ -757,7 +757,7 @@ export default function App() {
                 {!windowOpen && lastIncoming && (
                   <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)', borderRadius:8, fontSize:11, color:'#fbbf24', display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexWrap:'wrap' }}>
                     <span>⚠️ Ventana de 24h cerrada — solo plantilla</span>
-                    <button onClick={() => setShowTplModal(true)} style={{ background:'linear-gradient(135deg,#f59e0b,#f97316)', border:'none', color:'#0b1220', fontWeight:800, fontSize:11, padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>📋 Enviar plantilla</button>
+                    <button onClick={() => setShowTplModal(true)} style={{ background:C.cream, border:'none', color:C.bg, fontWeight:800, fontSize:11, padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>📋 Enviar plantilla</button>
                   </div>
                 )}
                 {imgFiles.length > 0 && (

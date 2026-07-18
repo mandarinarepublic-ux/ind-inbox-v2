@@ -2,14 +2,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { fetchDirectorio, fetchPlantillas, sendReply, sendTemplate } from '@/lib/api-client'
 
-// ── Pestaña CONTACTOS ─────────────────────────────────────────────────────────
+// ── Pestaña CONTACTOS (tema IND: cream sobre negro) ───────────────────────────
 // Directorio de todos los que te han escrito. Marca dentro/fuera de la ventana de
-// 24h de WhatsApp: DENTRO → texto libre o ir al chat; FUERA → solo PLANTILLA.
+// 24h: DENTRO → texto libre o ir al chat; FUERA → solo PLANTILLA.
 
-const ORANGE = '#f59e0b'
+const C = {
+  bg:'#0A0A0A', surface:'#0D0D0D', surface2:'#111111', modal:'#0D0D0D',
+  border:'#1F1F1F', border2:'#2A2A2A', borderFaint:'#161616',
+  cream:'#F4F1EC', creamDim:'#A09A90', creamFaint:'#3A3530',
+  green:'#4ade80', amber:'#f59e0b',
+}
 const soloDig = (s) => String(s || '').replace(/\D/g, '')
 
-// Tiempo relativo corto (es).
 function hace(iso) {
   if (!iso) return 'sin mensajes'
   const ms = Date.now() - new Date(iso).getTime()
@@ -25,7 +29,6 @@ function hace(iso) {
   return `hace ${mes} mes${mes > 1 ? 'es' : ''}`
 }
 
-// Sustituye {{1}}, {{2}}… por los valores dados (para la vista previa).
 function render(txt, params = []) {
   return String(txt || '').replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => params[Number(n) - 1] || `{{${n}}}`)
 }
@@ -34,9 +37,9 @@ function Badge24h({ on }) {
   return (
     <span style={{
       fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
-      background: on ? 'rgba(37,211,102,.12)' : 'rgba(148,163,184,.1)',
-      color: on ? '#25d366' : '#94a3b8',
-      border: `1px solid ${on ? 'rgba(37,211,102,.3)' : 'rgba(148,163,184,.2)'}`,
+      background: on ? 'rgba(74,222,128,.1)' : 'rgba(160,154,144,.08)',
+      color: on ? C.green : C.creamDim,
+      border: `1px solid ${on ? 'rgba(74,222,128,.28)' : 'rgba(160,154,144,.2)'}`,
     }}>{on ? '🟢 24h abierta' : '🔒 solo plantilla'}</span>
   )
 }
@@ -45,7 +48,7 @@ export default function Contactos({ active, onOpenChat }) {
   const [contactos, setContactos] = useState([])
   const [loading,   setLoading]   = useState(true)
   const [search,    setSearch]    = useState('')
-  const [sel,       setSel]       = useState(null)   // contacto abierto en el panel
+  const [sel,       setSel]       = useState(null)
   const [toast,     setToast]     = useState(null)
 
   const cargar = useCallback(async () => {
@@ -78,41 +81,41 @@ export default function Contactos({ active, onOpenChat }) {
   if (!active) return null
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: '#080d14', minWidth: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, minWidth: 0 }}>
       {/* Encabezado + buscador */}
-      <div style={{ padding: '16px 16px 10px', borderBottom: '1px solid #162030', flexShrink: 0 }}>
+      <div style={{ padding: '16px 16px 10px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ fontSize: 19, fontWeight: 900, color: '#e2e8f0' }}>👥 Contactos</div>
-          <div style={{ fontSize: 11, color: '#64748b' }}>
-            {contactos.length} en total · <b style={{ color: '#25d366' }}>{dentro24h}</b> dentro de 24h
+          <div style={{ fontSize: 19, fontWeight: 900, color: C.cream }}>👥 Contactos</div>
+          <div style={{ fontSize: 11, color: C.creamDim }}>
+            {contactos.length} en total · <b style={{ color: C.green }}>{dentro24h}</b> dentro de 24h
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, background: '#0d1828', border: '1px solid #1e2d3d', borderRadius: 10, padding: '8px 12px' }}>
-          <span style={{ fontSize: 14, color: '#475569' }}>🔍</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '8px 12px' }}>
+          <span style={{ fontSize: 14, color: C.creamFaint }}>🔍</span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o número…"
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#e2e8f0', fontSize: 13, fontFamily: 'Outfit,sans-serif' }} />
-          {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 15 }}>✕</button>}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: C.cream, fontSize: 13, fontFamily: 'Outfit,sans-serif' }} />
+          {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: C.creamFaint, cursor: 'pointer', fontSize: 15 }}>✕</button>}
         </div>
       </div>
 
       {/* Lista */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        {loading && <div style={{ color: '#475569', fontSize: 13, padding: 20 }}>Cargando contactos…</div>}
-        {!loading && filtrados.length === 0 && <div style={{ color: '#475569', fontSize: 13, padding: 20 }}>Sin resultados.</div>}
+        {loading && <div style={{ color: C.creamFaint, fontSize: 13, padding: 20 }}>Cargando contactos…</div>}
+        {!loading && filtrados.length === 0 && <div style={{ color: C.creamFaint, fontSize: 13, padding: 20 }}>Sin resultados.</div>}
         {filtrados.map((c) => (
           <button key={c.telefono} onClick={() => setSel(c)} style={{
             width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 16px',
-            background: 'transparent', border: 'none', borderBottom: '1px solid #111c2a', cursor: 'pointer', textAlign: 'left',
+            background: 'transparent', border: 'none', borderBottom: `1px solid ${C.borderFaint}`, cursor: 'pointer', textAlign: 'left',
           }}>
             <div style={{
               width: 38, height: 38, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'linear-gradient(135deg,#1e2d3d,#0d1828)', color: ORANGE, fontWeight: 800, fontSize: 15,
+              background: C.surface, color: C.cream, fontWeight: 800, fontSize: 15, border: `1px solid ${C.border2}`,
             }}>{(c.nombre || c.telefono || '?').trim().charAt(0).toUpperCase()}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.cream, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {c.nombre || c.alias || c.telefono}
               </div>
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: C.creamDim, marginTop: 1 }}>
                 {soloDig(c.telefono)} · {hace(c.ultimoEntranteAt)}
               </div>
             </div>
@@ -120,28 +123,18 @@ export default function Contactos({ active, onOpenChat }) {
           </button>
         ))}
         {!loading && contactos.length > 400 && !search && (
-          <div style={{ color: '#334155', fontSize: 11, padding: '12px 16px', textAlign: 'center' }}>
+          <div style={{ color: C.creamFaint, fontSize: 11, padding: '12px 16px', textAlign: 'center' }}>
             Mostrando los 400 más recientes · usa el buscador para el resto
           </div>
         )}
       </div>
 
       {sel && (
-        <PanelContacto
-          contacto={sel}
-          onClose={() => setSel(null)}
-          onOpenChat={onOpenChat}
-          flash={flash}
-        />
+        <PanelContacto contacto={sel} onClose={() => setSel(null)} onOpenChat={onOpenChat} flash={flash} />
       )}
 
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: '#0d1828', border: '1px solid #1e2d3d', color: '#e2e8f0',
-          padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700, zIndex: 400,
-          boxShadow: '0 8px 30px rgba(0,0,0,.5)', maxWidth: '86vw', textAlign: 'center',
-        }}>{toast}</div>
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: C.surface2, border: `1px solid ${C.border}`, color: C.cream, padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700, zIndex: 400, boxShadow: '0 8px 30px rgba(0,0,0,.6)', maxWidth: '86vw', textAlign: 'center' }}>{toast}</div>
       )}
     </div>
   )
@@ -163,58 +156,38 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 500 }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 500 }} />
       <div style={{
         position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
         width: 'min(460px, 94vw)', maxHeight: '88vh', overflowY: 'auto', zIndex: 501,
-        background: '#0b1220', border: '1px solid #1e2d3d', borderRadius: 18, padding: 20,
-        boxShadow: '0 20px 60px rgba(0,0,0,.6)',
+        background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 18, padding: 20,
+        boxShadow: '0 20px 60px rgba(0,0,0,.7)',
       }}>
-        {/* Cabecera */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg,#1e2d3d,#0d1828)', color: ORANGE, fontWeight: 800, fontSize: 18,
-          }}>{(c.nombre || c.telefono || '?').trim().charAt(0).toUpperCase()}</div>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface2, color: C.cream, fontWeight: 800, fontSize: 18, border: `1px solid ${C.border2}` }}>{(c.nombre || c.telefono || '?').trim().charAt(0).toUpperCase()}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.cream, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {c.nombre || c.alias || soloDig(c.telefono)}
             </div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>{soloDig(c.telefono)}</div>
+            <div style={{ fontSize: 12, color: C.creamDim }}>{soloDig(c.telefono)}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 20 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.creamFaint, cursor: 'pointer', fontSize: 20 }}>✕</button>
         </div>
 
         <div style={{ marginBottom: 14 }}><Badge24h on={c.dentro24h} /></div>
 
-        {/* Ir al chat */}
-        <button
-          onClick={() => { onOpenChat?.(c.telefono); onClose() }}
-          style={{
-            width: '100%', padding: '11px', borderRadius: 11, border: '1px solid #1e2d3d', marginBottom: 16,
-            background: '#0d1828', color: '#e2e8f0', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: 'Outfit,sans-serif',
-          }}>💬 Abrir la conversación</button>
+        <button onClick={() => { onOpenChat?.(c.telefono); onClose() }}
+          style={{ width: '100%', padding: '11px', borderRadius: 11, border: `1px solid ${C.border2}`, marginBottom: 16, background: C.surface2, color: C.cream, fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: 'Outfit,sans-serif' }}>💬 Abrir la conversación</button>
 
         {c.dentro24h ? (
-          // ── Dentro de 24h → texto libre ──
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#94a3b8', marginBottom: 8 }}>Enviar mensaje (texto libre)</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: C.creamDim, marginBottom: 8 }}>Enviar mensaje (texto libre)</div>
             <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={3} placeholder="Escribe tu mensaje…"
-              style={{
-                width: '100%', background: '#080d14', border: '1px solid #1e2d3d', borderRadius: 10,
-                color: '#e2e8f0', fontSize: 13, padding: '10px 12px', fontFamily: 'Outfit,sans-serif',
-                resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10,
-              }} />
+              style={{ width: '100%', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.cream, fontSize: 13, padding: '10px 12px', fontFamily: 'Outfit,sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
             <button onClick={enviarLibre} disabled={!texto.trim() || sending}
-              style={{
-                width: '100%', padding: '11px', borderRadius: 11, border: 'none',
-                background: texto.trim() ? `linear-gradient(135deg,${ORANGE},#f97316)` : '#1e2d3d',
-                color: texto.trim() ? '#0b1220' : '#475569', fontWeight: 900, fontSize: 14,
-                cursor: texto.trim() && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif',
-              }}>{sending ? 'Enviando…' : 'Enviar'}</button>
+              style={{ width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: texto.trim() ? C.cream : C.border, color: texto.trim() ? C.bg : C.creamFaint, fontWeight: 900, fontSize: 14, cursor: texto.trim() && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif' }}>{sending ? 'Enviando…' : 'Enviar'}</button>
           </div>
         ) : (
-          // ── Fuera de 24h → plantilla ──
           <SelectorPlantilla contacto={c} flash={flash} onClose={onClose} />
         )}
       </div>
@@ -226,16 +199,16 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
 export function PlantillaModal({ telefono, nombre, onClose, flash }) {
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 500 }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 500 }} />
       <div style={{
         position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
         width: 'min(460px, 94vw)', maxHeight: '88vh', overflowY: 'auto', zIndex: 501,
-        background: '#0b1220', border: '1px solid #1e2d3d', borderRadius: 18, padding: 20,
-        boxShadow: '0 20px 60px rgba(0,0,0,.6)',
+        background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 18, padding: 20,
+        boxShadow: '0 20px 60px rgba(0,0,0,.7)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#e2e8f0' }}>📋 Enviar plantilla</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 20 }}>✕</button>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.cream }}>📋 Enviar plantilla</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.creamFaint, cursor: 'pointer', fontSize: 20 }}>✕</button>
         </div>
         <SelectorPlantilla contacto={{ telefono, nombre }} flash={flash} onClose={onClose} />
       </div>
@@ -245,7 +218,7 @@ export function PlantillaModal({ telefono, nombre, onClose, flash }) {
 
 // ── Selector de plantilla (para contactos fuera de 24h) ───────────────────────
 function SelectorPlantilla({ contacto: c, flash, onClose }) {
-  const [estado,  setEstado]  = useState('loading') // loading | ready | error | needsEnv
+  const [estado,  setEstado]  = useState('loading')
   const [error,   setError]   = useState('')
   const [tpls,    setTpls]    = useState([])
   const [chosen,  setChosen]  = useState(null)
@@ -289,44 +262,44 @@ function SelectorPlantilla({ contacto: c, flash, onClose }) {
   }
 
   const inp = {
-    width: '100%', background: '#080d14', border: '1px solid #1e2d3d', borderRadius: 8,
-    color: '#e2e8f0', fontSize: 13, padding: '8px 10px', fontFamily: 'Outfit,sans-serif',
+    width: '100%', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8,
+    color: C.cream, fontSize: 13, padding: '8px 10px', fontFamily: 'Outfit,sans-serif',
     outline: 'none', boxSizing: 'border-box', marginBottom: 8,
   }
 
   return (
     <div>
-      <div style={{ fontSize: 11.5, color: '#f59e0b', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 9, padding: '8px 10px', marginBottom: 12, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 11.5, color: C.amber, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 9, padding: '8px 10px', marginBottom: 12, lineHeight: 1.4 }}>
         ⚠️ Pasaron más de 24h desde su último mensaje. WhatsApp solo permite enviar una <b>plantilla aprobada</b>.
       </div>
 
-      {estado === 'loading' && <div style={{ color: '#475569', fontSize: 13 }}>Cargando plantillas…</div>}
+      {estado === 'loading' && <div style={{ color: C.creamFaint, fontSize: 13 }}>Cargando plantillas…</div>}
 
       {estado === 'needsEnv' && (
-        <div style={{ color: '#94a3b8', fontSize: 12.5, lineHeight: 1.5 }}>
-          Falta configurar <b style={{ color: ORANGE }}>{error}</b> en Vercel para listar tus plantillas.
+        <div style={{ color: C.creamDim, fontSize: 12.5, lineHeight: 1.5 }}>
+          Falta configurar <b style={{ color: C.cream }}>{error}</b> para listar tus plantillas.
           {error === 'META_WABA_ID' && ' Es el ID de tu cuenta de WhatsApp Business (no el phone id).'}
         </div>
       )}
 
-      {estado === 'error' && <div style={{ color: '#ef4444', fontSize: 12.5 }}>Error: {error}</div>}
+      {estado === 'error' && <div style={{ color: '#f87171', fontSize: 12.5 }}>Error: {error}</div>}
 
       {estado === 'ready' && tpls.length === 0 && (
-        <div style={{ color: '#94a3b8', fontSize: 12.5, lineHeight: 1.5 }}>
+        <div style={{ color: C.creamDim, fontSize: 12.5, lineHeight: 1.5 }}>
           No hay plantillas aprobadas todavía. Crea una en Meta (WhatsApp Manager → Plantillas) para poder escribir fuera de 24h.
         </div>
       )}
 
       {estado === 'ready' && tpls.length > 0 && !chosen && (
         <div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#94a3b8', marginBottom: 8 }}>Elige una plantilla</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: C.creamDim, marginBottom: 8 }}>Elige una plantilla</div>
           {tpls.map((t) => (
             <button key={`${t.name}_${t.language}`} onClick={() => elegir(t)} style={{
-              width: '100%', textAlign: 'left', background: '#0d1828', border: '1px solid #1e2d3d', borderRadius: 10,
+              width: '100%', textAlign: 'left', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10,
               padding: '10px 12px', marginBottom: 8, cursor: 'pointer',
             }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#e2e8f0' }}>{t.name} <span style={{ fontSize: 10, color: '#475569' }}>· {t.language}</span></div>
-              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.bodyText}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.cream }}>{t.name} <span style={{ fontSize: 10, color: C.creamFaint }}>· {t.language}</span></div>
+              <div style={{ fontSize: 11.5, color: C.creamDim, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.bodyText}</div>
             </button>
           ))}
         </div>
@@ -334,40 +307,35 @@ function SelectorPlantilla({ contacto: c, flash, onClose }) {
 
       {chosen && (
         <div>
-          <button onClick={() => setChosen(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 12, padding: 0, marginBottom: 10 }}>← otras plantillas</button>
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#e2e8f0', marginBottom: 8 }}>{chosen.name}</div>
+          <button onClick={() => setChosen(null)} style={{ background: 'none', border: 'none', color: C.creamDim, cursor: 'pointer', fontSize: 12, padding: 0, marginBottom: 10 }}>← otras plantillas</button>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.cream, marginBottom: 8 }}>{chosen.name}</div>
 
           {chosen.header?.format === 'IMAGE' && (
-            <><div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>URL de la imagen del encabezado</div>
+            <><div style={{ fontSize: 11, color: C.creamDim, marginBottom: 4 }}>URL de la imagen del encabezado</div>
               <input value={headImg} onChange={e => setHeadImg(e.target.value)} placeholder="https://…" style={inp} /></>
           )}
           {headP.map((v, i) => (
             <div key={`h${i}`}>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Encabezado · variable {i + 1}</div>
+              <div style={{ fontSize: 11, color: C.creamDim, marginBottom: 4 }}>Encabezado · variable {i + 1}</div>
               <input value={v} onChange={e => setHeadP(p => p.map((x, j) => j === i ? e.target.value : x))} style={inp} />
             </div>
           ))}
           {bodyP.map((v, i) => (
             <div key={`b${i}`}>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Variable {'{{'}{i + 1}{'}}'}</div>
+              <div style={{ fontSize: 11, color: C.creamDim, marginBottom: 4 }}>Variable {'{{'}{i + 1}{'}}'}</div>
               <input value={v} onChange={e => setBodyP(p => p.map((x, j) => j === i ? e.target.value : x))} style={inp} />
             </div>
           ))}
 
           {chosen.bodyText && (
-            <div style={{ background: '#080d14', border: '1px solid #1e2d3d', borderRadius: 10, padding: '10px 12px', margin: '4px 0 12px' }}>
-              <div style={{ fontSize: 10, color: '#475569', fontWeight: 800, marginBottom: 4 }}>VISTA PREVIA</div>
-              <div style={{ fontSize: 13, color: '#cbd5e1', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{preview}</div>
+            <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', margin: '4px 0 12px' }}>
+              <div style={{ fontSize: 10, color: C.creamFaint, fontWeight: 800, marginBottom: 4 }}>VISTA PREVIA</div>
+              <div style={{ fontSize: 13, color: C.cream, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{preview}</div>
             </div>
           )}
 
           <button onClick={enviar} disabled={!listo || sending}
-            style={{
-              width: '100%', padding: '11px', borderRadius: 11, border: 'none',
-              background: listo ? `linear-gradient(135deg,${ORANGE},#f97316)` : '#1e2d3d',
-              color: listo ? '#0b1220' : '#475569', fontWeight: 900, fontSize: 14,
-              cursor: listo && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif',
-            }}>{sending ? 'Enviando…' : 'Enviar plantilla'}</button>
+            style={{ width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: listo ? C.cream : C.border, color: listo ? C.bg : C.creamFaint, fontWeight: 900, fontSize: 14, cursor: listo && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif' }}>{sending ? 'Enviando…' : 'Enviar plantilla'}</button>
         </div>
       )}
     </div>
