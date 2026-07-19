@@ -3,7 +3,7 @@ import { waitUntil } from '@vercel/functions'
 import { readSheet, appendRow } from '@/lib/sheets'
 import { registrarContactoEntrante, getModoIA, getContactos } from '@/lib/contactos'
 import { usaSupabaseLectura, dualWrite } from '@/lib/supabase'
-import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase } from '@/lib/inbox-supabase'
+import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase } from '@/lib/inbox-supabase'
 import { archivarFoto } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 
@@ -128,6 +128,16 @@ function extraer(msg) {
 }
 
 // ── Recepción de mensajes (POST) ──────────────────────────────────────────────
+// Read receipts: procesa los value.statuses[] de Meta (sent/delivered/read/failed)
+// y actualiza estado_entrega del mensaje saliente por wamid. Solo en modo supabase.
+async function procesarStatuses(statuses) {
+  if (!usaSupabaseLectura()) return
+  for (const s of statuses) {
+    await actualizarEstadoEntregaSupabase(s.wamid, s.estado)
+      .catch(e => console.error('[webhook status]', e.message))
+  }
+}
+
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}))
@@ -142,14 +152,20 @@ export async function POST(req) {
       waitUntil(guardarEventoCrudoSupabase(body))
     }
 
-    // Recolecta los mensajes entrantes (ignora statuses de entrega/lectura)
+    // Recolecta los mensajes entrantes + los statuses de entrega (✓✓)
     const nuevos = []
+    const statuses = [] // read receipts: {wamid, estado}
     for (const entry of entries) {
       for (const change of entry?.changes || []) {
         const value    = change?.value || {}
         const contacts = value?.contacts || []
         const nombreDe = {}
         for (const c of contacts) nombreDe[c.wa_id] = c.profile?.name || ''
+
+        // Estados de entrega (✓✓) de mensajes que ENVIAMOS.
+        for (const st of value?.statuses || []) {
+          if (st?.id && st?.status) statuses.push({ wamid: String(st.id), estado: String(st.status).toLowerCase() })
+        }
 
         for (const msg of value?.messages || []) {
           const telefono = String(msg.from || '')
@@ -247,6 +263,9 @@ export async function POST(req) {
         }
       }
     }
+
+    // Read receipts (✓✓): actualizar estado de entrega en background.
+    if (statuses.length) waitUntil(procesarStatuses(statuses))
 
     // Meta exige 200 rápido o reintenta
     return NextResponse.json({ ok: true })
