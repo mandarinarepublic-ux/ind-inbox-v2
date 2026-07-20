@@ -1,12 +1,12 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { fetchRows, fetchContacts, sendReply, sendImageUrl as sendImageUrlApi, updateContact, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile } from '@/lib/api-client'
+import { fetchRows, fetchContacts, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile } from '@/lib/api-client'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
 import Contactos, { PlantillaModal } from '@/components/Contactos'
 import Automatizaciones from '@/components/Automatizaciones'
-import { actualizarNoLeidos } from '@/lib/notif'
+import { actualizarNoLeidos, pedirPermisoNotif, notificar } from '@/lib/notif'
 
 // Paleta IND
 const C = {
@@ -20,7 +20,25 @@ const C = {
   creamFaint:'#3A3530',
 }
 
-const IMGBB_KEY    = '2307574d43689522feabd27cff3443df'
+// ── Dos ejes de estado ────────────────────────────────────────────
+// Eje 1 (bandeja): pendiente / atendido / soporte / archivado — casi todo automático.
+// Eje 2 (temperatura del lead): caliente / tibio / frio — 100% MANUAL, nada la cambia sola.
+const TEMPERATURAS = [
+  { key:'caliente', icon:'🔥', label:'Caliente', color:'#f97316' },
+  { key:'tibio',    icon:'🌤️', label:'Tibio',    color:'#fbbf24' },
+  { key:'frio',     icon:'❄️', label:'Frío',     color:'#38bdf8' },
+]
+const TEMP_META = Object.fromEntries(TEMPERATURAS.map(t => [t.key, t]))
+
+// La ventana de 24h de Meta arranca en el ÚLTIMO mensaje del cliente. Un lead 🔥 caliente
+// que se acerca a las 24h de silencio se resalta con ⏰ (hay que cerrarlo antes de que Meta
+// bloquee el mensaje gratis). Umbral por defecto: 20h.
+const VENTANA_MS = 24 * 60 * 60 * 1000
+const ALERTA_CALIENTE_MS = 20 * 60 * 60 * 1000
+
+// Al RESPONDER, la bandeja pasa a 'atendido' salvo que sea un carril deliberado (soporte).
+// La TEMPERATURA (Eje 2) nunca se toca al responder: es otro campo.
+const estadoAlResponder = (actual) => (actual === 'soporte' ? 'soporte' : 'atendido')
 
 async function toJpeg(file) {
   return new Promise((resolve) => {
@@ -125,6 +143,8 @@ export default function App() {
   const prevMsgLen = useRef(0)
   const [refreshKey, setRefreshKey] = useState(0)
   const localStatusRef = useRef({})
+  const localTempRef   = useRef({}) // override optimista de temperatura (Eje 2), hasta que el poll confirme
+  const alertadosRef   = useRef(new Set()) // leads calientes ya notificados (1 aviso por ventana)
   const pendingRef     = useRef({}) // mensajes optimistas por teléfono, hasta que Make los registre
   const seenRef        = useRef(null) // { telefono: epochMs } — última vez que se vio cada chat
 
@@ -202,6 +222,10 @@ export default function App() {
       Object.entries(localStatusRef.current).forEach(([tel, override]) => {
         if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], estado: override.estado }
       })
+      // Igual para la temperatura (Eje 2): que el poll no pise un cambio recién hecho.
+      Object.entries(localTempRef.current).forEach(([tel, override]) => {
+        if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], temperatura: override.temperatura }
+      })
       setContacts(ctMap)
     }
 
@@ -266,16 +290,50 @@ export default function App() {
     openConv(conv ? conv.telefono : telefono)
   }
 
+  // ── Alerta de leads 🔥 calientes cerca del cierre de la ventana de 24h ──
+  // Pide permiso una vez y dispara una notificación del navegador por lead y por ventana.
+  useEffect(() => { pedirPermisoNotif() }, [])
+  useEffect(() => {
+    const now = Date.now()
+    Object.entries(contacts).forEach(([tel, c]) => {
+      if ((c?.temperatura || '') !== 'caliente') return
+      const ent = c?.ultimoEntranteAt ? new Date(c.ultimoEntranteAt).getTime() : 0
+      if (!ent) return
+      const ms = now - ent
+      if (ms < ALERTA_CALIENTE_MS || ms >= VENTANA_MS) return
+      const key = `${tel}:${ent}` // 1 alerta por ventana (mismo entrante = misma ventana)
+      if (alertadosRef.current.has(key)) return
+      alertadosRef.current.add(key)
+      const nombre = c.alias || (convs.find(x => x.telefono === tel)?.nombre) || tel
+      const horas  = Math.max(0, Math.ceil((VENTANA_MS - ms) / 3600000))
+      notificar('🔥 Lead caliente por enfriarse', `${nombre}: se cierra la ventana de 24h en ~${horas}h. Escríbele ya.`, `caliente-${key}`)
+    })
+  }, [contacts, convs])
+
   const activeConv     = convs.find(c => c.telefono === active) || null
   const totalUnread    = convs.reduce((s, c) => s + c.unread, 0)
-  // VENTA desacoplada del estado de flujo:
-  // - getStatus = SOLO el estado real (pendiente/atendido/…), NO se fuerza 'venta'.
-  // - "Venta" = tiene un PEDIDO CREADO (idVenta, col H) O fue marcado a mano con el
-  //   botón 💰 Venta (estado='venta'). La pestaña 💰 filtra por eso y excluye archivados.
-  //   Antes solo contaba idVenta → marcar Venta a mano hacía DESAPARECER el chat.
+  // VENTA desacoplada del estado de flujo (igual que WA INBOX V2):
+  // - getStatus = SOLO el estado real de bandeja (pendiente/atendido/soporte/archivado).
+  // - "Venta" = tiene un PEDIDO CREADO (idVenta, col H). La pestaña 💰 filtra por eso y
+  //   excluye archivados. Así un cliente con venta que vuelve a escribir aparece en
+  //   PENDIENTE (para atenderlo) y a la vez sigue en 💰 Ventas.
   const hasVenta      = (tel) => String(contacts[tel]?.idVenta || '').trim() !== ''
   const getStatus     = (tel) => contacts[tel]?.estado || 'pendiente'
-  const esVentaActiva = (tel) => (hasVenta(tel) || getStatus(tel) === 'venta') && getStatus(tel) !== 'archivado'
+  const esVentaActiva = (tel) => hasVenta(tel) && getStatus(tel) !== 'archivado'
+  // Eje 2: temperatura del lead ('' = sin clasificar).
+  const getTemp = (tel) => contacts[tel]?.temperatura || ''
+  const esTemp  = (key) => TEMP_META[key] !== undefined
+  // Ventana de 24h: ms desde el último mensaje del cliente.
+  const silencioMs = (tel) => {
+    const t = contacts[tel]?.ultimoEntranteAt
+    return t ? (Date.now() - new Date(t).getTime()) : Infinity
+  }
+  // 🔥 caliente que se acerca al cierre de la ventana (entre el umbral y las 24h) → ⏰.
+  const alertaVentana = (tel) => {
+    if (getTemp(tel) !== 'caliente') return false
+    const ms = silencioMs(tel)
+    return ms >= ALERTA_CALIENTE_MS && ms < VENTANA_MS
+  }
 
   // Búsqueda tolerante de teléfono (Ecuador): 0987… == 593987… (últimos 9 díg).
   const soloDig  = (s) => String(s || '').replace(/\D/g, '')
@@ -310,16 +368,25 @@ export default function App() {
           return c.nombre.toLowerCase().includes(q) || alias.includes(q) || phoneMatch(c.telefono, search)
         })
   // Al BUSCAR mostramos TODOS los resultados sin importar la pestaña activa.
+  // Un solo filtro activo a la vez: venta (idVenta), temperatura (Eje 2) o bandeja (estado).
   const filtered = isSearching
     ? searched
-    : searched.filter(c => filter === 'venta' ? esVentaActiva(c.telefono) : getStatus(c.telefono) === filter)
+    : searched.filter(c =>
+        filter === 'venta' ? esVentaActiva(c.telefono)
+        : esTemp(filter)   ? getTemp(c.telefono) === filter
+        :                    getStatus(c.telefono) === filter)
   const counts = {
-    pendiente:    searched.filter(c => getStatus(c.telefono) === 'pendiente').length,
-    atendido:     searched.filter(c => getStatus(c.telefono) === 'atendido').length,
-    archivado:    searched.filter(c => getStatus(c.telefono) === 'archivado').length,
-    ventaproceso: searched.filter(c => getStatus(c.telefono) === 'ventaproceso').length,
-    venta:        searched.filter(c => esVentaActiva(c.telefono)).length,
-    soporte:      searched.filter(c => getStatus(c.telefono) === 'soporte').length,
+    pendiente:  searched.filter(c => getStatus(c.telefono) === 'pendiente').length,
+    atendido:   searched.filter(c => getStatus(c.telefono) === 'atendido').length,
+    archivado:  searched.filter(c => getStatus(c.telefono) === 'archivado').length,
+    venta:      searched.filter(c => esVentaActiva(c.telefono)).length,
+    soporte:    searched.filter(c => getStatus(c.telefono) === 'soporte').length,
+    // Temperaturas (Eje 2)
+    caliente:   searched.filter(c => getTemp(c.telefono) === 'caliente').length,
+    tibio:      searched.filter(c => getTemp(c.telefono) === 'tibio').length,
+    frio:       searched.filter(c => getTemp(c.telefono) === 'frio').length,
+    // Calientes que se acercan a las 24h → para el aviso ⏰.
+    alerta:     searched.filter(c => alertaVentana(c.telefono)).length,
   }
 
   const lastIncoming = activeConv ? [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE') : null
@@ -336,6 +403,22 @@ export default function App() {
     setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), estado: status } }))
     const conv = convs.find(c => c.telefono === telefono)
     await updateContact(telefono, conv?.nombre || '', status, contacts[telefono]?.alias || '', true)
+  }
+
+  // ── Cambiar TEMPERATURA del lead (Eje 2) — 100% manual ────────
+  // Clic en la temperatura activa la QUITA (toggle). Nada más la toca.
+  const changeTemperatura = async (telefono, temp) => {
+    const actual = contacts[telefono]?.temperatura || ''
+    const nueva  = actual === temp ? '' : temp
+    localTempRef.current[telefono] = { temperatura: nueva, expiresAt: Date.now() + 15000 }
+    setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), temperatura: nueva } }))
+    const res = await updateTemperatura(telefono, nueva)
+    if (res && res.ok === false) {
+      delete localTempRef.current[telefono]
+      setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), temperatura: actual } }))
+      setToast({ ok: false, msg: '✗ No se pudo cambiar la temperatura — reintenta' })
+      setTimeout(() => setToast(null), 4000)
+    }
   }
 
   const handleUpdateContact = async ({ alias }) => {
@@ -356,7 +439,7 @@ export default function App() {
     setConvs(prev => prev.map(c => c.telefono === tel ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
     pendingRef.current[tel] = [ ...(pendingRef.current[tel] || []), tmpMsg ]
     // 2) Estado → atendido (optimista, no bloquea la UI)
-    changeStatus(tel, ['ventaproceso','venta'].includes(currentStatus) ? currentStatus : 'atendido')
+    changeStatus(tel, estadoAlResponder(currentStatus))
     // 3) Enviar en segundo plano; solo avisamos si FALLA (no congela el input ni el botón)
     sendReply(tel, nombre, t)
       .then(result => { if (result && result.ok === false) { setToast(result); setTimeout(() => setToast(null), 4000) } })
@@ -404,14 +487,16 @@ export default function App() {
         allOk = result.ok
       } else {
         for (let i = 0; i < imgFiles.length; i++) {
-          // imgbb solo nos da la url permanente para el historial del hilo. Si falla,
-          // NO cancelamos el envío: subimos el archivo a Meta y mandamos por media id.
+          // URL permanente para pintar el hilo. La guardamos en NUESTRO Supabase
+          // Storage (vía /api/upload-foto), no en imgbb: imgbb respondía lento/5xx a
+          // los fetch server-side y las fotos que se enviaban por link terminaban en
+          // `failed`. Si falla, NO cancelamos: el envío real va por media id igual.
           let url = ''
           try {
-            const fd = new FormData(); fd.append('image', imgFiles[i].file)
-            const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method:'POST', body:fd })
+            const fd = new FormData(); fd.append('file', imgFiles[i].file)
+            const res  = await fetch('/api/upload-foto', { method:'POST', body:fd })
             const data = await res.json()
-            if (data.success) url = data.data.url
+            if (res.ok && data.url) url = data.url
           } catch { /* seguimos por media id */ }
 
           const { ok } = await sendImageFile(activeConv.telefono, activeConv.nombre, imgFiles[i].file, url)
@@ -421,7 +506,7 @@ export default function App() {
         }
       }
       setImgResult({ ok: allOk })
-      await changeStatus(activeConv.telefono, ['ventaproceso','venta'].includes(currentStatus) ? currentStatus : 'atendido')
+      await changeStatus(activeConv.telefono, estadoAlResponder(currentStatus))
       setTimeout(() => { setImgFiles([]); setImgResult(null); setIsVideo(false); setImgProgress(0); if (fileRef.current) fileRef.current.value = '' }, 1500)
       setTimeout(load, 4000)
     } catch { setImgResult({ ok: false }) }
@@ -458,13 +543,13 @@ export default function App() {
       await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imgs[i])
       if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 800))
     }
-    changeStatus(activeConv.telefono, ['ventaproceso','venta'].includes(currentStatus) ? currentStatus : 'atendido')
+    changeStatus(activeConv.telefono, estadoAlResponder(currentStatus))
   }
 
   const handleSendAIImage = async (imageUrl) => {
     if (!activeConv || !imageUrl) return
     const res = await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imageUrl)
-    if (res.ok) await changeStatus(activeConv.telefono, ['ventaproceso','venta'].includes(currentStatus) ? currentStatus : 'atendido')
+    if (res.ok) await changeStatus(activeConv.telefono, estadoAlResponder(currentStatus))
   }
 
   const getModoIA = (tel) => {
@@ -497,7 +582,7 @@ export default function App() {
     pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
     const result = await sendInteractiveButtons(activeConv.telefono, activeConv.nombre, input.trim(), validBtns)
     setSendingBtns(false); setToast(result); setTimeout(()=>setToast(null),4000)
-    if (result.ok) { setInput(''); setBtnTexts(['','','']); setShowBtnPanel(false); await changeStatus(activeConv.telefono, ['ventaproceso','venta'].includes(currentStatus)?currentStatus:'atendido'); setTimeout(load,4000) }
+    if (result.ok) { setInput(''); setBtnTexts(['','','']); setShowBtnPanel(false); await changeStatus(activeConv.telefono, estadoAlResponder(currentStatus)); setTimeout(load,4000) }
   }
 
   const currentContact     = activeConv ? contacts[activeConv.telefono] : null
@@ -612,7 +697,6 @@ export default function App() {
                 {[
                   { key:'pendiente',    label:'Pendientes',   icon:'🔴', color:'#f87171' },
                   { key:'atendido',     label:'Atendidos',    icon:'🟢', color:'#4ade80' },
-                  { key:'ventaproceso', label:'En proceso',   icon:'🟡', color:'#f59e0b' },
                   { key:'venta',        label:'Ventas',       icon:'💰', color:'#10b981' },
                 ].map(({ key, label, icon, color }) => (
                   <button key={key} onClick={() => setFilter(key)} style={{
@@ -652,6 +736,22 @@ export default function App() {
                   {counts['archivado']>0 && <span style={{ background:filter==='archivado'?C.creamDim:C.border2, color:filter==='archivado'?C.bg:C.creamFaint, borderRadius:10, padding:'0 5px', fontSize:8, fontWeight:800 }}>{counts['archivado']}</span>}
                 </button>
               </div>
+              {/* Fila TEMPERATURA del lead (Eje 2, manual) */}
+              <div style={{ display:'flex', gap:4, marginTop:4 }}>
+                {TEMPERATURAS.map(({ key, icon, label, color }) => (
+                  <button key={key} onClick={() => setFilter(key)} style={{
+                    flex:1, padding:'5px 2px', fontSize:9, fontWeight:700,
+                    background:filter===key?`${color}18`:'transparent',
+                    border:`1px solid ${filter===key?color+'40':C.border}`,
+                    color:filter===key?color:C.creamFaint,
+                    borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
+                  }}>
+                    {icon} {label}
+                    {key==='caliente' && counts.alerta>0 && <span title={`${counts.alerta} caliente(s) cerca de cerrar la ventana de 24h`} style={{ marginLeft:3 }}>⏰</span>}
+                    {counts[key]>0 && <span style={{ marginLeft:3, background:filter===key?color:C.border2, color:filter===key?C.bg:C.creamDim, borderRadius:10, padding:'0 4px', fontSize:8, fontWeight:800 }}>{counts[key]}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
@@ -671,7 +771,7 @@ export default function App() {
                 )}
                 {filtered.map(conv => (
                   <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => openConv(conv.telefono)}
-                    search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null} />
+                    search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} temp={getTemp(conv.telefono)} alerta={alertaVentana(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null} />
                 ))}
               </>)}
             </div>
@@ -696,16 +796,15 @@ export default function App() {
                   </div>
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
+                  {/* ── Eje 1: BANDEJA (estado de conversación) ── */}
                   {[
                     { s:'pendiente',    icon:'🔴', label:'Pendiente',  activeColor:'#f87171' },
-                    { s:'ventaproceso', icon:'🟡', label:'En proceso', activeColor:'#f59e0b' },
-                    { s:'venta',        icon:'💰', label:'Venta',      activeColor:'#10b981' },
                     { s:'atendido',     icon:'🟢', label:'Atendido',   activeColor:'#4ade80' },
                     { s:'soporte',      icon:'🎧', label:'Soporte',    activeColor:'#a78bfa' },
                     { s:'archivado',    icon:'⚫', label:'Archivar',   activeColor:C.creamDim },
                   ].map(({ s, icon, label, activeColor }) => (
                     <button key={s} onClick={() => changeStatus(activeConv.telefono, s)} title={label} style={{
-                      padding:'4px 6px', fontWeight: currentStatusView===s ? 800 : 600,
+                      padding:'4px 6px', fontWeight: currentStatusView===s ? 800 : 600, flexShrink:0,
                       background: currentStatusView===s ? `${activeColor}22` : 'transparent',
                       border: `${currentStatusView===s ? 2 : 1}px solid ${currentStatusView===s ? activeColor : C.border2}`,
                       color: currentStatusView===s ? activeColor : C.creamFaint,
@@ -716,6 +815,28 @@ export default function App() {
                       <span className="show-mobile" style={{ fontSize:14 }}>{icon}</span>
                     </button>
                   ))}
+
+                  {/* separador entre ejes */}
+                  <span style={{ width:1, alignSelf:'stretch', background:C.border2, margin:'2px 2px', flexShrink:0 }} />
+
+                  {/* ── Eje 2: TEMPERATURA del lead (manual, clic de nuevo = quitar) ── */}
+                  {TEMPERATURAS.map(({ key, icon, label, color }) => {
+                    const on = getTemp(activeConv.telefono) === key
+                    return (
+                      <button key={key} onClick={() => changeTemperatura(activeConv.telefono, key)}
+                        title={on ? `${label} — clic para quitar` : `Marcar ${label}`} style={{
+                          padding:'4px 6px', fontWeight: on ? 800 : 600, flexShrink:0,
+                          background: on ? `${color}22` : 'transparent',
+                          border: `${on ? 2 : 1}px solid ${on ? color : C.border2}`,
+                          color: on ? color : C.creamFaint,
+                          borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
+                          boxShadow: on ? `0 0 8px ${color}44` : 'none',
+                        }}>
+                        <span className="hide-mobile" style={{ fontSize:10 }}>{icon} {label}</span>
+                        <span className="show-mobile" style={{ fontSize:14 }}>{icon}</span>
+                      </button>
+                    )
+                  })}
                   <button onClick={() => setShowRight(r=>!r)} className="mob-ham" style={{ background:showRight?`rgba(244,241,236,.1)`:'rgba(255,255,255,.04)', border:`1px solid ${showRight?'rgba(244,241,236,.3)':C.border2}`, color:showRight?C.cream:C.creamFaint, borderRadius:8, width:30, height:28, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>⚡</button>
 
                   {/* Toggle IA */}
