@@ -132,7 +132,8 @@ function IABadge({ modoIA }) {
   )
 }
 
-export function ContactRow({ conv, isActive, onClick, search = '', estado, modoIA, msgSnippet = null }) {
+const TEMP_ICON = { caliente: '🔥', tibio: '🌤️', frio: '❄️' }
+export function ContactRow({ conv, isActive, onClick, search = '', estado, modoIA, temp = '', alerta = false, msgSnippet = null }) {
   const [hovered, setHovered] = useState(false)
   const searching = String(search || '').trim().length > 0
   const info = ESTADO_INFO[estado] || null
@@ -155,6 +156,8 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: C.cream, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{highlight(conv.nombre, search)}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {alerta && <span title="🔥 Caliente — cerca de cerrar la ventana de 24h" style={{ fontSize: 12, animation: 'pulse 2s infinite' }}>⏰</span>}
+            {temp && TEMP_ICON[temp] && <span title={`Lead ${temp}`} style={{ fontSize: 12 }}>{TEMP_ICON[temp]}</span>}
             <IABadge modoIA={modoIA} />
             <span style={{ fontSize: 11, color: C.creamFaint }}>{fmtTime(conv.last?.timestamp)}</span>
           </div>
