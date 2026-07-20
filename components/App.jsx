@@ -20,8 +20,6 @@ const C = {
   creamFaint:'#3A3530',
 }
 
-const IMGBB_KEY    = '2307574d43689522feabd27cff3443df'
-
 async function toJpeg(file) {
   return new Promise((resolve) => {
     const img = new Image()
@@ -404,14 +402,16 @@ export default function App() {
         allOk = result.ok
       } else {
         for (let i = 0; i < imgFiles.length; i++) {
-          // imgbb solo nos da la url permanente para el historial del hilo. Si falla,
-          // NO cancelamos el envío: subimos el archivo a Meta y mandamos por media id.
+          // URL permanente para pintar el hilo. La guardamos en NUESTRO Supabase
+          // Storage (vía /api/upload-foto), no en imgbb: imgbb respondía lento/5xx a
+          // los fetch server-side y las fotos que se enviaban por link terminaban en
+          // `failed`. Si falla, NO cancelamos: el envío real va por media id igual.
           let url = ''
           try {
-            const fd = new FormData(); fd.append('image', imgFiles[i].file)
-            const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method:'POST', body:fd })
+            const fd = new FormData(); fd.append('file', imgFiles[i].file)
+            const res  = await fetch('/api/upload-foto', { method:'POST', body:fd })
             const data = await res.json()
-            if (data.success) url = data.data.url
+            if (res.ok && data.url) url = data.url
           } catch { /* seguimos por media id */ }
 
           const { ok } = await sendImageFile(activeConv.telefono, activeConv.nombre, imgFiles[i].file, url)
