@@ -628,6 +628,12 @@ export default function App() {
           .overlay{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:90; }
           .msgs-scroll{ padding:12px 14px !important; }
           .input-bar{ padding-bottom:env(safe-area-inset-bottom,12px) !important; }
+          /* Cabecera en 2 filas: info arriba, acciones en tira scrollable abajo
+             (evita que los botones se envuelvan y se tapen entre sí en móvil). */
+          .chat-header-left{ flex:1 1 100% !important; }
+          .chat-actions{ flex:1 1 100% !important; flex-wrap:nowrap !important; overflow-x:auto; justify-content:flex-start !important; padding-bottom:2px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+          .chat-actions::-webkit-scrollbar{ display:none; }
+          .chat-actions > *{ flex-shrink:0 !important; }
         }
       `}</style>
 
@@ -786,8 +792,8 @@ export default function App() {
           {activeConv ? (
             <div className="chat-col">
               {/* Header chat */}
-              <div style={{ padding:'8px 10px', background:C.surface, borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', flexWrap:'wrap', flexShrink:0, gap:6 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:7, minWidth:0, flex:'0 0 auto' }}>
+              <div className="chat-header" style={{ padding:'8px 10px', background:C.surface, borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', flexWrap:'wrap', flexShrink:0, gap:6 }}>
+                <div className="chat-header-left" style={{ display:'flex', alignItems:'center', gap:7, minWidth:0, flex:'0 0 auto' }}>
                   <button className="mob-ham" onClick={() => setShowSidebar(s=>!s)} style={{ background:'transparent', border:'none', color:C.cream, cursor:'pointer', fontSize:20, padding:'0 2px', lineHeight:1, flexShrink:0 }}>☰</button>
                   <Avatar name={displayName(activeConv.telefono)} phone={activeConv.telefono} size={34} />
                   <div style={{ minWidth:0 }}>
@@ -795,7 +801,7 @@ export default function App() {
                     <div style={{ fontSize:9, color:C.creamFaint }}>+{activeConv.telefono}</div>
                   </div>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
+                <div className="chat-actions" style={{ display:'flex', alignItems:'center', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
                   {/* ── Eje 1: BANDEJA (estado de conversación) ── */}
                   {[
                     { s:'pendiente',    icon:'🔴', label:'Pendiente',  activeColor:'#f87171' },
