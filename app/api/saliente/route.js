@@ -146,6 +146,22 @@ function construir(body) {
     }
   }
 
+  // Video por URL pública (Supabase Storage). El navegador sube el archivo DIRECTO
+  // a Supabase (sin el muro de 4.5 MB de Vercel) y Meta lo descarga del link.
+  // Permite hasta 16 MB. Supabase es un host confiable → Meta no falla al bajarlo.
+  if (body.VideoURL) {
+    return {
+      tipo: 'video',
+      contenido: '', mediaUrl: body.VideoURL, mediaId: '',
+      payload: {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'video',
+        video: { link: body.VideoURL },
+      },
+    }
+  }
+
   // Imagen por MediaID (subida antes vía /api/media/upload — camino sin terceros)
   if (body.ImagenMediaId) {
     return {
