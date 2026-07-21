@@ -13,6 +13,41 @@ const C = {
   cream:     '#F4F1EC', creamDim:'#A09A90', creamFaint:'#3A3530',
 }
 
+// ── Tarjeta de un pedido del historial (MANDARINACRM) ────────────
+function PedidoCard({ p }) {
+  const est       = String(p.estado || '').toUpperCase()
+  const pago      = String(p.estadoPago || '').toUpperCase()
+  const entregado = /ENTREG/.test(est)
+  const pagado    = /PAG/.test(pago)
+  const estColor  = entregado ? '#10b981' : '#f59e0b'
+  const items     = p.items || []
+  return (
+    <div style={{ padding:'7px 9px', background:C.surface2, border:`1px solid ${C.border2}`, borderRadius:8 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:6 }}>
+        <span style={{ fontSize:11, fontWeight:800, color:C.cream }}>
+          <span style={{ color: estColor }}>{entregado ? '●' : '○'}</span> {p.id || 'Pedido'}
+        </span>
+        <span style={{ fontSize:10, color:C.creamDim, flexShrink:0 }}>
+          {p.fecha} · <strong style={{ color:'#10b981' }}>${Number(p.total || 0).toFixed(2)}</strong>
+        </span>
+      </div>
+      {items.slice(0, 4).map((it, i) => (
+        <div key={i} style={{ fontSize:11, color:C.creamDim, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          • {it.producto}{it.talla ? ` · ${it.talla}` : ''}{it.color ? ` · ${it.color}` : ''}{it.cantidad > 1 ? ` ×${it.cantidad}` : ''}
+        </div>
+      ))}
+      {items.length > 4 && (
+        <div style={{ fontSize:10, color:C.creamFaint, marginTop:2 }}>+{items.length - 4} ítem{items.length - 4 === 1 ? '' : 's'} más…</div>
+      )}
+      <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:5, flexWrap:'wrap' }}>
+        <span style={{ fontSize:8.5, fontWeight:800, color:estColor, background:`${estColor}1e`, border:`1px solid ${estColor}44`, borderRadius:5, padding:'1px 6px' }}>{p.estado || '—'}</span>
+        <span style={{ fontSize:8.5, fontWeight:800, color: pagado ? '#10b981' : '#f87171', background: pagado ? 'rgba(16,185,129,.12)' : 'rgba(248,113,113,.12)', border:`1px solid ${pagado ? 'rgba(16,185,129,.35)' : 'rgba(248,113,113,.35)'}`, borderRadius:5, padding:'1px 6px' }}>{p.estadoPago || 'PENDIENTE'}</span>
+        {p.url && <a href={p.url} target="_blank" rel="noreferrer" style={{ marginLeft:'auto', fontSize:9, fontWeight:700, color:'#60a5fa', textDecoration:'none' }}>Ver →</a>}
+      </div>
+    </div>
+  )
+}
+
 async function toJpeg(file) {
   return new Promise((resolve) => {
     const img = new Image()
@@ -238,6 +273,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [pedidoLoading, setPedidoLoading] = useState(false)
   const [pedidoRes,     setPedidoRes]     = useState(null)
 
+  // ── Historial de pedidos del cliente (desde MANDARINACRM) ────
+  const [historial,   setHistorial]   = useState(null)  // null = cargando
+  const [histError,   setHistError]   = useState(false)
+  const histLoadedRef = useRef(null)
+
   // ── Catálogo TIENDA (Shopify INDSTORE) ───────────────────────
   const [fuente,          setFuente]          = useState('shopify') // 'shopify' | 'sucursal'
   const [prodCache,       setProdCache]       = useState({})        // { shopify:[...], sucursal:[...] }
@@ -258,6 +298,27 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
       setNotasSaved(false)
       setPedidoRes(null)
     }
+  }, [activeConv, contactInfo])
+
+  const loadHistorial = async (tel, idVenta) => {
+    setHistorial(null); setHistError(false)
+    try {
+      const url = `/api/cliente-pedidos?telefono=${encodeURIComponent(tel)}${idVenta ? `&idVenta=${encodeURIComponent(idVenta)}` : ''}`
+      const r = await fetch(url)
+      if (!r.ok) throw new Error('http ' + r.status)
+      const d = await r.json()
+      if (histLoadedRef.current === tel) setHistorial(d)
+    } catch {
+      if (histLoadedRef.current === tel) setHistError(true)
+    }
+  }
+
+  // Cargar historial de pedidos al cambiar de contacto (una sola vez por teléfono)
+  useEffect(() => {
+    if (!activeConv) return
+    if (histLoadedRef.current === activeConv.telefono) return
+    histLoadedRef.current = activeConv.telefono
+    loadHistorial(activeConv.telefono, contactInfo?.idVenta)
   }, [activeConv, contactInfo])
 
   // Cargar el catálogo de la fuente activa la PRIMERA vez (perezoso, cacheado por fuente)
@@ -550,6 +611,49 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 style={{ ...btnBase, width:'100%', marginTop:5, padding:'6px', background:notasSaving?C.bg:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.3)', color:'#f59e0b', borderRadius:7, fontSize:11, fontWeight:700, cursor:notasSaving?'default':'pointer' }}>
                 {notasSaving?'⏳ Guardando...':'💾 Guardar nota'}
               </button>
+            </div>
+
+            {/* HISTORIAL DE PEDIDOS */}
+            <div style={{ padding:'10px 12px 16px', borderTop:`1px solid ${C.border}`, background:C.bg }}>
+              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <p style={{ fontSize:10, color:'#60a5fa', fontWeight:700, letterSpacing:'.08em', margin:0, display:'flex', alignItems:'center', gap:6 }}>
+                  📦 HISTORIAL DE PEDIDOS
+                  {historial?.totalPedidos > 0 && (historial.totalPedidos >= 3 || historial.totalGastado >= 80) && (
+                    <span style={{ fontSize:8, background:'rgba(245,158,11,.15)', color:'#f59e0b', border:'1px solid rgba(245,158,11,.35)', borderRadius:10, padding:'1px 6px', fontWeight:800 }}>⭐ VIP</span>
+                  )}
+                </p>
+                <span onClick={() => loadHistorial(activeConv.telefono, contactInfo?.idVenta)} title="Recargar historial"
+                  style={{ marginLeft:'auto', color:C.creamDim, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
+              </div>
+
+              <div style={{ marginTop:8 }}>
+                {historial === null && !histError ? (
+                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    {[0, 1].map(i => (
+                      <div key={i} style={{ height:38, borderRadius:8, background:C.surface2, border:`1px solid ${C.border2}`, opacity:.6 }} />
+                    ))}
+                  </div>
+                ) : histError ? (
+                  <div style={{ fontSize:11, color:C.creamDim, padding:'4px 0' }}>
+                    No se pudo cargar el historial.{' '}
+                    <button onClick={() => loadHistorial(activeConv.telefono, contactInfo?.idVenta)}
+                      style={{ background:'transparent', border:'none', color:'#60a5fa', cursor:'pointer', fontSize:11, padding:0, textDecoration:'underline', fontFamily:'inherit' }}>Reintentar</button>
+                  </div>
+                ) : !historial || historial.totalPedidos === 0 ? (
+                  <div style={{ fontSize:11, color:C.creamDim, padding:'7px 9px', background:'rgba(96,165,250,.06)', border:'1px solid rgba(96,165,250,.18)', borderRadius:7 }}>
+                    Cliente nuevo ✨ — sin pedidos previos
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ fontSize:11, color:C.creamDim, marginBottom:7 }}>
+                      {historial.totalPedidos} pedido{historial.totalPedidos === 1 ? '' : 's'} · <strong style={{ color:'#10b981' }}>${historial.totalGastado.toFixed(2)}</strong> total
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      {historial.pedidos.map(p => <PedidoCard key={p.id} p={p} />)}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </>
         )}
