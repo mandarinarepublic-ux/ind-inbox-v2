@@ -218,12 +218,26 @@ function MediaContent({ tipo, mediaUrl, mediaId }) {
       <img src={src} alt="imagen" style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 10, display: 'block', objectFit: 'cover', border: `1px solid ${C.border2}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
     </a>
   )
-  if (hasSrc && isAudio) return (
-    <a href={src} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
-      <span style={{ fontSize: 22 }}>🎵</span>
-      <span style={{ fontSize: 13, color: C.cream, fontWeight: 600 }}>Escuchar audio</span>
-    </a>
-  )
+  if (hasSrc && isAudio) {
+    // Google Drive no deja hacer streaming inline → cae al link "Escuchar audio".
+    const isDrive = raw.includes('drive.google.com')
+    if (isDrive) return (
+      <a href={src} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
+        <span style={{ fontSize: 22 }}>🎵</span>
+        <span style={{ fontSize: 13, color: C.cream, fontWeight: 600 }}>Escuchar audio</span>
+      </a>
+    )
+    return (
+      <div style={{ marginBottom: 6, minWidth: 280 }}>
+        <audio controls preload="metadata" src={src} style={{ width: '100%', minWidth: 280, height: 40, display: 'block', borderRadius: 10, outline: 'none', accentColor: C.cream }} />
+        {/* Respaldo: si el reproductor inline falla (caché/navegador), este link
+            abre el audio en pestaña nueva, donde siempre suena. */}
+        <a href={src} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 11, color: C.cream, textDecoration: 'none', fontWeight: 600 }}>
+          🎧 Abrir audio ↗
+        </a>
+      </div>
+    )
+  }
   if (hasSrc && isVideo) return (
     <div style={{ marginBottom: 6, maxWidth: '100%' }}>
       <video controls preload="metadata" src={src} style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 10, display: 'block', border: `1px solid ${C.border2}` }} />
