@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
-import { appendRow } from '@/lib/sheets'
-import { dualWrite } from '@/lib/supabase'
 import { guardarMensajeSupabase } from '@/lib/inbox-supabase'
 
 export const dynamic = 'force-dynamic'
@@ -252,18 +250,11 @@ export async function POST(req) {
     // Botones (interactivos) serializados para la columna M / campo Supabase.
     const botonesStr = botones && botones.length ? JSON.stringify(botones) : ''
     waitUntil(
-      dualWrite(
-        () => appendRow('MENSAJES', [
-          wamid, soloDigitos(body.Telefono), body.Nombre || '', tipo, contenido, mediaUrl,
-          fechaSal, 'SALIENTE', mediaId, '', '', '', botonesStr,
-        ]),
-        () => guardarMensajeSupabase({
-          id: wamid, telefono: soloDigitos(body.Telefono), nombre: body.Nombre || '', tipo,
-          mensaje: contenido, mediaUrl, timestamp: fechaSal, direccion: 'SALIENTE', mediaId,
-          botones: botonesStr,
-        }),
-        'saliente',
-      ).catch(e => console.error('[/api/saliente] Enviado pero no se pudo registrar:', e.message))
+      guardarMensajeSupabase({
+        id: wamid, telefono: soloDigitos(body.Telefono), nombre: body.Nombre || '', tipo,
+        mensaje: contenido, mediaUrl, timestamp: fechaSal, direccion: 'SALIENTE', mediaId,
+        botones: botonesStr,
+      }).catch(e => console.error('[/api/saliente] Enviado pero no se pudo registrar:', e.message))
     )
 
     return NextResponse.json({ ok: true, wamid })

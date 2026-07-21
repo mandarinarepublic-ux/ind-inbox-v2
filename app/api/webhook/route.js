@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
-import { readSheet, appendRow } from '@/lib/sheets'
 import { registrarContactoEntrante, getModoIA, getContactos } from '@/lib/contactos'
-import { usaSupabaseLectura, dualWrite } from '@/lib/supabase'
+import { usaSupabaseLectura } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase } from '@/lib/inbox-supabase'
 import { archivarFoto } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
@@ -184,12 +183,8 @@ export async function POST(req) {
 
     if (nuevos.length) {
       // Dedup por wamid: Meta reintenta la entrega, evita filas duplicadas.
-      // En modo supabase se consulta por wamid en Supabase; si no, por la hoja MENSAJES.
-      let vistos = null
-      if (!usaSupabaseLectura()) {
-        const rows = await readSheet('MENSAJES').catch(() => [])
-        vistos = new Set(rows.map(r => String(r[0] || '')))
-      }
+      // Se consulta por wamid en Supabase.
+      const vistos = null
 
       // ── Saludos automáticos: config + SNAPSHOT de contactos leído ANTES de
       // guardar los mensajes de este lote (para detectar "nuevo" y "reactivación").
@@ -226,21 +221,14 @@ export async function POST(req) {
         // Escribe el mensaje entrante en el backend activo (+ espejo best-effort).
         // MENSAJES: A=ID B=Telefono C=Nombre D=Tipo E=Contenido F=MediaURL
         //           G=Fecha H=Direccion I=MediaID J=RespuestaIA K=FotoIA L=ContextoID
-        await dualWrite(
-          () => appendRow('MENSAJES', [
-            m.wamid, m.telefono, m.nombre, m.tipo, m.contenido, '',
-            m.fecha, 'ENTRANTE', m.mediaId, '', '', '',
-          ]),
-          () => guardarMensajeSupabase({
-            id: m.wamid, telefono: m.telefono, nombre: m.nombre, tipo: m.tipo,
-            mensaje: m.contenido, mediaUrl: '', timestamp: m.fecha,
-            direccion: 'ENTRANTE', mediaId: m.mediaId, referral: m.referral, raw: m.raw,
-          }),
-          'webhook.entrante',
-        )
+        await guardarMensajeSupabase({
+          id: m.wamid, telefono: m.telefono, nombre: m.nombre, tipo: m.tipo,
+          mensaje: m.contenido, mediaUrl: '', timestamp: m.fecha,
+          direccion: 'ENTRANTE', mediaId: m.mediaId, referral: m.referral, raw: m.raw,
+        })
         // Archivar la foto entrante a Supabase Storage (URL estable en media_url).
         // En background (no frena el 200 a Meta). Solo en modo supabase, donde la
-        // fila ya quedó insertada por el dualWrite de arriba.
+        // fila ya quedó insertada por guardarMensajeSupabase arriba.
         if (usaSupabaseLectura() && (m.tipo === 'imagen' || m.tipo === 'sticker') && m.mediaId) {
           waitUntil(archivarFoto({ mediaId: m.mediaId, wamid: m.wamid }))
         }
