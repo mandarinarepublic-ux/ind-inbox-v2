@@ -1005,13 +1005,13 @@ export default function App() {
                 )}
 
                 <div style={{ display:'flex', gap:8, alignItems:'flex-end' }}>
-                  <button onClick={() => fileRef.current?.click()} style={{ width:42, height:42, flexShrink:0, background:imgFiles.length?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${imgFiles.length?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center', color:imgFiles.length?C.cream:C.creamDim, transition:'all .15s', position:'relative' }}>
+                  <button onClick={() => fileRef.current?.click()} style={{ width:42, height:42, flexShrink:0, background:imgFiles.length?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${imgFiles.length?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center', color:imgFiles.length?C.cream:C.creamDim, transition:'all .15s', position:'relative' }} title="Adjuntar imagen o video">
                     📎
                     {imgFiles.length > 0 && <span style={{ position:'absolute', top:-4, right:-4, width:16, height:16, borderRadius:'50%', background:C.cream, color:C.bg, fontSize:8, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>{imgFiles.length}</span>}
                   </button>
                   <button onClick={() => setShowBtnPanel(p=>!p)} style={{ width:42, height:42, flexShrink:0, background:showBtnPanel?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${showBtnPanel?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', color:showBtnPanel?C.cream:C.creamDim, transition:'all .15s' }}>🔘</button>
                   <button onClick={() => { setShowEmoji(p=>!p); setShowBtnPanel(false) }} style={{ width:42, height:42, flexShrink:0, background:showEmoji?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${showEmoji?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:20, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .15s' }}>😊</button>
-                  <input ref={fileRef} type="file" accept="image/*,video/mp4,video/3gpp,video/quicktime" multiple style={{ display:'none' }} onChange={handleFileSelect} />
+                  <input ref={fileRef} type="file" accept="image/*,video/*" multiple style={{ display:'none' }} onChange={handleFileSelect} />
 
                   {showEmoji && <EmojiPicker onSelect={(emoji) => setInput(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />}
 
