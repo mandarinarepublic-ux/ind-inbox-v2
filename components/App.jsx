@@ -152,6 +152,7 @@ export default function App() {
   // historial vive aquí y se re-inyecta en cada poll para que no se recorte.
   const hilosRef       = useRef({})
   const activeRef      = useRef(null)
+  const backGuardRef   = useRef(false) // móvil: entrada de historial empujada al abrir un chat (el "atrás" del celu vuelve a la lista en vez de salir de la app)
   const [msgHits,  setMsgHits]  = useState([])   // resultados de /api/buscar (modo Mensajes)
   const [buscando, setBuscando] = useState(false)
 
@@ -159,6 +160,20 @@ export default function App() {
   const rightWidthRef = useRef(300)
   const resizingRef   = useRef(false)
   useEffect(() => { rightWidthRef.current = rightWidth }, [rightWidth])
+
+  // Botón "atrás" del celular: al abrir un chat empujamos una entrada de historial
+  // (en openConv) y acá la consumimos para VOLVER A LA LISTA en vez de salir de la app.
+  // Solo actúa si nosotros empujamos la entrada (backGuardRef); en desktop el back navega normal.
+  useEffect(() => {
+    const onPop = () => {
+      if (backGuardRef.current) {
+        backGuardRef.current = false
+        setShowSidebar(true)   // muestra la lista de chats (no sale de la app)
+      }
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
   useEffect(() => {
     try {
       const v = parseInt(localStorage.getItem('ind_right_width') || '', 10)
@@ -292,7 +307,15 @@ export default function App() {
 
   const openConv = (telefono) => {
     setActive(telefono); activeRef.current = telefono
-    setShowSidebar(false); autoScroll.current = true; prevMsgLen.current = 0
+    setShowSidebar(false)
+    // En móvil, empujamos una entrada de historial: así el botón "atrás" del celular
+    // vuelve a la lista de chats en vez de salir de la app (una sola entrada mientras
+    // navegamos chats; backGuardRef evita duplicar al saltar de chat en chat).
+    if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches && !backGuardRef.current) {
+      window.history.pushState({ inbox: 'chat' }, '')
+      backGuardRef.current = true
+    }
+    autoScroll.current = true; prevMsgLen.current = 0
     seenRef.current[telefono] = Date.now(); saveSeen(seenRef.current)
     setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, unread: 0 } : c))
     cargarHilo(telefono)
