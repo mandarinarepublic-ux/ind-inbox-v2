@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { fetchRows, fetchContacts, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile } from '@/lib/api-client'
+import { fetchRows, fetchLista, fetchHilo, buscarEnMensajes, fetchContacts, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile } from '@/lib/api-client'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
@@ -147,6 +147,13 @@ export default function App() {
   const alertadosRef   = useRef(new Set()) // leads calientes ya notificados (1 aviso por ventana)
   const pendingRef     = useRef({}) // mensajes optimistas por teléfono, hasta que Make los registre
   const seenRef        = useRef(null) // { telefono: epochMs } — última vez que se vio cada chat
+  // Hilos completos ya descargados, por teléfono (carga por chat: /api/hilo).
+  // La lista lateral solo trae el ÚLTIMO mensaje de cada conversación, así que el
+  // historial vive aquí y se re-inyecta en cada poll para que no se recorte.
+  const hilosRef       = useRef({})
+  const activeRef      = useRef(null)
+  const [msgHits,  setMsgHits]  = useState([])   // resultados de /api/buscar (modo Mensajes)
+  const [buscando, setBuscando] = useState(false)
 
   // ── Panel derecho redimensionable (arrastra el borde izquierdo) ──
   const rightWidthRef = useRef(300)
@@ -189,11 +196,19 @@ export default function App() {
   if (seenRef.current === null) seenRef.current = loadSeen()
 
   const load = useCallback(async () => {
-    const [rows, ctList] = await Promise.all([fetchRows(), fetchContacts()])
+    // Tres fuentes que se combinan (buildConvs deduplica por id de mensaje):
+    //  · lista  → ÚLTIMO mensaje de cada conversación, sobre TODO el historial
+    //             (hace que aparezcan también los chats viejos).
+    //  · rows   → ventana reciente de la cuenta: mantiene el hilo abierto al día
+    //             y da el conteo real de no leídos.
+    //  · hilos  → historiales completos ya descargados al abrir cada chat.
+    const [lista, rows, ctList] = await Promise.all([fetchLista(), fetchRows(), fetchContacts()])
 
-    // rows === null → hubo ERROR (no "vacío"): conservar lo previo, no parpadear a blanco
-    if (Array.isArray(rows)) {
-      let next = buildConvs(rows, seenRef.current)
+    // null → hubo ERROR (no "vacío"): conservar lo previo, no parpadear a blanco
+    if (Array.isArray(lista) || Array.isArray(rows)) {
+      const hilos = Object.values(hilosRef.current).flat()
+      const todo  = [...(lista || []), ...(rows || []), ...hilos]
+      let next = buildConvs(todo, seenRef.current)
       // Re-inyectar mensajes optimistas que aún no están en la hoja
       const now = Date.now()
       const pend = pendingRef.current
@@ -276,10 +291,35 @@ export default function App() {
   }, [])
 
   const openConv = (telefono) => {
-    setActive(telefono); setShowSidebar(false); autoScroll.current = true; prevMsgLen.current = 0
+    setActive(telefono); activeRef.current = telefono
+    setShowSidebar(false); autoScroll.current = true; prevMsgLen.current = 0
     seenRef.current[telefono] = Date.now(); saveSeen(seenRef.current)
     setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, unread: 0 } : c))
+    cargarHilo(telefono)
   }
+
+  // Historial completo del chat, bajo demanda. La lista lateral solo trae el
+  // último mensaje de cada conversación, así que sin esto un chat viejo se vería
+  // con una sola burbuja (el síntoma de "se borraron los mensajes").
+  const cargarHilo = useCallback(async (telefono) => {
+    if (!telefono) return
+    const msgs = await fetchHilo(telefono)
+    if (!Array.isArray(msgs) || !msgs.length) return
+    hilosRef.current[telefono] = msgs
+    // Solo conservamos los últimos 5 hilos abiertos: se re-inyectan en cada poll
+    // (cada 8s) y guardar decenas de historiales completos costaría memoria y CPU.
+    const abiertos = Object.keys(hilosRef.current)
+    if (abiertos.length > 5) {
+      abiertos.slice(0, abiertos.length - 5)
+        .filter(t => t !== activeRef.current)
+        .forEach(t => { delete hilosRef.current[t] })
+    }
+    setConvs(prev => prev.map(c => {
+      if (c.telefono !== telefono) return c
+      const merged = buildConvs([...c.msgs, ...msgs], seenRef.current)[0]
+      return merged ? { ...c, msgs: merged.msgs, last: merged.last } : c
+    }))
+  }, [])
 
   // Desde la pestaña CONTACTOS: vuelve al chat y abre la conversación (match por
   // últimos 9 dígitos, por si el formato del directorio difiere).
@@ -350,9 +390,32 @@ export default function App() {
   const isSearching = q.length > 0
   const searchingMsgs = isSearching && searchMode === 'mensaje'
 
+  // Buscador por MENSAJE: va al servidor (/api/buscar) y mira TODO el historial.
+  // Antes filtraba solo lo que estaba cargado en el navegador, así que no
+  // encontraba nada fuera de la ventana reciente.
+  useEffect(() => {
+    if (!searchingMsgs || q.length < 2) { setMsgHits([]); setBuscando(false); return }
+    let cancelado = false
+    setBuscando(true)
+    const t = setTimeout(async () => {
+      const hits = await buscarEnMensajes(q)
+      if (cancelado) return
+      setMsgHits(Array.isArray(hits) ? hits : [])
+      setBuscando(false)
+    }, 350) // debounce: no dispara una consulta por tecla
+    return () => { cancelado = true; clearTimeout(t) }
+  }, [q, searchingMsgs])
+
+  const t9de = (s) => String(s || '').replace(/\D/g, '').slice(-9)
+  const hitsPorTel = React.useMemo(() => {
+    const m = {}
+    msgHits.forEach(h => { (m[t9de(h.telefono)] ||= []).push(h) })
+    return m
+  }, [msgHits])
+
   // Fragmento del mensaje más reciente que contiene la búsqueda (modo Mensajes)
   const matchSnippet = (c) => {
-    const m = [...(c.msgs || [])].reverse().find(m => (m.mensaje || '').toLowerCase().includes(q))
+    const m = (hitsPorTel[t9de(c.telefono)] || [])[0]
     if (!m) return ''
     const t = String(m.mensaje || '')
     const i = t.toLowerCase().indexOf(q)
@@ -362,7 +425,7 @@ export default function App() {
 
   const searched = !isSearching ? convs
     : searchingMsgs
-      ? convs.filter(c => (c.msgs || []).some(m => (m.mensaje || '').toLowerCase().includes(q)))
+      ? convs.filter(c => hitsPorTel[t9de(c.telefono)])
       : convs.filter(c => {
           const alias = (contacts[c.telefono]?.alias || '').toLowerCase()
           return c.nombre.toLowerCase().includes(q) || alias.includes(q) || phoneMatch(c.telefono, search)
@@ -764,6 +827,10 @@ export default function App() {
               {loading ? (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:48, gap:12 }}>
                   <Spinner size={24} /><span style={{ fontSize:11, color:C.creamFaint }}>Cargando...</span>
+                </div>
+              ) : buscando ? (
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:48, gap:12 }}>
+                  <Spinner size={20} /><span style={{ fontSize:11, color:C.creamFaint }}>Buscando en todo el historial...</span>
                 </div>
               ) : filtered.length === 0 ? (
                 <div style={{ padding:28, textAlign:'center', color:C.creamFaint, fontSize:12 }}>
