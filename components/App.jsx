@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { fetchRows, fetchLista, fetchHilo, buscarEnMensajes, fetchContacts, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile } from '@/lib/api-client'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
@@ -217,7 +217,12 @@ export default function App() {
     //  · rows   → ventana reciente de la cuenta: mantiene el hilo abierto al día
     //             y da el conteo real de no leídos.
     //  · hilos  → historiales completos ya descargados al abrir cada chat.
-    const [lista, rows, ctList] = await Promise.all([fetchLista(), fetchRows(), fetchContacts()])
+    // UN request por ciclo (antes 3: lista+mensajes+contactos → /api/inbox-sync).
+    // null (error) → se conservan los datos previos, no parpadea a blanco.
+    const sync   = await fetchInboxSync()
+    const lista  = sync?.lista ?? null
+    const rows   = sync?.rows ?? null
+    const ctList = sync?.contactos ?? null
 
     // null → hubo ERROR (no "vacío"): conservar lo previo, no parpadear a blanco
     if (Array.isArray(lista) || Array.isArray(rows)) {
@@ -264,9 +269,16 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    // Poll cada 25s (antes 8s) y SOLO con la pestaña visible: una pestaña en
+    // segundo plano no aporta y seguía golpeando la cuota cada 8s. Al volver a
+    // la pestaña se refresca al instante.
+    const start = () => { if (!pollRef.current) pollRef.current = setInterval(load, 25000) }
+    const stop  = () => { clearInterval(pollRef.current); pollRef.current = null }
+    const onVisibility = () => { if (document.hidden) stop(); else { load(); start() } }
     load()
-    pollRef.current = setInterval(load, 8000)
-    return () => clearInterval(pollRef.current)
+    start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
   }, [load])
 
   useEffect(() => {
