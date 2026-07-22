@@ -269,17 +269,20 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    // Poll cada 25s (antes 8s) y SOLO con la pestaña visible: una pestaña en
-    // segundo plano no aporta y seguía golpeando la cuota cada 8s. Al volver a
-    // la pestaña se refresca al instante.
-    const start = () => { if (!pollRef.current) pollRef.current = setInterval(load, 25000) }
+    // Polling de DOS velocidades para no castigar al vendedor:
+    //  · chat abierto (active) → 10s: la conversación que está atendiendo se
+    //    siente casi en vivo (mensajes entrantes aparecen rápido).
+    //  · sin chat abierto      → 25s: solo lista/contactos, mucho más barato.
+    // Y SOLO con la pestaña visible; en segundo plano se pausa (al volver refresca).
+    const ms = active ? 10000 : 25000
+    const start = () => { if (!pollRef.current) pollRef.current = setInterval(load, ms) }
     const stop  = () => { clearInterval(pollRef.current); pollRef.current = null }
     const onVisibility = () => { if (document.hidden) stop(); else { load(); start() } }
     load()
     start()
     document.addEventListener('visibilitychange', onVisibility)
     return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
-  }, [load])
+  }, [load, active])
 
   useEffect(() => {
     const activeConv = convs.find(c => c.telefono === active)

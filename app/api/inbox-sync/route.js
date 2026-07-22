@@ -15,10 +15,10 @@ export async function GET() {
       getContactos(),
     ])
     return NextResponse.json({ lista, rows, contactos }, {
-      // Cache COMPARTIDO en el edge: varias pestañas/vendedores que pollean dentro
-      // de la misma ventana comparten UNA ejecución de origen en vez de una c/u.
-      // stale-while-revalidate sirve al instante mientras revalida en background.
-      headers: { 'Cache-Control': 's-maxage=10, stale-while-revalidate=30' },
+      // Cache COMPARTIDO en el edge, corto (5s) para no agregar latencia visible al
+      // vendedor: varias pestañas que pollean dentro de la misma ventana comparten
+      // UNA ejecución de origen. stale-while-revalidate sirve al instante y revalida.
+      headers: { 'Cache-Control': 's-maxage=5, stale-while-revalidate=20' },
     })
   } catch (err) {
     console.error('[/api/inbox-sync]', err)
