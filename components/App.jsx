@@ -557,6 +557,12 @@ export default function App() {
 
   const sendImageUrl = async (imageUrl) => {
     const res = await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imageUrl)
+    // Si la foto no se pudo enviar (p. ej. pesa más de los 5 MB que acepta
+    // WhatsApp), decirlo: antes moría en Meta y nadie se enteraba.
+    if (!res.ok) {
+      setToast({ ok: false, msg: `✗ ${res.error || 'No se pudo enviar la foto'}` })
+      setTimeout(() => setToast(null), 6000)
+    }
     return res.ok
   }
 
