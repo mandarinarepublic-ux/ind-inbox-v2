@@ -233,7 +233,7 @@ const TABS = [
 // Etiqueta del catálogo online en el selector de la pestaña Tienda (este inbox = INDLOVERS).
 const CATALOGO_LABEL = 'INDLOVERS'
 
-export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, contactInfo, onUpdateContact, windowOpen }) {
+export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen }) {
   const [tab, setTab] = useState('respuestas')
   const [countdown, setCountdown] = useState('')
 
@@ -391,20 +391,17 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     () => setProdSending(prev => { const n = { ...prev }; delete n[id]; return n }),
     600,
   )
-  const sendProductoFoto = async (p) => {
+  // Título+foto se mandan con UNA sola llamada (onSendProducto) para que entren
+  // juntos a la fila del chat: en dos pasos, algo clickeado en el medio podía
+  // colarse entre el título del producto y su foto.
+  const sendProducto = async (p, modo) => {
     if (!windowOpen || prodSending[p.id]) return
-    marcarProd(p.id, 'foto')
-    try { await onSendImage?.(p.image) }
+    marcarProd(p.id, modo)
+    try { await onSendProducto?.(p, modo) }
     finally { soltarProd(p.id) }
   }
-  const sendProductoInfo = async (p) => {
-    if (!windowOpen || prodSending[p.id]) return
-    marcarProd(p.id, 'info')
-    try {
-      await onSendText?.(`${p.title}${p.price ? ` — $${p.price}` : ''}`)
-      await onSendImage?.(p.image)
-    } finally { soltarProd(p.id) }
-  }
+  const sendProductoFoto = (p) => sendProducto(p, 'foto')
+  const sendProductoInfo = (p) => sendProducto(p, 'info')
 
   const crearPedido = async () => {
     if (pedidoLoading || !activeConv) return

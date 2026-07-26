@@ -113,7 +113,10 @@ export default function App() {
   const [contacts,     setContacts]     = useState({})
   const [active,       setActive]       = useState(null)
   const [input,        setInput]        = useState('')
-  const [sending,      setSending]      = useState(false)
+  // Envíos en fila por chat: { telefono: cuántos esperan turno o están saliendo }.
+  // Reemplaza al viejo booleano `sending`, que había quedado muerto (nadie lo
+  // encendía desde que handleSend dejó de bloquear).
+  const [colaLen,      setColaLen]      = useState({})
   const [loading,      setLoading]      = useState(true)
   const [lastSync,     setLastSync]     = useState(null)
   const [search,       setSearch]       = useState('')
@@ -146,6 +149,12 @@ export default function App() {
   const localTempRef   = useRef({}) // override optimista de temperatura (Eje 2), hasta que el poll confirme
   const alertadosRef   = useRef(new Set()) // leads calientes ya notificados (1 aviso por ventana)
   const pendingRef     = useRef({}) // mensajes optimistas por teléfono, hasta que Make los registre
+  // Fila de salida POR CONVERSACIÓN. Como los envíos ya no bloquean la interfaz, el
+  // vendedor puede disparar una respuesta rápida de 4 fotos y, encima, mandar la foto
+  // de otro producto: sin fila, esa foto se colaba ENTRE las de la respuesta rápida y
+  // al cliente le llegaba todo mezclado. Acá lo que se clickea primero sale primero y
+  // COMPLETO antes de que empiece lo siguiente. Chats distintos no se esperan entre sí.
+  const colaRef        = useRef({})
   const seenRef        = useRef(null) // { telefono: epochMs } — última vez que se vio cada chat
   // Hilos completos ya descargados, por teléfono (carga por chat: /api/hilo).
   // La lista lateral solo trae el ÚLTIMO mensaje de cada conversación, así que el
@@ -530,27 +539,56 @@ export default function App() {
     await updateContact(tel, activeConv.nombre, currentStatus, alias)
   }
 
+  /**
+   * Pone `tarea` al final de la fila de ese chat y devuelve su promesa.
+   * Si la fila está vacía (el caso normal) arranca al instante: esto no agrega
+   * demora, solo impide que dos envíos al MISMO cliente se pisen.
+   */
+  const encolar = (telefono, tarea) => {
+    const anterior = colaRef.current[telefono] || Promise.resolve()
+    const actual   = anterior.then(tarea)   // `anterior` nunca rechaza: se guarda ya "atrapada"
+    const marca    = actual.catch(() => {}) // un envío que falla no debe trabar la fila
+    colaRef.current[telefono] = marca
+    setColaLen(p => ({ ...p, [telefono]: (p[telefono] || 0) + 1 }))
+    marca.then(() => {
+      // Limpiar cuando esta tarea era la última: si no, quedaría una promesa por contacto.
+      if (colaRef.current[telefono] === marca) delete colaRef.current[telefono]
+      setColaLen(p => {
+        const n = (p[telefono] || 1) - 1
+        const c = { ...p }
+        if (n > 0) c[telefono] = n; else delete c[telefono]
+        return c
+      })
+    })
+    return actual
+  }
+
   const handleSend = (text) => {
     const t = (text || input).trim()
     if (!t || !activeConv) return
     const tel = activeConv.telefono, nombre = activeConv.nombre
+    const estadoDestino = estadoAlResponder(currentStatus)
+    // El input se limpia YA aunque el mensaje espere turno: el vendedor sigue
+    // escribiendo el siguiente sin quedarse mirando el cursor.
     setInput(''); setToast(null); autoScroll.current = true
-    // 1) Render optimista INSTANTÁNEO — el mensaje aparece ya, sin esperar al servidor.
-    const tmpMsg = { id: 'tmp_' + Date.now(), telefono: tel, nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
-    setConvs(prev => prev.map(c => c.telefono === tel ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
-    pendingRef.current[tel] = [ ...(pendingRef.current[tel] || []), tmpMsg ]
-    // 2) Estado → atendido (optimista, no bloquea la UI)
-    changeStatus(tel, estadoAlResponder(currentStatus))
-    // 3) Enviar en segundo plano; solo avisamos si FALLA (no congela el input ni el botón)
-    sendReply(tel, nombre, t)
-      .then(result => { if (result && result.ok === false) { setToast(result); setTimeout(() => setToast(null), 4000) } })
-      .catch(() => {})
-    setTimeout(load, 4000)
+    return encolar(tel, async () => {
+      // 1) Burbuja optimista cuando REALMENTE le toca salir, no al hacer clic: así el
+      //    hilo en pantalla queda en el mismo orden en que le llega al cliente.
+      const tmpMsg = { id: 'tmp_' + Date.now(), telefono: tel, nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+      setConvs(prev => prev.map(c => c.telefono === tel ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+      pendingRef.current[tel] = [ ...(pendingRef.current[tel] || []), tmpMsg ]
+      // 2) Estado → atendido (optimista, no bloquea la UI)
+      changeStatus(tel, estadoDestino)
+      // 3) Enviar; solo avisamos si FALLA
+      const result = await sendReply(tel, nombre, t).catch(() => null)
+      if (result && result.ok === false) { setToast(result); setTimeout(() => setToast(null), 4000) }
+      setTimeout(load, 4000)
+    })
   }
 
   const handleSendText = async (text, copyToInput) => {
     if (copyToInput !== undefined) { setInput(copyToInput); return }
-    await handleSend(text)
+    return handleSend(text)   // ya va por la fila del chat
   }
 
   const handleKey = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSend() } }
@@ -590,36 +628,44 @@ export default function App() {
 
   const handleSendImage = async () => {
     if (!imgFiles.length || !activeConv) return
+    const telefono = activeConv.telefono
+    const nombre   = activeConv.nombre
+    const estadoDestino = estadoAlResponder(currentStatus)
+    const archivos = imgFiles
     setImgUploading(true); setImgResult(null); setImgProgress(0)
     try {
+      // Toda la tanda entra como UNA sola tarea en la fila: las fotos del computador
+      // tampoco deben intercalarse con las de una respuesta rápida en curso.
+      await encolar(telefono, async () => {
       let allOk = true
       let sendErr = ''
       if (isVideo) {
-        const result = await sendVideo(activeConv.telefono, activeConv.nombre, imgFiles[0].file)
+        const result = await sendVideo(telefono, nombre, archivos[0].file)
         allOk = result.ok
         if (!result.ok) sendErr = result.error || ''
       } else {
-        for (let i = 0; i < imgFiles.length; i++) {
+        for (let i = 0; i < archivos.length; i++) {
           // URL permanente para pintar el hilo. La guardamos en NUESTRO Supabase
           // Storage (vía /api/upload-foto), no en imgbb: imgbb respondía lento/5xx a
           // los fetch server-side y las fotos que se enviaban por link terminaban en
           // `failed`. Si falla, NO cancelamos: el envío real va por media id igual.
           let url = ''
           try {
-            const fd = new FormData(); fd.append('file', imgFiles[i].file)
+            const fd = new FormData(); fd.append('file', archivos[i].file)
             const res  = await fetch('/api/upload-foto', { method:'POST', body:fd })
             const data = await res.json()
             if (res.ok && data.url) url = data.url
           } catch { /* seguimos por media id */ }
 
-          const { ok } = await sendImageFile(activeConv.telefono, activeConv.nombre, imgFiles[i].file, url)
+          const { ok } = await sendImageFile(telefono, nombre, archivos[i].file, url)
           if (!ok) allOk = false
           setImgProgress(i + 1)
-          if (i < imgFiles.length - 1) await new Promise(r => setTimeout(r, 800))
+          if (i < archivos.length - 1) await new Promise(r => setTimeout(r, 800))
         }
       }
       setImgResult({ ok: allOk, error: sendErr })
-      await changeStatus(activeConv.telefono, estadoAlResponder(currentStatus))
+      await changeStatus(telefono, estadoDestino)
+      })
       setTimeout(() => { setImgFiles([]); setImgResult(null); setIsVideo(false); setImgProgress(0); if (fileRef.current) fileRef.current.value = '' }, 1500)
       setTimeout(load, 4000)
     } catch { setImgResult({ ok: false }) }
@@ -630,6 +676,16 @@ export default function App() {
     imgFiles.forEach(f => { if (isVideo) URL.revokeObjectURL(f.preview) })
     setImgFiles([]); setImgResult(null); setIsVideo(false); setImgProgress(0)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  // Burbuja optimista + envío de texto. Se usa DENTRO de una tarea ya encolada
+  // (NO encola por su cuenta): si acá se llamara a handleSend, que sí encola, la
+  // tarea quedaría esperándose a sí misma y no saldría nada.
+  const enviarTextoSuelto = async (telefono, nombre, texto) => {
+    const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: texto, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+    setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+    pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
+    return sendReply(telefono, nombre, texto)
   }
 
   // `onProgress(hechas, total)` deja que el botón muestre "2/5" sin que el panel
@@ -650,51 +706,82 @@ export default function App() {
     let hechas = 0
     const avanzar = () => { hechas += 1; onProgress?.(hechas, total) }
 
-    // Arranca YA la resolución de las fotos a media id, las N en paralelo y sin
-    // esperar: mientras se manda el texto, las imágenes se van preparando. La
-    // segunda vez que se usa esta respuesta rápida esto responde de la caché y es
-    // instantáneo. Antes cada foto se descargaba y se subía a Meta en su turno.
+    // Arranca YA la resolución de las fotos a media id, las N en paralelo, y FUERA
+    // de la fila a propósito: aunque esta respuesta rápida tenga que esperar turno,
+    // sus fotos se van preparando mientras tanto y cuando le toque salir ya están
+    // listas. La segunda vez esto responde de la caché y es instantáneo; antes cada
+    // foto se descargaba y se subía a Meta recién en su turno.
     const idsPromesa = imgs.length ? precacheMedia(imgs) : Promise.resolve({})
 
-    const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
-    if (botones.length && reply.text) {
-      // Respuesta rápida CON botones interactivos
-      const validBtns = botones.map((t, i) => ({ id: `btn_${i + 1}`, title: t }))
-      // El servidor guarda SOLO el cuerpo en `mensaje`; los botones van aparte en `botones`
-      // (así el texto optimista coincide con lo guardado → la reconciliación descarta el
-      // temporal sin duplicar, y la burbuja pinta los botones desde `botones`).
-      const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
-      setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
-      pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
-      sendInteractiveButtons(telefono, nombre, reply.text, validBtns).catch(() => {})
-      avanzar()
-    } else if (reply.text) {
-      handleSend(reply.text)   // ya es optimista y no bloquea
-      avanzar()
-    }
+    // Toda la respuesta rápida es UNA tarea: nada puede meterse entre su texto y
+    // sus fotos, ni entre una foto y la siguiente.
+    return encolar(telefono, async () => {
+      const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
+      if (botones.length && reply.text) {
+        // Respuesta rápida CON botones interactivos
+        const validBtns = botones.map((t, i) => ({ id: `btn_${i + 1}`, title: t }))
+        // El servidor guarda SOLO el cuerpo en `mensaje`; los botones van aparte en `botones`
+        // (así el texto optimista coincide con lo guardado → la reconciliación descarta el
+        // temporal sin duplicar, y la burbuja pinta los botones desde `botones`).
+        const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+        setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+        pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
+        // Se ESPERA (antes iba suelto): las fotos tienen que salir después del texto.
+        await sendInteractiveButtons(telefono, nombre, reply.text, validBtns).catch(() => {})
+        avanzar()
+      } else if (reply.text) {
+        await enviarTextoSuelto(telefono, nombre, reply.text)
+        avanzar()
+      }
 
-    // Envía las imágenes en orden (WhatsApp respeta el orden de llegada). La pausa
-    // era de 800 ms cuando cada envío tardaba segundos; ahora que van por media id
-    // alcanza con un respiro corto.
-    const ids = await idsPromesa
-    for (let i = 0; i < imgs.length; i++) {
-      await sendImageUrl(telefono, nombre, imgs[i], ids[imgs[i]] || '')
-      avanzar()
-      if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 150))
-    }
+      // Envía las imágenes en orden (WhatsApp respeta el orden de llegada). La pausa
+      // era de 800 ms cuando cada envío tardaba segundos; ahora que van por media id
+      // alcanza con un respiro corto.
+      const ids = await idsPromesa
+      for (let i = 0; i < imgs.length; i++) {
+        await sendImageUrl(telefono, nombre, imgs[i], ids[imgs[i]] || '')
+        avanzar()
+        if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 150))
+      }
 
-    changeStatus(telefono, estadoDestino)
+      changeStatus(telefono, estadoDestino)
+      setTimeout(load, 4000)
+    })
   }
 
   // Foto de producto (Tienda: Shopify / sucursal). Su URL también es fija, así que
   // la primera vez que se manda queda su media id en caché y de ahí sale al toque.
+  // Va por la fila: si hay una respuesta rápida saliendo, esta foto espera a que
+  // termine en vez de meterse en el medio.
   const handleSendAIImage = async (imageUrl) => {
     if (!activeConv || !imageUrl) return
     const telefono = activeConv.telefono
     const nombre   = activeConv.nombre
     const estadoDestino = estadoAlResponder(currentStatus)
-    const ok = await sendImageUrl(telefono, nombre, imageUrl)
-    if (ok) changeStatus(telefono, estadoDestino)
+    return encolar(telefono, async () => {
+      const ok = await sendImageUrl(telefono, nombre, imageUrl)
+      if (ok) changeStatus(telefono, estadoDestino)
+    })
+  }
+
+  /**
+   * Producto de la Tienda: 'foto' manda solo la imagen, 'info' manda título+precio
+   * y después la imagen. Los dos mensajes van como UNA tarea de la fila — si fueran
+   * dos, algo clickeado en el medio podría meterse entre el título y su foto.
+   */
+  const handleSendProducto = async (p, modo = 'foto') => {
+    if (!activeConv || !p) return
+    const telefono = activeConv.telefono
+    const nombre   = activeConv.nombre
+    const estadoDestino = estadoAlResponder(currentStatus)
+    return encolar(telefono, async () => {
+      if (modo === 'info') {
+        await enviarTextoSuelto(telefono, nombre, `${p.title}${p.price ? ` — $${p.price}` : ''}`)
+      }
+      const ok = await sendImageUrl(telefono, nombre, p.image)
+      if (ok) changeStatus(telefono, estadoDestino)
+      setTimeout(load, 4000)
+    })
   }
 
   const getModoIA = (tel) => {
@@ -720,17 +807,26 @@ export default function App() {
     if (!activeConv || !input.trim()) return
     const validBtns = btnTexts.map((t,i) => ({ id:`btn_${i+1}`, title:t.trim() })).filter(b=>b.title)
     if (validBtns.length === 0) return
+    const telefono = activeConv.telefono
+    const nombre   = activeConv.nombre
+    const cuerpo   = input.trim()
+    const estadoDestino = estadoAlResponder(currentStatus)
     setSendingBtns(true)
-    // mensaje = solo el cuerpo (igual a lo que guarda el servidor) + botones aparte → sin duplicado.
-    const tmpMsg = { id:'tmp_'+Date.now(), telefono:activeConv.telefono, nombre:activeConv.nombre, mensaje:input.trim(), botones:validBtns, direccion:'SALIENTE', timestamp:new Date().toISOString(), estado:'enviado', _pendingAt: Date.now() }
-    setConvs(prev=>prev.map(c=>c.telefono===activeConv.telefono?{...c,msgs:[...c.msgs,tmpMsg],last:tmpMsg}:c))
-    pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
-    const result = await sendInteractiveButtons(activeConv.telefono, activeConv.nombre, input.trim(), validBtns)
-    setSendingBtns(false); setToast(result); setTimeout(()=>setToast(null),4000)
-    if (result.ok) { setInput(''); setBtnTexts(['','','']); setShowBtnPanel(false); await changeStatus(activeConv.telefono, estadoAlResponder(currentStatus)); setTimeout(load,4000) }
+    setInput(''); setBtnTexts(['','','']); setShowBtnPanel(false)
+    return encolar(telefono, async () => {
+      // mensaje = solo el cuerpo (igual a lo que guarda el servidor) + botones aparte → sin duplicado.
+      const tmpMsg = { id:'tmp_'+Date.now(), telefono, nombre, mensaje:cuerpo, botones:validBtns, direccion:'SALIENTE', timestamp:new Date().toISOString(), estado:'enviado', _pendingAt: Date.now() }
+      setConvs(prev=>prev.map(c=>c.telefono===telefono?{...c,msgs:[...c.msgs,tmpMsg],last:tmpMsg}:c))
+      pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
+      const result = await sendInteractiveButtons(telefono, nombre, cuerpo, validBtns)
+      setSendingBtns(false); setToast(result); setTimeout(()=>setToast(null),4000)
+      if (result.ok) { await changeStatus(telefono, estadoDestino); setTimeout(load,4000) }
+    })
   }
 
   const currentContact     = activeConv ? contacts[activeConv.telefono] : null
+  // Cuántos envíos hay saliendo o esperando turno en el chat abierto.
+  const enFila             = activeConv ? (colaLen[activeConv.telefono] || 0) : 0
   const currentStatus      = currentContact?.estado || 'pendiente'
   const currentStatusView  = activeConv ? getStatus(activeConv.telefono) : 'pendiente'
   const displayName        = (tel) => contacts[tel]?.alias || convs.find(c=>c.telefono===tel)?.nombre || tel
@@ -1023,10 +1119,12 @@ export default function App() {
                     </div>
                   )
                 })}
-                {sending && (
+                {enFila > 0 && (
                   <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:4 }}>
                     <div style={{ background:C.surface2, borderRadius:'18px 18px 4px 18px', padding:'9px 14px', border:`1px solid ${C.border2}` }}>
-                      <span style={{ color:C.creamDim, fontSize:12, animation:'blink 1s infinite' }}>Enviando...</span>
+                      <span style={{ color:C.creamDim, fontSize:12, animation:'blink 1s infinite' }}>
+                        {enFila > 1 ? `Enviando... (${enFila} en fila)` : 'Enviando...'}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -1129,7 +1227,9 @@ export default function App() {
                     {(() => {
                       // UN SOLO botón: manda CON botones si el panel tiene botones; si no, solo texto.
                       const conBotones = showBtnPanel && btnTexts.some(t => t.trim())
-                      const busy = sending || sendingBtns
+                      // Ya NO se bloquea por tener envíos en curso: lo que se escriba
+                      // ahora entra a la fila y sale después, en orden.
+                      const busy = sendingBtns
                       const activo = !!input.trim() && windowOpen && !busy
                       return (
                         <button
@@ -1169,7 +1269,7 @@ export default function App() {
                 onMouseLeave={e => e.currentTarget.style.background = C.border}
               />
               <div className="right-col" style={{ width:'auto', flex:1, borderLeft:'none' }}>
-                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} />
+                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} />
               </div>
             </div>
           )}
@@ -1178,7 +1278,7 @@ export default function App() {
               <div style={{ display:'flex', justifyContent:'flex-end', padding:'10px 10px 0' }}>
                 <button onClick={() => setShowRight(false)} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:17 }}>✕</button>
               </div>
-              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} />
+              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} />
             </div>
           )}
 
