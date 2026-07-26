@@ -105,10 +105,14 @@ function normalizarReferral(r) {
   return Object.values(out).some(Boolean) ? out : null
 }
 
-// Extrae { tipo, contenido, mediaId, referral } según el tipo de mensaje de Meta
+// Extrae { tipo, contenido, mediaId, contextoId, referral } según el tipo de mensaje.
+// `context.id` = el wamid del mensaje que el cliente CITÓ al responder. Se perdió al
+// quitar Make (última cita capturada: 11-jul-2026) y sin él la burbuja no puede
+// pintar la referencia.
 function extraer(msg) {
+  const contextoId = msg.context?.id || ''
   const referral = normalizarReferral(msg.referral)
-  const base = (o) => ({ ...o, referral })
+  const base = (o) => ({ ...o, contextoId, referral })
   switch (msg.type) {
     case 'text':     return base({ tipo: 'texto',      contenido: msg.text?.body || '',            mediaId: '' })
     case 'image':    return base({ tipo: 'imagen',     contenido: msg.image?.caption || '',        mediaId: msg.image?.id || '' })
@@ -172,12 +176,12 @@ export async function POST(req) {
 
         for (const msg of value?.messages || []) {
           const telefono = String(msg.from || '')
-          const { tipo, contenido, mediaId, referral } = extraer(msg)
+          const { tipo, contenido, mediaId, contextoId, referral } = extraer(msg)
           nuevos.push({
             wamid: msg.id || '',
             telefono,
             nombre: nombreDe[telefono] || '',
-            tipo, contenido, mediaId, referral,
+            tipo, contenido, mediaId, contextoId, referral,
             raw: msg, // respaldo: objeto crudo del mensaje tal cual de Meta
             fecha: msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : new Date().toISOString(),
           })
@@ -256,7 +260,8 @@ export async function POST(req) {
         await guardarMensajeSupabase({
           id: m.wamid, telefono: m.telefono, nombre: m.nombre, tipo: m.tipo,
           mensaje: m.contenido, mediaUrl: '', timestamp: m.fecha,
-          direccion: 'ENTRANTE', mediaId: m.mediaId, referral: m.referral, raw: m.raw,
+          direccion: 'ENTRANTE', mediaId: m.mediaId, contextoId: m.contextoId,
+          referral: m.referral, raw: m.raw,
         })
         // Archivar la foto entrante a Supabase Storage (URL estable en media_url).
         // En background (no frena el 200 a Meta). Solo en modo supabase, donde la

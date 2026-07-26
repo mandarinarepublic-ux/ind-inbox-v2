@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { colorFor, initialsFor, fmtTime, parseDate, hashWamid } from '@/lib/utils'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
@@ -263,12 +263,37 @@ function MediaContent({ tipo, mediaUrl, mediaId }) {
 }
 
 // ── QUOTED MESSAGE ────────────────────────────────────────────────
+// Si el mensaje citado quedó fuera de lo que hay cargado, se pide por API; y si aun
+// así no aparece, se muestra un aviso en vez de NADA (antes desaparecía en silencio
+// y parecía que el cliente no había citado nada).
 function QuotedMessage({ contextoId, allMsgs }) {
-  if (!contextoId || !allMsgs) return null
-  if (!contextoId.startsWith('wamid.')) return null
+  const [fetched, setFetched] = useState(null)
+  const valid    = !!contextoId && contextoId.startsWith('wamid.')
   // Comparar por HASH del wamid (el envoltorio difiere aunque sea el mismo mensaje)
-  const cited = allMsgs.find(m => hashWamid(m.id) === hashWamid(contextoId))
-  if (!cited) return null
+  const inWindow = valid && allMsgs ? allMsgs.find(m => hashWamid(m.id) === hashWamid(contextoId)) : null
+  const cited    = inWindow || fetched
+  const needFetch = valid && !inWindow && !fetched
+
+  useEffect(() => {
+    if (!needFetch) return
+    let cancel = false
+    fetch(`/api/mensaje?id=${encodeURIComponent(contextoId)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancel && d && d.id) setFetched(d) })
+      .catch(() => {})
+    return () => { cancel = true }
+  }, [contextoId, needFetch])
+
+  if (!valid) return null
+
+  if (!cited) {
+    return (
+      <div style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, fontSize: 11, color: C.creamDim, fontStyle: 'italic' }}>
+        ↩️ Respondió a un mensaje anterior
+      </div>
+    )
+  }
+
   const isImage = ['image','sticker','imagen','foto'].includes(cited.tipo) || !!cited.mediaUrl?.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
   const citedSrc = viaProxy(cited.mediaUrl, cited.mediaId)
   return (
