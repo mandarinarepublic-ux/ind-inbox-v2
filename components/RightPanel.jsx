@@ -261,7 +261,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [newImgUrls,    setNewImgUrls]    = useState([])
   const [editBotones,   setEditBotones]   = useState(['', '', ''])
   const [newBotones,    setNewBotones]    = useState(['', '', ''])
-  const [sending,       setSending]       = useState(null)
+  // Respuestas rápidas EN VUELO: { [idx]: '⏳' | '3/5' }. Es un mapa y no un solo
+  // índice a propósito — antes el panel esperaba a que terminara una para dejar
+  // mandar otra, y con 5 fotos eso eran 40 segundos de brazos cruzados.
+  const [sending,       setSending]       = useState({})
   const [editAlias,     setEditAlias]     = useState(false)
   const [aliasInput,    setAliasInput]    = useState('')
   const [notasInput,    setNotasInput]    = useState('')
@@ -282,7 +285,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [fuente,          setFuente]          = useState('shopify') // 'shopify' | 'sucursal'
   const [prodCache,       setProdCache]       = useState({})        // { shopify:[...], sucursal:[...] }
   const [prodQuery,       setProdQuery]       = useState('')
-  const [prodSending,     setProdSending]     = useState(null)      // { id, modo }
+  // Productos en vuelo: { [id]: 'foto' | 'info' }. Era un solo producto a la vez y
+  // eso bloqueaba TODA la grilla mientras salía una foto: no se podía ni elegir el
+  // siguiente. Ahora solo se bloquea la tarjeta que ya está enviando.
+  const [prodSending,     setProdSending]     = useState({})
   const productos = prodCache[fuente] ?? null                       // null = cargando
 
   useEffect(() => {
@@ -362,25 +368,42 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     await writeReply('agregar', nr)
   }
 
-  const handleSendQuick = async (idx) => { setSending(idx); await onQuickReply(replies[idx]); setSending(null) }
+  // No se espera a que termine: se dispara y el botón va mostrando "2/5". Así el
+  // vendedor puede mandar otra respuesta rápida (o escribir) mientras las fotos
+  // de la anterior siguen saliendo. El único bloqueo que queda es el doble clic
+  // sobre LA MISMA respuesta.
+  const handleSendQuick = (idx) => {
+    if (sending[idx]) return
+    const marcar = (v) => setSending(prev => ({ ...prev, [idx]: v }))
+    const soltar = () => setSending(prev => { const n = { ...prev }; delete n[idx]; return n })
+    marcar('⏳')
+    Promise.resolve(
+      onQuickReply(replies[idx], (hechas, total) => marcar(total > 1 ? `${hechas}/${total}` : '⏳')),
+    ).catch(() => {}).finally(soltar)
+  }
 
   // ── TIENDA: enviar producto ──────────────────────────────────
   const productosFiltrados = (productos || []).filter(p =>
     !prodQuery.trim() || String(p.title).toLowerCase().includes(prodQuery.trim().toLowerCase())
   )
+  const marcarProd = (id, modo) => setProdSending(prev => ({ ...prev, [id]: modo }))
+  const soltarProd  = (id) => setTimeout(
+    () => setProdSending(prev => { const n = { ...prev }; delete n[id]; return n }),
+    600,
+  )
   const sendProductoFoto = async (p) => {
-    if (!windowOpen || prodSending) return
-    setProdSending({ id: p.id, modo: 'foto' })
+    if (!windowOpen || prodSending[p.id]) return
+    marcarProd(p.id, 'foto')
     try { await onSendImage?.(p.image) }
-    finally { setTimeout(() => setProdSending(null), 600) }
+    finally { soltarProd(p.id) }
   }
   const sendProductoInfo = async (p) => {
-    if (!windowOpen || prodSending) return
-    setProdSending({ id: p.id, modo: 'info' })
+    if (!windowOpen || prodSending[p.id]) return
+    marcarProd(p.id, 'info')
     try {
       await onSendText?.(`${p.title}${p.price ? ` — $${p.price}` : ''}`)
       await onSendImage?.(p.image)
-    } finally { setTimeout(() => setProdSending(null), 600) }
+    } finally { soltarProd(p.id) }
   }
 
   const crearPedido = async () => {
@@ -524,9 +547,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                             {imgs.length>0&&`🖼×${imgs.length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{reply.text}
                           </span>
                           <div style={{ display:'flex', gap:2, flexShrink:0 }}>
-                            <button onClick={()=>handleSendQuick(idx)} disabled={sending===idx||!windowOpen}
-                              style={{ ...btnBase, background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.2)`, color:C.cream, borderRadius:5, width:20, height:20, cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                              {sending===idx?'⏳':'➤'}
+                            <button onClick={()=>handleSendQuick(idx)} disabled={!!sending[idx]||!windowOpen}
+                              style={{ ...btnBase, background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.2)`, color:C.cream, borderRadius:5, minWidth:20, height:20, padding:'0 3px', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                              {sending[idx] || '➤'}
                             </button>
                             <button onClick={()=>startEdit(idx)} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:10, padding:'0 2px' }}>✏️</button>
                             <button onClick={()=>deleteReply(idx)} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:10, padding:'0 2px' }}>🗑️</button>
@@ -715,7 +738,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                     key={p.id}
                     p={p}
                     windowOpen={windowOpen}
-                    sending={prodSending?.id === p.id ? prodSending.modo : null}
+                    sending={prodSending[p.id] || null}
                     onSendFoto={sendProductoFoto}
                     onSendInfo={sendProductoInfo}
                   />

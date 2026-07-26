@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile, precacheMedia } from '@/lib/api-client'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
@@ -555,8 +555,12 @@ export default function App() {
 
   const handleKey = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSend() } }
 
-  const sendImageUrl = async (imageUrl) => {
-    const res = await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imageUrl)
+  // Recibe teléfono y nombre en vez de leerlos de `activeConv`: los envíos ya no
+  // bloquean la interfaz, así que el vendedor puede cambiar de chat mientras una
+  // respuesta rápida sigue saliendo — y las fotos que faltaban se irían al chat
+  // equivocado si esta función mirara la conversación "actual".
+  const sendImageUrl = async (telefono, nombre, imageUrl, mediaId = '') => {
+    const res = await sendImageUrlApi(telefono, nombre, imageUrl, mediaId)
     // Si la foto no se pudo enviar (p. ej. pesa más de los 5 MB que acepta
     // WhatsApp), decirlo: antes moría en Meta y nadie se enteraba.
     if (!res.ok) {
@@ -628,8 +632,30 @@ export default function App() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const handleQuickReply = async (reply) => {
+  // `onProgress(hechas, total)` deja que el botón muestre "2/5" sin que el panel
+  // tenga que esperar a que termine todo.
+  const handleQuickReply = async (reply, onProgress) => {
     if (!activeConv) return
+    // Se congelan acá: el vendedor puede cambiar de chat mientras esto sale.
+    const telefono = activeConv.telefono
+    const nombre   = activeConv.nombre
+    const estadoDestino = estadoAlResponder(currentStatus)
+
+    // Recoger hasta 10 imágenes
+    const imgs = Array.from({length: 10}, (_, i) =>
+      i === 0 ? reply.imageUrl : reply[`imageUrl${i+1}`]
+    ).filter(Boolean)
+
+    const total = (reply.text ? 1 : 0) + imgs.length
+    let hechas = 0
+    const avanzar = () => { hechas += 1; onProgress?.(hechas, total) }
+
+    // Arranca YA la resolución de las fotos a media id, las N en paralelo y sin
+    // esperar: mientras se manda el texto, las imágenes se van preparando. La
+    // segunda vez que se usa esta respuesta rápida esto responde de la caché y es
+    // instantáneo. Antes cada foto se descargaba y se subía a Meta en su turno.
+    const idsPromesa = imgs.length ? precacheMedia(imgs) : Promise.resolve({})
+
     const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
     if (botones.length && reply.text) {
       // Respuesta rápida CON botones interactivos
@@ -637,28 +663,38 @@ export default function App() {
       // El servidor guarda SOLO el cuerpo en `mensaje`; los botones van aparte en `botones`
       // (así el texto optimista coincide con lo guardado → la reconciliación descarta el
       // temporal sin duplicar, y la burbuja pinta los botones desde `botones`).
-      const tmpMsg = { id: 'tmp_' + Date.now(), telefono: activeConv.telefono, nombre: activeConv.nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
-      setConvs(prev => prev.map(c => c.telefono === activeConv.telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
-      pendingRef.current[activeConv.telefono] = [ ...(pendingRef.current[activeConv.telefono] || []), tmpMsg ]
-      sendInteractiveButtons(activeConv.telefono, activeConv.nombre, reply.text, validBtns).catch(() => {})
+      const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+      setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+      pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
+      sendInteractiveButtons(telefono, nombre, reply.text, validBtns).catch(() => {})
+      avanzar()
     } else if (reply.text) {
-      await handleSend(reply.text)
+      handleSend(reply.text)   // ya es optimista y no bloquea
+      avanzar()
     }
-    // Recoger hasta 10 imágenes
-    const imgs = Array.from({length: 10}, (_, i) =>
-      i === 0 ? reply.imageUrl : reply[`imageUrl${i+1}`]
-    ).filter(Boolean)
+
+    // Envía las imágenes en orden (WhatsApp respeta el orden de llegada). La pausa
+    // era de 800 ms cuando cada envío tardaba segundos; ahora que van por media id
+    // alcanza con un respiro corto.
+    const ids = await idsPromesa
     for (let i = 0; i < imgs.length; i++) {
-      await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imgs[i])
-      if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 800))
+      await sendImageUrl(telefono, nombre, imgs[i], ids[imgs[i]] || '')
+      avanzar()
+      if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 150))
     }
-    changeStatus(activeConv.telefono, estadoAlResponder(currentStatus))
+
+    changeStatus(telefono, estadoDestino)
   }
 
+  // Foto de producto (Tienda: Shopify / sucursal). Su URL también es fija, así que
+  // la primera vez que se manda queda su media id en caché y de ahí sale al toque.
   const handleSendAIImage = async (imageUrl) => {
     if (!activeConv || !imageUrl) return
-    const res = await sendImageUrlApi(activeConv.telefono, activeConv.nombre, imageUrl)
-    if (res.ok) await changeStatus(activeConv.telefono, estadoAlResponder(currentStatus))
+    const telefono = activeConv.telefono
+    const nombre   = activeConv.nombre
+    const estadoDestino = estadoAlResponder(currentStatus)
+    const ok = await sendImageUrl(telefono, nombre, imageUrl)
+    if (ok) changeStatus(telefono, estadoDestino)
   }
 
   const getModoIA = (tel) => {
