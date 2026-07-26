@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { guardarMensajeSupabase } from '@/lib/inbox-supabase'
+import { limpiarPush } from '@/lib/contactos'
 import { resolverMediaId, invalidarMediaId, esErrorDeMediaId, urlLiviana, META_PHONE_ID } from '@/lib/media-id'
 
 export const dynamic = 'force-dynamic'
@@ -246,6 +247,18 @@ export async function POST(req) {
         botones: botonesStr,
       }).catch(e => console.error('[/api/saliente] Enviado pero no se pudo registrar:', e.message))
     )
+
+    // Contestar reinicia el enfriamiento del aviso: si ya respondiste, el próximo
+    // mensaje del cliente es información nueva y DEBE avisar, aunque el aviso
+    // anterior haya sido hace un minuto.
+    // Los envíos automáticos (IA, saludos) mandan auto:true y NO lo reinician: si la
+    // IA está llevando ese chat, no hay que interrumpir al humano.
+    if (!body.auto) {
+      waitUntil(
+        limpiarPush(soloDigitos(body.Telefono))
+          .catch(e => console.error('[/api/saliente] limpiar enfriamiento push:', e.message))
+      )
+    }
 
     return NextResponse.json({ ok: true, wamid })
   } catch (err) {

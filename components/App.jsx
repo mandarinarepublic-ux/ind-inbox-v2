@@ -6,7 +6,8 @@ import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/
 import RightPanel from '@/components/RightPanel'
 import Contactos, { PlantillaModal } from '@/components/Contactos'
 import Automatizaciones from '@/components/Automatizaciones'
-import { actualizarNoLeidos, pedirPermisoNotif, notificar } from '@/lib/notif'
+import PushToggle from '@/components/PushToggle'
+import { actualizarNoLeidos, notificar } from '@/lib/notif'
 
 // Paleta IND
 const C = {
@@ -329,6 +330,44 @@ export default function App() {
     return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', alVolver) }
   }, [])
 
+  // El service worker avisa cuando llegó un push: refrescamos al instante en vez de
+  // dejar el polling corriendo en segundo plano (que costaría llamadas de más). Sin
+  // esto el contador de la pestaña nunca alcanzaba a subir, porque con la pestaña
+  // oculta el polling está detenido y `convs` no cambia.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+    const onMsg = (ev) => { if (ev.data?.tipo === 'push-recibido') load() }
+    navigator.serviceWorker.addEventListener('message', onMsg)
+    return () => navigator.serviceWorker.removeEventListener('message', onMsg)
+  }, [load])
+
+  // ── Abrir un chat puntual desde un aviso push ────────────────────────────────
+  // Lo pide el service worker al tocar la notificación, o viene en ?tel= cuando el
+  // aviso tuvo que abrir una ventana nueva.
+  const pedidoRef = useRef(null)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const tel = new URLSearchParams(window.location.search).get('tel')
+    if (tel) pedidoRef.current = tel
+    if (!('serviceWorker' in navigator)) return
+    const onMsg = (ev) => {
+      if (ev.data?.tipo === 'abrir-chat' && ev.data.tel) pedidoRef.current = ev.data.tel
+    }
+    navigator.serviceWorker.addEventListener('message', onMsg)
+    return () => navigator.serviceWorker.removeEventListener('message', onMsg)
+  }, [])
+
+  useEffect(() => {
+    const pedido = pedidoRef.current
+    if (!pedido || !convs.length) return
+    // El formato del webhook y el canónico de la base pueden diferir → últimos 9.
+    const t9 = String(pedido).replace(/\D/g, '').slice(-9)
+    const conv = convs.find(c => String(c.telefono).replace(/\D/g, '').slice(-9) === t9)
+    if (!conv) return          // aún no llegó en este ciclo: reintenta al siguiente
+    pedidoRef.current = null
+    openConv(conv.telefono)
+  }, [convs])
+
   const openConv = (telefono) => {
     setActive(telefono); activeRef.current = telefono
     setShowSidebar(false)
@@ -378,8 +417,9 @@ export default function App() {
   }
 
   // ── Alerta de leads 🔥 calientes cerca del cierre de la ventana de 24h ──
-  // Pide permiso una vez y dispara una notificación del navegador por lead y por ventana.
-  useEffect(() => { pedirPermisoNotif() }, [])
+  // Dispara una notificación del navegador por lead y por ventana. El permiso ya no
+  // se pide acá: Chrome silencia los pedidos sin gesto del usuario, así que ahora lo
+  // pide el botón 🔔 (PushToggle) dentro de su click.
   useEffect(() => {
     const now = Date.now()
     Object.entries(contacts).forEach(([tel, c]) => {
@@ -921,6 +961,7 @@ export default function App() {
                 <div style={{ display:'flex', gap:5, flexShrink:0 }}>
                   <button onClick={() => setVista('AUTO')} title="Mensajes de saludo (automatizaciones)" style={{ background:'rgba(244,241,236,.1)', border:'1px solid rgba(244,241,236,.28)', color:C.cream, borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>👋</button>
                   <a href="/dashboard" title="Dashboard" style={{ background:'rgba(96,165,250,.14)', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', textDecoration:'none' }}>📊</a>
+                  <PushToggle />
                 </div>
               </div>
               <div style={{ position:'relative', marginBottom:6 }}>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
-import { registrarContactoEntrante, getModoIA, getContactos } from '@/lib/contactos'
+import { registrarContactoEntrante, getModoIA, getContactos, marcarPush } from '@/lib/contactos'
+import { enviarPush, cuerpoDeMensaje, debeNotificar } from '@/lib/push'
 import { usaSupabaseLectura } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase } from '@/lib/inbox-supabase'
 import { archivarFoto } from '@/lib/media-archive'
@@ -32,11 +33,14 @@ const AGENT_URL = process.env.INDX_AGENT_URL || 'https://indx-agent.vercel.app/a
 const AGENT_KEY = process.env.INDX_AGENT_KEY || 'mandi_republic_2024'
 const RE_IMG = /https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s)]*)?/gi
 
+// `auto: true` marca que el envío NO lo hizo un humano (IA, saludo automático).
+// /api/saliente lo usa para no reiniciar el enfriamiento del aviso push: si la IA
+// está llevando el chat, no hay que empezar a interrumpir al humano.
 async function enviarSaliente(origin, body) {
   return fetch(`${origin}/api/saliente`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, auto: true }),
   }).catch(e => console.error('[webhook IA] envío falló:', e.message))
 }
 
@@ -195,6 +199,34 @@ export async function POST(req) {
       const ultimoEntranteAtDe = (phone) => { const c = contactosSnap.find(c => tail9(c.telefono) === tail9(phone)); return c?.ultimoEntranteAt ? new Date(c.ultimoEntranteAt).getTime() : 0 }
       const agenteResponde = (phone) => IA_ON && modoIAde(phone) // ¿el bot va a contestar?
       const saludados = new Set()
+
+      // ── Aviso push de mensaje nuevo ──────────────────────────────────────────
+      // Último aviso enviado por conversación (del snapshot de este ciclo).
+      const ultimoPushAtDe = (phone) => {
+        const c = contactosSnap.find(c => tail9(c.telefono) === tail9(phone))
+        return c?.ultimoPushAt || null
+      }
+      // Anti doble-aviso dentro del mismo lote: el snapshot no se entera de lo que
+      // acabamos de mandar hace dos mensajes.
+      const avisados = new Set()
+
+      // Nunca lanza: un fallo acá no puede tocar el webhook. Sin claves VAPID,
+      // enviarPush es un no-op silencioso.
+      async function avisarSiCorresponde(m) {
+        const t = tail9(m.telefono)
+        if (avisados.has(t)) return
+        if (!debeNotificar(ultimoPushAtDe(m.telefono), Date.now())) return
+        avisados.add(t)
+        const nombre = m.nombre || m.telefono
+        await enviarPush({
+          titulo: `💬 ${nombre}`,
+          cuerpo: cuerpoDeMensaje({ tipo: m.tipo, contenido: m.contenido }),
+          url:    `/inbox?tel=${encodeURIComponent(m.telefono)}`,
+          tag:    `chat-${t}`,
+          tel:    m.telefono,
+        })
+        await marcarPush(m.telefono)
+      }
       async function saludarSiCorresponde(phone, name) {
         if (!auto || agenteResponde(phone)) return // si el bot responde, él saluda → evita doble msg
         const t = tail9(phone)
@@ -236,6 +268,11 @@ export async function POST(req) {
         // Upsert del contacto (no pisa nombre/alias editados a mano)
         try { await registrarContactoEntrante(m.telefono, m.nombre, m.telefono) }
         catch (e) { console.error('[/api/webhook] contacto:', e.message) }
+
+        // Aviso al equipo. Va DESPUÉS de registrarContactoEntrante para que la
+        // conversación exista y se le pueda escribir ultimo_push_at.
+        await avisarSiCorresponde(m)
+          .catch(e => console.error('[/api/webhook] aviso push:', e.message))
 
         // Saludo automático (bienvenida a nuevo / "hola de vuelta" al reactivarse).
         // En background: no frena el 200 a Meta. Solo dispara si el bot NO va a responder.
