@@ -145,6 +145,8 @@ export default function App() {
   const msgsRef    = useRef(null)
   const autoScroll = useRef(true)
   const prevMsgLen = useRef(0)
+  // Mensaje que se está citando al responder (null = ninguno).
+  const [citando, setCitando] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const localStatusRef = useRef({})
   const localTempRef   = useRef({}) // override optimista de temperatura (Eje 2), hasta que el poll confirme
@@ -375,6 +377,7 @@ export default function App() {
   const openConv = (telefono) => {
     setActive(telefono); activeRef.current = telefono
     setShowSidebar(false)
+    setCitando(null)   // la cita pertenece al chat que estabas mirando
     // En móvil, empujamos una entrada de historial: así el botón "atrás" del celular
     // vuelve a la lista de chats en vez de salir de la app (una sola entrada mientras
     // navegamos chats; backGuardRef evita duplicar al saltar de chat en chat).
@@ -612,20 +615,29 @@ export default function App() {
     if (!t || !activeConv) return
     const tel = activeConv.telefono, nombre = activeConv.nombre
     const estadoDestino = estadoAlResponder(currentStatus)
+    // Se toma la cita ANTES de limpiarla: si el envío espera turno en la fila, la
+    // barra ya no está pero el wamid citado tiene que viajar igual.
+    const citaId = citando?.id || ''
     // El input se limpia YA aunque el mensaje espere turno: el vendedor sigue
     // escribiendo el siguiente sin quedarse mirando el cursor.
-    setInput(''); setToast(null); autoScroll.current = true
+    setInput(''); setToast(null); setCitando(null); autoScroll.current = true
     return encolar(tel, async () => {
       // 1) Burbuja optimista cuando REALMENTE le toca salir, no al hacer clic: así el
       //    hilo en pantalla queda en el mismo orden en que le llega al cliente.
-      const tmpMsg = { id: 'tmp_' + Date.now(), telefono: tel, nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+      const tmpMsg = { id: 'tmp_' + Date.now(), telefono: tel, nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now(), contextoId: citaId }
       setConvs(prev => prev.map(c => c.telefono === tel ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
       pendingRef.current[tel] = [ ...(pendingRef.current[tel] || []), tmpMsg ]
       // 2) Estado → atendido (optimista, no bloquea la UI)
       changeStatus(tel, estadoDestino)
       // 3) Enviar; solo avisamos si FALLA
-      const result = await sendReply(tel, nombre, t).catch(() => null)
+      const result = await sendReply(tel, nombre, t, citaId).catch(() => null)
       if (result && result.ok === false) { setToast(result); setTimeout(() => setToast(null), 4000) }
+      // El mensaje salió, pero Meta rechazó la cita (mensaje viejo). Se avisa en vez
+      // de que el vendedor crea que respondió citando y el cliente vea un texto suelto.
+      else if (result?.citaOmitida) {
+        setToast({ ok: true, msg: '✓ Enviado, pero SIN la cita: WhatsApp ya no reconoce ese mensaje' })
+        setTimeout(() => setToast(null), 4000)
+      }
       setTimeout(load, 4000)
     })
   }
@@ -1160,7 +1172,7 @@ export default function App() {
                           <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:11, color:C.creamFaint }}>{fmtDate(msg.timestamp)}</span>
                         </div>
                       )}
-                      <MessageBubble msg={msg} allMsgs={activeConv.msgs} />
+                      <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={setCitando} />
                     </div>
                   )
                 })}
@@ -1262,6 +1274,25 @@ export default function App() {
                   )}
 
                   <div style={{ flex:1, background:C.surface2, border:`1px solid ${C.border}`, borderRadius:13, padding:'9px 13px', position:'relative' }}>
+                    {/* Barra de cita: qué mensaje se está respondiendo. Con ✕ para soltarlo. */}
+                    {citando && (
+                      <div style={{
+                        display:'flex', alignItems:'center', gap:8, marginBottom:8,
+                        borderLeft:'3px solid #f59e0b', background:'rgba(0,0,0,.3)',
+                        borderRadius:'0 8px 8px 0', padding:'5px 10px',
+                      }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:'#f59e0b' }}>
+                            Respondiendo a {citando.direccion === 'SALIENTE' ? 'ti' : (activeConv?.nombre || citando.telefono)}
+                          </div>
+                          <div style={{ fontSize:11, color:C.creamDim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {citando.mensaje || `[${citando.tipo || 'archivo'}]`}
+                          </div>
+                        </div>
+                        <button onClick={() => setCitando(null)} title="Quitar la cita"
+                          style={{ background:'transparent', border:'none', color:C.creamFaint, fontSize:15, cursor:'pointer', lineHeight:1, flexShrink:0 }}>✕</button>
+                      </div>
+                    )}
                     <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
                       placeholder={getModoIA(activeConv?.telefono) ? '🤖 IA respondiendo automáticamente...' : 'Escribe un mensaje... (Ctrl+Enter para enviar)'}
                       rows={2}

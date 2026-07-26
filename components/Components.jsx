@@ -375,20 +375,35 @@ function ReferralCard({ referral }) {
 }
 
 // ── MESSAGE BUBBLE ────────────────────────────────────────────────
-export function MessageBubble({ msg, allMsgs }) {
+// `onResponder` (opcional): al tocar la burbuja aparece "↩ Responder" SOLO en ese
+// mensaje. Nada visible hasta que el usuario toca — a propósito: una flecha fija en
+// cada burbuja ensucia el hilo entero.
+export function MessageBubble({ msg, allMsgs, onResponder }) {
+  const [accion, setAccion] = useState(false)
   const isMe     = msg.direccion === 'SALIENTE'
   const hasMedia = !!msg.mediaUrl || !!msg.mediaId
   const hasText  = !!msg.mensaje
 
+  // Un clic sobre una foto, un link o un botón hace LO SUYO, no abre el "Responder".
+  const alTocar = (e) => {
+    if (!onResponder) return
+    if (e.target.closest('a, button, img, video, audio')) return
+    setAccion(v => !v)
+  }
+
   return (
     <div style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: 4, animation: 'up .2s ease' }}>
-      <div style={{
+      <div
+        onClick={alTocar}
+        title={onResponder ? 'Toca para responder a este mensaje' : undefined}
+        style={{
         maxWidth: '68%',
         background: isMe ? '#1A1A1A' : '#111111',
         borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
         padding: '10px 14px',
         boxShadow: '0 2px 8px rgba(0,0,0,.5)',
         border: isMe ? `1px solid rgba(244,241,236,.12)` : `1px solid ${C.border}`,
+        cursor: onResponder ? 'pointer' : 'default',
       }}>
         {msg.referral && <ReferralCard referral={msg.referral} />}
         {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} />}
@@ -431,6 +446,19 @@ export function MessageBubble({ msg, allMsgs }) {
           </span>
           {isMe && <Ticks estado={msg.estadoEntrega} />}
         </div>
+
+        {/* Aparece SOLO en el mensaje que tocaste. Se va al usarlo o al tocar de nuevo. */}
+        {accion && onResponder && (
+          <div style={{ display:'flex', justifyContent: isMe ? 'flex-start' : 'flex-end', marginTop: 6 }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setAccion(false); onResponder(msg) }}
+              style={{
+                background:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.45)',
+                color:'#f59e0b', borderRadius:14, padding:'3px 12px',
+                fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+              }}>↩ Responder</button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -439,6 +467,8 @@ export function MessageBubble({ msg, allMsgs }) {
 // ── TOAST ─────────────────────────────────────────────────────────
 export function Toast({ result }) {
   if (!result) return null
+  // Si trae `msg`, se muestra ese texto tal cual (p. ej. "enviado, pero sin la cita").
+  const custom = typeof result.msg === 'string' ? result.msg : null
   return (
     <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8, animation: 'up .2s ease' }}>
       <span style={{
@@ -447,7 +477,7 @@ export function Toast({ result }) {
         color: result.ok ? C.cream : '#f87171',
         border: `1px solid ${result.ok ? 'rgba(244,241,236,.2)' : 'rgba(239,68,68,.2)'}`,
       }}>
-        {result.ok ? '✓ Enviado' : '✗ No se pudo enviar — reintenta'}
+        {custom ? custom : (result.ok ? '✓ Enviado' : '✗ No se pudo enviar — reintenta')}
       </span>
     </div>
   )
