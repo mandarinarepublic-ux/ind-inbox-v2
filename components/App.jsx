@@ -374,6 +374,16 @@ export default function App() {
     openConv(conv.telefono)
   }, [convs])
 
+  // Cambiar de bandeja CIERRA el chat abierto: si no, al terminar de escribirle a un
+  // cliente y pasar a "Pendientes" quedaba en pantalla la conversación anterior, que
+  // ya no pertenece a esa bandeja. Se deja el panel del medio en blanco para elegir.
+  const cambiarFiltro = (key) => {
+    setFilter(key)
+    setActive(null)
+    activeRef.current = null
+    setCitando(null)
+  }
+
   const openConv = (telefono) => {
     setActive(telefono); activeRef.current = telefono
     setShowSidebar(false)
@@ -1003,7 +1013,7 @@ export default function App() {
                   { key:'atendido',     label:'Atendidos',    icon:'🟢', color:'#4ade80' },
                   { key:'venta',        label:'Ventas',       icon:'💰', color:'#10b981' },
                 ].map(({ key, label, icon, color }) => (
-                  <button key={key} onClick={() => setFilter(key)} style={{
+                  <button key={key} onClick={() => cambiarFiltro(key)} style={{
                     flex:1, padding:'5px 2px', fontSize:9, fontWeight:700,
                     background:filter===key?`${color}18`:'transparent',
                     border:`1px solid ${filter===key?color+'40':C.border}`,
@@ -1017,7 +1027,7 @@ export default function App() {
               </div>
               {/* Soporte + Archivados colapsados */}
               <div style={{ marginTop:4, display:'flex', gap:4 }}>
-                <button onClick={() => setFilter('soporte')} style={{
+                <button onClick={() => cambiarFiltro('soporte')} style={{
                   flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
                   background:filter==='soporte'?`rgba(167,139,250,.18)`:'transparent',
                   border:`1px solid ${filter==='soporte'?'rgba(167,139,250,.4)':C.border}`,
@@ -1028,7 +1038,7 @@ export default function App() {
                   🎧 Soporte
                   {counts['soporte']>0 && <span style={{ background:filter==='soporte'?'#a78bfa':C.border2, color:filter==='soporte'?C.bg:C.creamDim, borderRadius:10, padding:'0 5px', fontSize:8, fontWeight:800 }}>{counts['soporte']}</span>}
                 </button>
-                <button onClick={() => setFilter('archivado')} style={{
+                <button onClick={() => cambiarFiltro('archivado')} style={{
                   flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
                   background:filter==='archivado'?`rgba(160,154,144,.18)`:'transparent',
                   border:`1px solid ${filter==='archivado'?'rgba(160,154,144,.4)':C.border}`,
@@ -1043,7 +1053,7 @@ export default function App() {
               {/* Fila TEMPERATURA del lead (Eje 2, manual) */}
               <div style={{ display:'flex', gap:4, marginTop:4 }}>
                 {TEMPERATURAS.map(({ key, icon, label, color }) => (
-                  <button key={key} onClick={() => setFilter(key)} style={{
+                  <button key={key} onClick={() => cambiarFiltro(key)} style={{
                     flex:1, padding:'5px 2px', fontSize:9, fontWeight:700,
                     background:filter===key?`${color}18`:'transparent',
                     border:`1px solid ${filter===key?color+'40':C.border}`,
