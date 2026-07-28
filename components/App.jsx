@@ -228,7 +228,10 @@ export default function App() {
   }
   if (seenRef.current === null) seenRef.current = loadSeen()
 
-  const load = useCallback(async () => {
+  // `sinCache: true` salta el caché compartido del edge. Se usa justo después de
+  // cambiar algo (estado, temperatura) para no leer una respuesta vieja que
+  // "deshaga" en pantalla lo que el vendedor acaba de hacer.
+  const load = useCallback(async ({ sinCache = false } = {}) => {
     // Tres fuentes que se combinan (buildConvs deduplica por id de mensaje):
     //  · lista  → ÚLTIMO mensaje de cada conversación, sobre TODO el historial
     //             (hace que aparezcan también los chats viejos).
@@ -237,7 +240,7 @@ export default function App() {
     //  · hilos  → historiales completos ya descargados al abrir cada chat.
     // UN request por ciclo (antes 3: lista+mensajes+contactos → /api/inbox-sync).
     // null (error) → se conservan los datos previos, no parpadea a blanco.
-    const sync   = await fetchInboxSync()
+    const sync   = await fetchInboxSync({ sinCache })
     const lista  = sync?.lista ?? null
     const rows   = sync?.rows ?? null
     const ctList = sync?.contactos ?? null
@@ -594,10 +597,17 @@ export default function App() {
     if (changingRef.current[telefono]) return
     changingRef.current[telefono] = true
     setTimeout(() => { delete changingRef.current[telefono] }, 3000)
-    localStatusRef.current[telefono] = { estado: status, expiresAt: Date.now() + 15000 }
+    // El override tiene que durar MÁS que el caché del edge (s-maxage=5 +
+    // stale-while-revalidate=20 = hasta 25 s de respuesta vieja). Con 15 s, al
+    // expirar el override el poll podía traer todavía el estado anterior y el
+    // botón "se revertía" solo. 35 s cubre la ventana con margen.
+    localStatusRef.current[telefono] = { estado: status, expiresAt: Date.now() + 35000 }
     setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), estado: status } }))
     const conv = convs.find(c => c.telefono === telefono)
     await updateContact(telefono, conv?.nombre || '', status, contacts[telefono]?.alias || '', true)
+    // Y se pide una lectura FRESCA saltando el caché: así el estado real llega en
+    // segundos en vez de esperar a que el edge revalide.
+    load({ sinCache: true }).catch(() => {})
   }
 
   // ── Cambiar TEMPERATURA del lead (Eje 2) — 100% manual ────────
@@ -605,7 +615,9 @@ export default function App() {
   const changeTemperatura = async (telefono, temp) => {
     const actual = contacts[telefono]?.temperatura || ''
     const nueva  = actual === temp ? '' : temp
-    localTempRef.current[telefono] = { temperatura: nueva, expiresAt: Date.now() + 15000 }
+    // 35 s por lo mismo que en changeStatus: el override debe sobrevivir al caché
+    // del edge (hasta 25 s), o el poll revierte el cambio en pantalla.
+    localTempRef.current[telefono] = { temperatura: nueva, expiresAt: Date.now() + 35000 }
     setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), temperatura: nueva } }))
     const res = await updateTemperatura(telefono, nueva)
     if (res && res.ok === false) {
@@ -926,7 +938,8 @@ export default function App() {
     const current = getModoIA(tel)
     const next = !current
     setTogglingIA(true)
-    localIARef.current[tel] = { modoIA: next, expiresAt: Date.now() + 15000 }
+    // Igual que changeStatus y la temperatura: por encima del caché del edge.
+    localIARef.current[tel] = { modoIA: next, expiresAt: Date.now() + 35000 }
     setContacts(prev => ({ ...prev, [tel]: { ...(prev[tel] || {}), modoIA: next } }))
     await toggleIAMode(tel, activeConv.nombre, currentStatus, contacts[tel]?.alias || '', next)
     setTogglingIA(false)
