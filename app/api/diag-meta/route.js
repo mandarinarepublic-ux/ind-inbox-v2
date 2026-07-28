@@ -9,7 +9,7 @@ export const revalidate = 0
 
 const META_TOKEN = process.env.META_TOKEN || ''
 const PHONE = process.env.META_PHONE_ID || '1135333936337730'
-const WABA = process.env.META_WABA_ID || '1003593902536446'
+const WABA_DEFECTO = process.env.META_WABA_ID || '1003593902536446'
 // OJO: acá se consultaba también la WABA duplicada ("Indstore" 2151783152331852 /
 // phone 1092674123940116) por si quedaba viva como salida alterna. Ya se comprobó
 // el 27-jul que el token NO la alcanza: devuelve code 100 subcode 33 en cada
@@ -42,6 +42,9 @@ export async function GET(req) {
 
   const camposNumero = 'id,display_phone_number,verified_name,quality_rating,status,name_status,code_verification_status,throughput,platform_type'
   const camposWaba = 'id,name,account_review_status,business_verification_status,status,ownership_type,currency,timezone_id'
+  // ?waba=<id> permite auditar CUALQUIER cuenta antes de mover el número a ella.
+  // Conectar el número a una WABA que también está rota costaría el número.
+  const WABA = req.nextUrl.searchParams.get('waba') || WABA_DEFECTO
   const [token, phone, waba, numeros, asignadas, appsSuscritas, yo] = await Promise.all([
     get(`debug_token?input_token=${tok()}`),
     get(`${PHONE}?fields=${camposNumero},messaging_limit_tier`),
