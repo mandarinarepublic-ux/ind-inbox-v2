@@ -35,7 +35,11 @@ export async function POST(req) {
   console.log(`[/api/admin/suscribir-app] waba=${waba} http=${r.status} ${JSON.stringify(body)}`)
 
   // Se devuelve el estado resultante para confirmar en el acto que quedó.
-  const ver = await fetch(`${GRAPH}/${waba}/subscribed_apps?access_token=${encodeURIComponent(META_TOKEN)}`)
+  // El token va SIEMPRE por cabecera: en la query string termina en los logs de
+  // acceso, en el historial de proxies y en cualquier traza intermedia.
+  const ver = await fetch(`${GRAPH}/${waba}/subscribed_apps`, {
+    headers: { Authorization: `Bearer ${META_TOKEN}` },
+  })
   const suscritas = await ver.json().catch(() => ({}))
 
   return NextResponse.json({ ok: r.ok, http: r.status, respuesta: body, suscritas }, { status: r.ok ? 200 : 502 })
