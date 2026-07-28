@@ -1,6 +1,7 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile, precacheMedia } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile, precacheMedia, setCanalActivo } from '@/lib/api-client'
+import { CANALES, CANAL_POR_DEFECTO } from '@/lib/canales'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
@@ -108,6 +109,11 @@ const saveSeen  = (m) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify(m
 
 export default function App() {
   const [vista,        setVista]        = useState('CHAT') // 'CHAT' | 'CONTACTOS' | 'AUTO'
+  // Canal = qué número se está atendiendo. La vista de chat es UNA sola y se
+  // reutiliza; lo único que cambia es de dónde salen los datos y por dónde sale
+  // la respuesta. Ver lib/canales.js.
+  const [canal,        setCanal]        = useState(CANAL_POR_DEFECTO)
+  const [pendientes,   setPendientes]   = useState({})   // { phoneId: nº pendientes }
   const [showTplModal, setShowTplModal] = useState(false)  // plantilla desde el chat (fuera de 24h)
   const [tplToast,     setTplToast]     = useState(null)
   const [convs,        setConvs]        = useState([])
@@ -235,6 +241,8 @@ export default function App() {
     const lista  = sync?.lista ?? null
     const rows   = sync?.rows ?? null
     const ctList = sync?.contactos ?? null
+    // Pendientes de TODOS los canales (incluido el que no se está mirando).
+    if (sync?.pendientes) setPendientes(sync.pendientes)
 
     // null → hubo ERROR (no "vacío"): conservar lo previo, no parpadear a blanco
     if (Array.isArray(lista) || Array.isArray(rows)) {
@@ -384,6 +392,24 @@ export default function App() {
     setActive(null)
     activeRef.current = null
     setCitando(null)
+  }
+
+  /**
+   * Cambiar de número. Se limpia TODO lo que pertenece a la bandeja anterior:
+   * si quedara el chat abierto o los hilos en memoria, se vería una conversación
+   * del otro número y la respuesta saldría por el canal equivocado.
+   */
+  const cambiarCanal = (id) => {
+    setVista('CHAT')
+    if (id === canal) return
+    setCanalActivo(id)        // manda a api-client: lecturas y envíos van por acá
+    setCanal(id)
+    setActive(null); activeRef.current = null
+    setCitando(null)
+    setConvs([]); setContacts({})
+    hilosRef.current = {}     // hilos cargados del canal anterior
+    pendingRef.current = {}   // burbujas optimistas del canal anterior
+    setTimeout(load, 0)       // recarga ya, sin esperar al siguiente poll
   }
 
   const openConv = (telefono) => {
@@ -989,8 +1015,34 @@ export default function App() {
         {/* ══════ HEADER + PESTAÑAS ══════ */}
         <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:12, flexShrink:0, height:42, background:C.bg, borderBottom:`1px solid ${C.border}`, zIndex:200, overflowX:'auto' }}>
           <div style={{ width:26, height:26, background:C.cream, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:900, color:C.bg, letterSpacing:'-0.5px', flexShrink:0 }}>IND</div>
+          {/* Un botón por número + las vistas de siempre. El chat NO se duplica:
+              es el mismo panel, solo cambia el canal que se está atendiendo. */}
+          {CANALES.map((c) => {
+            const activo = vista === 'CHAT' && canal === c.id
+            const n = pendientes[c.phoneId] || 0
+            return (
+              <button key={c.id} onClick={() => cambiarCanal(c.id)} title={c.titulo} style={{
+                padding:'4px 12px', border:'none', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, height:'100%',
+                display:'flex', alignItems:'center', gap:6,
+                background: activo ? 'rgba(244,241,236,.1)' : 'transparent',
+                borderTop:'2px solid transparent',
+                borderBottom: activo ? `2px solid ${C.cream}` : '2px solid transparent',
+                color: activo ? C.cream : C.creamFaint, fontWeight:800, fontSize:11, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
+              }}>
+                💬 {c.etiqueta}
+                {/* El contador es lo que impide que la bandeja que no miras se
+                    vuelva invisible y se pierdan clientes ahí dentro. */}
+                {n > 0 && (
+                  <span style={{
+                    background:'#f87171', color:'#fff', borderRadius:9, minWidth:17, height:17,
+                    display:'inline-flex', alignItems:'center', justifyContent:'center',
+                    fontSize:9.5, fontWeight:900, padding:'0 5px', letterSpacing:0,
+                  }}>{n}</span>
+                )}
+              </button>
+            )
+          })}
           {[
-            { id:'CHAT',      label:'💬 CHAT' },
             { id:'CONTACTOS', label:'👥 CONTACTOS' },
             { id:'AUTO',      label:'⚙️ AUTOS' },
           ].map(({ id, label }) => (
