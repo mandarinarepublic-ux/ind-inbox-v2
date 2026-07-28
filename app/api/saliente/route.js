@@ -211,8 +211,25 @@ export async function POST(req) {
       body: JSON.stringify(payload),
     })
 
-    let res  = await enviar()
-    let data = await res.json().catch(() => ({}))
+    // Meta contesta HTTP 5xx / code 1 ("An unknown error has occurred.") cuando algo
+    // se rompe de SU lado. Casi siempre es un bache de segundos y perder el mensaje
+    // por eso es inaceptable, así que se reintenta 2 veces con espera creciente.
+    // Si el fallo es sostenido (como la caída del 27-jul) igual termina en error: eso
+    // es a propósito, mentirle al vendedor es peor.
+    const esFalloDeMeta = (r, d) => r.status >= 500 || d?.error?.code === 1
+    const enviarConReintentos = async () => {
+      let r = await enviar()
+      let d = await r.json().catch(() => ({}))
+      for (let intento = 1; intento <= 2 && !r.ok && esFalloDeMeta(r, d); intento++) {
+        await new Promise((s) => setTimeout(s, intento * 700))
+        console.warn(`[/api/saliente] Meta falló de su lado (http=${r.status} code=${d?.error?.code}), reintento ${intento}/2`)
+        r = await enviar()
+        d = await r.json().catch(() => ({}))
+      }
+      return { r, d }
+    }
+
+    let { r: res, d: data } = await enviarConReintentos()
 
     // El media id que teníamos guardado ya no le sirve a Meta (caducó, o lo borró).
     // Lo sacamos de la caché, subimos la foto de nuevo y reintentamos UNA vez: para

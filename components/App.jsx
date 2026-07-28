@@ -251,7 +251,9 @@ export default function App() {
       Object.keys(pend).forEach(tel => {
         const conv = next.find(c => c.telefono === tel)
         pend[tel] = (pend[tel] || []).filter(pm => {
-          if (now - pm._pendingAt > 90000) return false // expira a los 90s
+          // Los fallidos NO expiran: son la única prueba en pantalla de que ese
+          // mensaje no salió. Los demás sí, a los 90s.
+          if (!pm._fallido && now - pm._pendingAt > 90000) return false
           // dropear cuando ya aparece un SALIENTE real con el mismo texto
           const yaEsta = conv?.msgs.some(m => m.direccion === 'SALIENTE' && !String(m.id).startsWith('tmp_') && String(m.mensaje).trim() === String(pm.mensaje).trim())
           return !yaEsta
@@ -620,6 +622,20 @@ export default function App() {
     return actual
   }
 
+  /**
+   * Un envío que Meta rechazó NO puede seguir pintado como enviado. Se marca la
+   * burbuja con ⚠ y se queda en el hilo (no expira a los 90 s como las demás
+   * optimistas): el vendedor tiene que poder ver EXACTAMENTE cuál no salió, en vez
+   * de que el mensaje se evapore solo y el chat quede como atendido.
+   */
+  const marcarFallido = (telefono, id) => {
+    const marcar = (m) => (m.id === id ? { ...m, estadoEntrega: 'failed', _fallido: true } : m)
+    setConvs(prev => prev.map(c => c.telefono === telefono
+      ? { ...c, msgs: c.msgs.map(marcar), last: marcar(c.last || {}) }
+      : c))
+    pendingRef.current[telefono] = (pendingRef.current[telefono] || []).map(marcar)
+  }
+
   const handleSend = (text) => {
     const t = (text || input).trim()
     if (!t || !activeConv) return
@@ -637,14 +653,23 @@ export default function App() {
       const tmpMsg = { id: 'tmp_' + Date.now(), telefono: tel, nombre, mensaje: t, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now(), contextoId: citaId }
       setConvs(prev => prev.map(c => c.telefono === tel ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
       pendingRef.current[tel] = [ ...(pendingRef.current[tel] || []), tmpMsg ]
-      // 2) Estado → atendido (optimista, no bloquea la UI)
-      changeStatus(tel, estadoDestino)
-      // 3) Enviar; solo avisamos si FALLA
+      // 2) Enviar
       const result = await sendReply(tel, nombre, t, citaId).catch(() => null)
-      if (result && result.ok === false) { setToast(result); setTimeout(() => setToast(null), 4000) }
+      // 3) El chat pasa a atendido SOLO si el mensaje salió de verdad. Marcarlo antes
+      //    de enviar (como se hacía) sacaba de PENDIENTES a clientes que nunca
+      //    recibieron nada: el vendedor no los volvía a ver.
+      const salio = Boolean(result && result.ok !== false)
+      if (salio) changeStatus(tel, estadoDestino)
+      else {
+        // `result` null = la llamada ni siquiera respondió. Antes ese caso no avisaba
+        // nada y el mensaje se perdía en silencio.
+        marcarFallido(tel, tmpMsg.id)
+        setToast(result || { ok: false, error: 'No se pudo enviar' })
+        setTimeout(() => setToast(null), 4000)
+      }
       // El mensaje salió, pero Meta rechazó la cita (mensaje viejo). Se avisa en vez
       // de que el vendedor crea que respondió citando y el cliente vea un texto suelto.
-      else if (result?.citaOmitida) {
+      if (result?.citaOmitida) {
         setToast({ ok: true, msg: '✓ Enviado, pero SIN la cita: WhatsApp ya no reconoce ese mensaje' })
         setTimeout(() => setToast(null), 4000)
       }
@@ -730,7 +755,9 @@ export default function App() {
         }
       }
       setImgResult({ ok: allOk, error: sendErr })
-      await changeStatus(telefono, estadoDestino)
+      // Solo si TODAS salieron: si una foto se cayó, el cliente quedó a medias y el
+      // chat tiene que seguir en PENDIENTES.
+      if (allOk) await changeStatus(telefono, estadoDestino)
       })
       setTimeout(() => { setImgFiles([]); setImgResult(null); setIsVideo(false); setImgProgress(0); if (fileRef.current) fileRef.current.value = '' }, 1500)
       setTimeout(load, 4000)
@@ -751,7 +778,9 @@ export default function App() {
     const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: texto, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
     setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
     pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
-    return sendReply(telefono, nombre, texto)
+    const result = await sendReply(telefono, nombre, texto).catch(() => null)
+    if (!result || result.ok === false) marcarFallido(telefono, tmpMsg.id)
+    return result
   }
 
   // `onProgress(hechas, total)` deja que el botón muestre "2/5" sin que el panel
@@ -782,6 +811,9 @@ export default function App() {
     // Toda la respuesta rápida es UNA tarea: nada puede meterse entre su texto y
     // sus fotos, ni entre una foto y la siguiente.
     return encolar(telefono, async () => {
+      // Si CUALQUIER pieza de la respuesta rápida falla, el chat no puede quedar
+      // como atendido: al cliente le llegó media respuesta o ninguna.
+      let todoOk = true
       const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
       if (botones.length && reply.text) {
         // Respuesta rápida CON botones interactivos
@@ -793,10 +825,13 @@ export default function App() {
         setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
         pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
         // Se ESPERA (antes iba suelto): las fotos tienen que salir después del texto.
-        await sendInteractiveButtons(telefono, nombre, reply.text, validBtns).catch(() => {})
+        const r = await sendInteractiveButtons(telefono, nombre, reply.text, validBtns).catch(() => null)
+        if (!r || r.ok === false) { todoOk = false; marcarFallido(telefono, tmpMsg.id) }
         avanzar()
       } else if (reply.text) {
-        await enviarTextoSuelto(telefono, nombre, reply.text)
+        // enviarTextoSuelto ya marca su propia burbuja si falla.
+        const r = await enviarTextoSuelto(telefono, nombre, reply.text)
+        if (!r || r.ok === false) todoOk = false
         avanzar()
       }
 
@@ -805,12 +840,14 @@ export default function App() {
       // alcanza con un respiro corto.
       const ids = await idsPromesa
       for (let i = 0; i < imgs.length; i++) {
-        await sendImageUrl(telefono, nombre, imgs[i], ids[imgs[i]] || '')
+        const ok = await sendImageUrl(telefono, nombre, imgs[i], ids[imgs[i]] || '')
+        if (!ok) todoOk = false
         avanzar()
         if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 150))
       }
 
-      changeStatus(telefono, estadoDestino)
+      if (todoOk) changeStatus(telefono, estadoDestino)
+      else { setToast({ ok: false, error: 'La respuesta rápida no salió completa' }); setTimeout(() => setToast(null), 4000) }
       setTimeout(load, 4000)
     })
   }
