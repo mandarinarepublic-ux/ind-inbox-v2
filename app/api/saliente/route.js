@@ -244,9 +244,17 @@ export async function POST(req) {
     }
 
     if (!res.ok || !data?.messages?.[0]?.id) {
-      const msg = data?.error?.message || `HTTP ${res.status}`
-      console.error('[/api/saliente] Meta rechazó el envío:', msg)
-      return NextResponse.json({ ok: false, error: msg }, { status: 502 })
+      const e = data?.error || {}
+      const msg = e.message || `HTTP ${res.status}`
+      // "Meta rechazó el envío" a secas no alcanza para arreglar nada: sin el code /
+      // subcode / details no se distingue un token vencido de un problema de pago o
+      // de un número bloqueado. Se registra TODO lo que Meta manda.
+      console.error(
+        `[/api/saliente] Meta rechazó el envío — http=${res.status} code=${e.code} subcode=${e.error_subcode} ` +
+        `type=${e.type} msg=${msg} details=${e.error_data?.details || '—'} title=${e.error_user_title || '—'} ` +
+        `user_msg=${e.error_user_msg || '—'} fbtrace=${e.fbtrace_id || '—'} | tipo=${payload.type} to=${payload.to}`
+      )
+      return NextResponse.json({ ok: false, error: msg, code: e.code, subcode: e.error_subcode }, { status: 502 })
     }
 
     const wamid = data.messages[0].id
