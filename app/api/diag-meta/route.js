@@ -25,11 +25,12 @@ async function get(path) {
 
 export async function GET(req) {
   const clave = req.nextUrl.searchParams.get('clave') || ''
-  // Con la clave correcta el resultado vuelve en la respuesta. SIN clave igual se
-  // corre, pero el detalle sale SOLO por los logs de Vercel y la respuesta no
-  // devuelve nada: así se puede diagnosticar sin tener MIG_KEY a mano y sin
-  // exponerle el estado de la cuenta a quien pase por la URL.
-  const autorizado = Boolean(process.env.MIG_KEY) && clave === process.env.MIG_KEY
+  // Sin clave NO se corre nada. Este repo es PÚBLICO: dejar la ruta abierta (aunque
+  // no devuelva el informe) permitía que cualquiera disparara llamadas contra la
+  // Graph API de Meta con nuestro token.
+  if (!process.env.MIG_KEY || clave !== process.env.MIG_KEY) {
+    return NextResponse.json({ ok: false, error: 'no autorizado' }, { status: 401 })
+  }
   if (!META_TOKEN) return NextResponse.json({ ok: false, error: 'META_TOKEN ausente' }, { status: 500 })
 
   const [token, phone, waba, numeros] = await Promise.all([
@@ -45,7 +46,5 @@ export async function GET(req) {
     wabaId: WABA,
     token, phone, waba, numeros,
   }
-  console.log('[/api/diag-meta]', JSON.stringify(informe))
-  if (!autorizado) return NextResponse.json({ ok: true, enLogs: true })
   return NextResponse.json({ ok: true, ...informe })
 }
