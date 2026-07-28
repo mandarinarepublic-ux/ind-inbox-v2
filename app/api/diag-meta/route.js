@@ -10,11 +10,11 @@ export const revalidate = 0
 const META_TOKEN = process.env.META_TOKEN || ''
 const PHONE = process.env.META_PHONE_ID || '1135333936337730'
 const WABA = process.env.META_WABA_ID || '1003593902536446'
-// El número +593 99 995 3326 está DUPLICADO en dos WABAs. Si la que usamos se
-// rompe, hay que poder ver de una si la otra quedó viva: sería la salida para
-// volver a despachar sin esperar a Meta.
-const WABA_ALT = '2151783152331852'   // "Indstore"
-const PHONE_ALT = '1092674123940116'
+// OJO: acá se consultaba también la WABA duplicada ("Indstore" 2151783152331852 /
+// phone 1092674123940116) por si quedaba viva como salida alterna. Ya se comprobó
+// el 27-jul que el token NO la alcanza: devuelve code 100 subcode 33 en cada
+// llamada y eso ensucia el panel de la app con errores "Invalid ID" que no
+// significan nada. No volver a agregarlo.
 const GRAPH = 'https://graph.facebook.com/v22.0'
 
 const tok = () => encodeURIComponent(META_TOKEN)
@@ -42,13 +42,11 @@ export async function GET(req) {
 
   const camposNumero = 'id,display_phone_number,verified_name,quality_rating,status,name_status,code_verification_status,throughput,platform_type'
   const camposWaba = 'id,name,account_review_status,business_verification_status,status,ownership_type,currency,timezone_id'
-  const [token, phone, waba, numeros, wabaAlt, phoneAlt, asignadas] = await Promise.all([
+  const [token, phone, waba, numeros, asignadas] = await Promise.all([
     get(`debug_token?input_token=${tok()}`),
     get(`${PHONE}?fields=${camposNumero},messaging_limit_tier`),
     get(`${WABA}?fields=${camposWaba}`),
     get(`${WABA}/phone_numbers?fields=id,display_phone_number,status,quality_rating,name_status`),
-    get(`${WABA_ALT}?fields=${camposWaba}`),
-    get(`${PHONE_ALT}?fields=${camposNumero}`),
     get(`me/assigned_whatsapp_business_accounts?fields=id,name,status`),
   ])
 
@@ -56,9 +54,7 @@ export async function GET(req) {
     largoToken: META_TOKEN.length,
     phoneId: PHONE,
     wabaId: WABA,
-    token, phone, waba, numeros,
-    alterna: { wabaId: WABA_ALT, phoneId: PHONE_ALT, waba: wabaAlt, phone: phoneAlt },
-    asignadas,
+    token, phone, waba, numeros, asignadas,
   }
   return NextResponse.json({ ok: true, ...informe })
 }
