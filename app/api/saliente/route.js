@@ -287,6 +287,9 @@ export async function POST(req) {
         id: wamid, telefono: soloDigitos(body.Telefono), nombre: body.Nombre || '', tipo,
         mensaje: contenido, mediaUrl, timestamp: fechaSal, direccion: 'SALIENTE', mediaId,
         botones: botonesStr,
+        // Por qué número salió. Hoy siempre es el principal, pero queda registrado
+        // para que el hilo se vea completo cuando haya más de un canal.
+        phoneId: META_PHONE_ID,
         // Solo si la cita SALIÓ de verdad: si Meta la rechazó y reenviamos sin ella,
         // guardarla pintaría en el hilo una cita que el cliente nunca vio.
         contextoId: citaAplicada ? contextoId : '',
