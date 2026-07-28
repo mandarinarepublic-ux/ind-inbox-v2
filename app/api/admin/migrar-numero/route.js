@@ -20,11 +20,11 @@ export const maxDuration = 30
 const META_TOKEN = process.env.META_TOKEN || ''
 const GRAPH = 'https://graph.facebook.com/v22.0'
 
-async function llamar(path, cuerpo) {
+async function llamar(path, cuerpo, metodo = 'POST') {
   const r = await fetch(`${GRAPH}/${path}`, {
-    method: 'POST',
+    method: metodo,
     headers: { Authorization: `Bearer ${META_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(cuerpo),
+    ...(cuerpo ? { body: JSON.stringify(cuerpo) } : {}),
   })
   const body = await r.json().catch(() => ({}))
   return { http: r.status, ok: r.ok, body }
@@ -51,6 +51,31 @@ export async function POST(req) {
     }
     res = await llamar(`${waba}/phone_numbers`, {
       cc, phone_number: numero, migrate_phone_number: true,
+    })
+
+  } else if (accion === 'borrar') {
+    // ⚠️ PUNTO SIN RETORNO. Saca el número de su WABA. A partir de acá el número
+    // no pertenece a ninguna cuenta hasta completar 'agregar' + verificación:
+    // no envía NI recibe. Solo se usa cuando 'migrar' está bloqueado y el cupo
+    // de números del portafolio está lleno (borrar libera el cupo).
+    const phone = q.get('phone') || ''
+    if (!/^\d{5,25}$/.test(phone)) {
+      return NextResponse.json({ ok: false, error: 'phone invalido' }, { status: 400 })
+    }
+    res = await llamar(phone, null, 'DELETE')
+
+  } else if (accion === 'agregar') {
+    // Alta del número en la WABA destino. A diferencia de 'migrar', NO exige que
+    // el número traiga un nombre visible aprobado: el nombre se define acá.
+    const waba = q.get('waba') || ''
+    const cc = q.get('cc') || ''
+    const numero = q.get('numero') || ''
+    const nombre = (q.get('nombre') || '').trim()
+    if (!/^\d{5,25}$/.test(waba) || !/^\d{1,4}$/.test(cc) || !/^\d{6,15}$/.test(numero) || nombre.length < 3) {
+      return NextResponse.json({ ok: false, error: 'parametros invalidos' }, { status: 400 })
+    }
+    res = await llamar(`${waba}/phone_numbers`, {
+      cc, phone_number: numero, verified_name: nombre,
     })
 
   } else if (accion === 'pedir_codigo') {
