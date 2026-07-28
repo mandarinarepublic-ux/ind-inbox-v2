@@ -4,7 +4,7 @@ import { registrarContactoEntrante, getModoIA, getContactos, marcarPush } from '
 import { enviarPush, cuerpoDeMensaje, debeNotificar } from '@/lib/push'
 import { usaSupabaseLectura } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase } from '@/lib/inbox-supabase'
-import { archivarFoto } from '@/lib/media-archive'
+import { archivarMedia } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
@@ -263,11 +263,16 @@ export async function POST(req) {
           direccion: 'ENTRANTE', mediaId: m.mediaId, contextoId: m.contextoId,
           referral: m.referral, raw: m.raw,
         })
-        // Archivar la foto entrante a Supabase Storage (URL estable en media_url).
+        // Archivar el adjunto entrante a Supabase Storage (URL estable en media_url).
         // En background (no frena el 200 a Meta). Solo en modo supabase, donde la
         // fila ya quedó insertada por guardarMensajeSupabase arriba.
-        if (usaSupabaseLectura() && (m.tipo === 'imagen' || m.tipo === 'sticker') && m.mediaId) {
-          waitUntil(archivarFoto({ mediaId: m.mediaId, wamid: m.wamid }))
+        // CUALQUIER media, no solo fotos: antes esto era `imagen || sticker` y por
+        // eso los audios y videos se quedaron colgando del media_id de Meta. Cuando
+        // el número se rompió (27-jul) su API de media empezó a devolver 500 y esos
+        // archivos se perdieron para siempre. Lo que no está en nuestro Storage no
+        // es nuestro.
+        if (usaSupabaseLectura() && m.mediaId) {
+          waitUntil(archivarMedia({ mediaId: m.mediaId, wamid: m.wamid }))
         }
 
         // Upsert del contacto (no pisa nombre/alias editados a mano)
