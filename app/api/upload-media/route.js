@@ -5,10 +5,9 @@ export const dynamic = 'force-dynamic'
 // Sube un archivo (video/imagen) a la Graph API de Meta y devuelve su MediaID.
 // El token vive SOLO en el servidor (env) — nunca viaja al navegador.
 // Antes esto se hacía desde el cliente con el token hardcodeado en lib/api-client.js.
+import { META_PHONE_ID } from '@/lib/meta-ids'
+
 const META_TOKEN    = process.env.META_TOKEN || ''
-// Phone ID de la WABA que el token controla (IND STORE 1003593902536446). Setea
-// META_PHONE_ID en Vercel; no dependas del fallback.
-const META_PHONE_ID = process.env.META_PHONE_ID || '1135333936337730'
 
 export async function POST(req) {
   try {

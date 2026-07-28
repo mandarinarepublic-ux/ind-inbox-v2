@@ -15,12 +15,11 @@ export const maxDuration = 60
 // la Graph API. Luego registra la salida en la hoja MENSAJES (lo que antes hacía
 // Make con un "Add Row"). Token y phone id viven SOLO server-side.
 const META_TOKEN = process.env.META_TOKEN || ''
-// El número +593 99 995 3326 quedó DUPLICADO en dos WABAs. La que el token del
-// system user SÍ controla es "IND STORE" (1003593902536446), phone id 1135333936337730.
-// (La otra, "Indstore" 2151783152331852 / 1092674123940116, tiene el display name
-// rechazado y el token no la alcanza.) Igual: setea META_PHONE_ID en Vercel.
-// El valor se importa de lib/media-id: la caché de media_id se indexa por ese mismo
-// número, así que tiene que ser exactamente el mismo en los dos lados.
+// El phone id NO se escribe acá: sale de lib/meta-ids.js, que es la única fuente
+// (llega vía lib/media-id, que lo re-exporta). La caché de media_id se indexa por
+// ese mismo número, así que tiene que ser idéntico en los dos lados — por eso un
+// solo origen y no copias sueltas.
+// Para cambiar de número basta con META_PHONE_ID en Vercel.
 const GRAPH_URL = `https://graph.facebook.com/v19.0/${META_PHONE_ID}/messages`
 
 const soloDigitos = (s) => String(s || '').replace(/\D/g, '')
