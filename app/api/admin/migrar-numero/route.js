@@ -78,6 +78,19 @@ export async function POST(req) {
       cc, phone_number: numero, verified_name: nombre,
     })
 
+  } else if (accion === 'desregistrar') {
+    // Suelta el número de la Cloud API SIN sacarlo de su WABA. Es lo que pide
+    // Meta cuando el alta en otra cuenta choca con subcode 2388001 ("este número
+    // está registrado en una cuenta existente"): el registro es único y hay que
+    // liberar el viejo antes de crear el nuevo.
+    // Deja de enviar y recibir por ese phone_id hasta que se registre en el
+    // destino, así que se encadena inmediatamente con 'registrar'.
+    const phone = q.get('phone') || ''
+    if (!/^\d{5,25}$/.test(phone)) {
+      return NextResponse.json({ ok: false, error: 'phone invalido' }, { status: 400 })
+    }
+    res = await llamar(`${phone}/deregister`, {})
+
   } else if (accion === 'pedir_codigo') {
     const phone = q.get('phone') || ''
     const metodo = (q.get('metodo') || 'SMS').toUpperCase()   // SMS o VOICE
