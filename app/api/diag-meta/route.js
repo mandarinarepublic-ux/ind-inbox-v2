@@ -49,10 +49,24 @@ export async function GET(req) {
   // ?objeto=<id>&campos=<a,b,c> — consulta suelta de CUALQUIER objeto del Graph.
   // Sirve para auditar la app, un portafolio o una cuenta de pago antes de
   // tocarlos, sin tener que desplegar una ruta nueva por cada pregunta.
+  // Solo IDs numéricos y solo campos de una lista corta: sin esto la ruta era un
+  // proxy del Graph API con nuestro token de producción, y la clave pasaba a ser
+  // una llave maestra para leer cualquier cosa que el token alcance.
+  const CAMPOS_OK = new Set([
+    'id', 'name', 'link', 'category', 'status', 'currency', 'timezone_id',
+    'account_review_status', 'business_verification_status', 'ownership_type',
+    'verification_status', 'display_phone_number', 'quality_rating',
+    'name_status', 'code_verification_status', 'platform_type',
+  ])
   const objetoId = req.nextUrl.searchParams.get('objeto')
   if (objetoId) {
-    const campos = req.nextUrl.searchParams.get('campos') || 'id,name'
-    const r = await get(`${encodeURIComponent(objetoId)}?fields=${encodeURIComponent(campos)}`)
+    if (!/^\d{5,25}$/.test(objetoId)) {
+      return NextResponse.json({ ok: false, error: 'objeto invalido' }, { status: 400 })
+    }
+    const pedidos = (req.nextUrl.searchParams.get('campos') || 'id,name').split(',').map(s => s.trim())
+    const campos = pedidos.filter(c => CAMPOS_OK.has(c))
+    if (!campos.length) return NextResponse.json({ ok: false, error: 'campos invalidos' }, { status: 400 })
+    const r = await get(`${objetoId}?fields=${encodeURIComponent(campos.join(','))}`)
     return NextResponse.json({ ok: true, objeto: objetoId, campos, resultado: r })
   }
   const [token, phone, waba, numeros, asignadas, appsSuscritas, yo] = await Promise.all([
