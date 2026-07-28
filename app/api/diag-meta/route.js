@@ -42,19 +42,24 @@ export async function GET(req) {
 
   const camposNumero = 'id,display_phone_number,verified_name,quality_rating,status,name_status,code_verification_status,throughput,platform_type'
   const camposWaba = 'id,name,account_review_status,business_verification_status,status,ownership_type,currency,timezone_id'
-  const [token, phone, waba, numeros, asignadas] = await Promise.all([
+  const [token, phone, waba, numeros, asignadas, appsSuscritas, yo] = await Promise.all([
     get(`debug_token?input_token=${tok()}`),
     get(`${PHONE}?fields=${camposNumero},messaging_limit_tier`),
     get(`${WABA}?fields=${camposWaba}`),
     get(`${WABA}/phone_numbers?fields=id,display_phone_number,status,quality_rating,name_status`),
     get(`me/assigned_whatsapp_business_accounts?fields=id,name,status`),
+    // ¿Qué app está suscrita a ESTA WABA? Si nuestra app (IND STORE API,
+    // 1536330231408825) no aparece acá, no puede enviar por su número por más que
+    // el token lea los metadatos sin problema.
+    get(`${WABA}/subscribed_apps`),
+    get('me?fields=id,name'),
   ])
 
   const informe = {
     largoToken: META_TOKEN.length,
     phoneId: PHONE,
     wabaId: WABA,
-    token, phone, waba, numeros, asignadas,
+    token, phone, waba, numeros, asignadas, appsSuscritas, yo,
   }
   return NextResponse.json({ ok: true, ...informe })
 }
