@@ -45,6 +45,16 @@ export async function GET(req) {
   // ?waba=<id> permite auditar CUALQUIER cuenta antes de mover el número a ella.
   // Conectar el número a una WABA que también está rota costaría el número.
   const WABA = req.nextUrl.searchParams.get('waba') || WABA_DEFECTO
+
+  // ?objeto=<id>&campos=<a,b,c> — consulta suelta de CUALQUIER objeto del Graph.
+  // Sirve para auditar la app, un portafolio o una cuenta de pago antes de
+  // tocarlos, sin tener que desplegar una ruta nueva por cada pregunta.
+  const objetoId = req.nextUrl.searchParams.get('objeto')
+  if (objetoId) {
+    const campos = req.nextUrl.searchParams.get('campos') || 'id,name'
+    const r = await get(`${encodeURIComponent(objetoId)}?fields=${encodeURIComponent(campos)}`)
+    return NextResponse.json({ ok: true, objeto: objetoId, campos, resultado: r })
+  }
   const [token, phone, waba, numeros, asignadas, appsSuscritas, yo] = await Promise.all([
     get(`debug_token?input_token=${tok()}`),
     get(`${PHONE}?fields=${camposNumero},messaging_limit_tier`),
