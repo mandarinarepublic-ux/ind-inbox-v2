@@ -131,20 +131,14 @@ quedaron fuera de alcance** hasta tener plantillas aprobadas:
 `recuperar_conversacion_ind`, `confirmacion_pedido_ind`, `abandono_carrito_ind`,
 `reactivacion_clientes_ind`.
 
-### 6.2 🔴 Borrar las rutas temporales — **el repo es PÚBLICO**
-Siguen vivas en producción, **6 rutas**:
+### 6.2 ✅ HECHO — las 6 rutas temporales borradas (29-jul)
+`diag-meta`, `migrar-numero` (movía un número entre WABAs), `nombre-visible`,
+`probar-envio` (mandaba WhatsApp desde tus números), `rescatar-media` y
+`suscribir-app`. `app/api/admin/` ya no existe. Sin referencias en el código,
+build limpio.
 
-```
-app/api/diag-meta/
-app/api/admin/migrar-numero/     ← mueve un número entre WABAs
-app/api/admin/nombre-visible/
-app/api/admin/probar-envio/      ← manda WhatsApp desde tus números
-app/api/admin/rescatar-media/
-app/api/admin/suscribir-app/
-```
-
-Están protegidas por clave, pero cualquiera que lea el repo sabe que existen y qué
-hacen; lo único que las separa de tus números es una variable de entorno.
+🔑 **Falta borrar la env var `DIAG_KEY` en Vercel** (y revisar `MIG_KEY`): quedaron
+sin uso. No hacen daño ahí, pero son claves vivas de rutas que ya no existen.
 
 ### 6.3 🟠 Los 7 clientes que siguen sin respuesta
 De los 22 que perdieron el saludo, **7 seguían en PENDIENTE** al cierre (ventana
