@@ -41,6 +41,16 @@ pánico, y no distingue entre los dos números.
 > **Método:** para saber si un bot está vivo, mirar sus invocaciones, no una columna
 > que quizá nadie escribe.
 
+> ⚠️ **Segunda corrección, posterior a este plan.** El resto de este documento
+> (§3.2, §4 y el paso 6 de §6, en su redacción original) asumía que
+> `IA_AUTORESPUESTA` seguía **apagada**. Es falso: **está ENCENDIDA en
+> producción**. Lo que pasa hoy es que `indx-agent` devuelve **error 500 en
+> cada llamada**, así que el bot no responde por estar **roto**, no por tener
+> el interruptor maestro apagado. Son dos cosas distintas y con reversa
+> distinta: un interruptor apagado se prende con un click; un agente roto hay
+> que arreglarlo. Las menciones de "sigue apagada" más abajo quedan
+> corregidas para reflejar esto.
+
 **Consecuencia, y razón de ser de este plan:** hoy, si el bot se desboca o dice algo
 que no debe, la única forma de pararlo es editar `IA_AUTORESPUESTA` en Vercel y
 **esperar un redespliegue**. Con 116 conversaciones vivas, esos minutos son mensajes
@@ -103,7 +113,9 @@ En `inbox.automatizaciones.config` de la cuenta `IND`:
 - Llave = **id lógico** del canal, nunca el `phone_id`: a IND ya le cambió el
   `phone_id` ayer, y una config guardada por número habría quedado huérfana.
 - Arranca en `true` **a propósito**: desplegar no debe cambiar el comportamiento.
-  Y como `IA_ON` sigue apagado, en la práctica no habilita nada.
+  Esto no depende de si `IA_ON` está prendido o apagado — el candado nuevo solo
+  puede restar, nunca sumar (§3.1), así que arrancar en `true` deja el
+  comportamiento de hoy intacto sea cual sea el estado del maestro.
 
 ### 3.3 Dónde se aplica
 
@@ -129,7 +141,9 @@ aquí esperando que el bot hable.
 
 ## 4. Lo que NO se toca
 
-- `IA_AUTORESPUESTA` **no se modifica**. Sigue apagada.
+- `IA_AUTORESPUESTA` **no se modifica**. Hoy está **ENCENDIDA** en producción
+  (ver corrección en §2.2): el bot no responde porque `indx-agent` está roto
+  (error 500 en cada llamada), no porque este interruptor esté apagado.
 - **No se toca `modo_ia` de ningún chat.** Los 876 quedan como están.
 - No se toca el camino de los mensajes entrantes, ni saludos, ni estados, ni bandejas.
 - No se toca nada de la WABA ni de los números: IND está recién reconstruido y frágil.
@@ -161,7 +175,14 @@ Base actual: **15 pruebas en verde**. Al terminar: **~24**.
 5. **Que un cliente escriba a cada número y que su mensaje ENTRE normal.** Es lo
    crítico: el cortafuegos no puede afectar la recepción. Si dejaran de llegar
    mensajes, se revierte de inmediato.
-6. Confirmar que el bot sigue sin responder (debe seguir así: `IA_ON` está apagada).
+6. Confirmar que, si el bot sigue sin responder tras el deploy, es por el error
+   500 de `indx-agent` (ver corrección en §2.2) — `IA_AUTORESPUESTA` está
+   ENCENDIDA en producción, no apagada. No confundir "roto" con "apagado".
+7. **La prueba que de verdad valida la reja, ya con `indx-agent` funcionando
+   (no roto):** apagar un número en AUTOS, escribir desde un chat con la IA
+   prendida para ese número, y confirmar en los logs que **NO** aparece
+   ninguna llamada a `indx-agent` para ese `phone_id`. Prender el número de
+   nuevo y confirmar que la llamada **SÍ** vuelve a aparecer.
 
 ## 7. Riesgos y reversa
 

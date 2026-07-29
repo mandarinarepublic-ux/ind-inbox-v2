@@ -157,7 +157,14 @@ export default function Automatizaciones({ active }) {
                     <div style={{ fontWeight: 700, fontSize: 13, color: C.cream }}>{c.etiqueta}</div>
                     <div style={{ fontSize: 11, color: C.creamDim }}>{c.titulo}</div>
                     <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, color: on ? C.green : C.red }}>
-                      {on ? 'Respondiendo' : '⛔ DETENIDO — el bot no contesta en este número'}
+                      {/* "on" solo dice que ESTE candado no está bloqueando. No es
+                          prueba de que el bot esté respondiendo: puede seguir mudo
+                          por el interruptor maestro, por el modo del chat, o porque
+                          el agente esté fallando. Por eso el texto encendido no
+                          afirma un resultado, solo describe el candado. El texto
+                          apagado sí es una afirmación segura: apagar aquí SIEMPRE
+                          detiene el bot, pase lo que pase con lo demás. */}
+                      {on ? 'Sin bloquear' : '⛔ DETENIDO — el bot no contesta en este número'}
                     </div>
                   </div>
                   <Switch on={on} onClick={() => togIA(c.id, !on)} />
