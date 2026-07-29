@@ -36,6 +36,11 @@ const RE_IMG = /https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s)]*)?/gi
 // `auto: true` marca que el envío NO lo hizo un humano (IA, saludo automático).
 // /api/saliente lo usa para no reiniciar el enfriamiento del aviso push: si la IA
 // está llevando el chat, no hay que empezar a interrumpir al humano.
+//
+// `Canal` es OBLIGATORIO: hay que responder por el MISMO número al que el cliente
+// escribió. Sin él /api/saliente cae al número principal, y como el cliente nunca
+// escribió a ese número la ventana de 24 h está cerrada → el envío FALLA y el
+// cliente no recibe nada. Paso el 28-jul: 57 de 69 saludos perdidos.
 async function enviarSaliente(origin, body) {
   return fetch(`${origin}/api/saliente`, {
     method: 'POST',
@@ -44,7 +49,7 @@ async function enviarSaliente(origin, body) {
   }).catch(e => console.error('[webhook IA] envío falló:', e.message))
 }
 
-async function responderConIA(origin, phone, name, message) {
+async function responderConIA(origin, phone, name, message, canal) {
   try {
     const r = await fetch(AGENT_URL, {
       method: 'POST',
@@ -63,9 +68,9 @@ async function responderConIA(origin, phone, name, message) {
     for (const u of imagenes) texto = texto.split(u).join('')
     texto = texto.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
 
-    if (texto) await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: texto })
+    if (texto) await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: texto, Canal: canal })
     for (const url of imagenes) {
-      await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', ImagenURL: url })
+      await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', ImagenURL: url, Canal: canal })
     }
   } catch (e) {
     console.error('[webhook IA] agente falló:', e.message)
@@ -235,20 +240,20 @@ export async function POST(req) {
         })
         await marcarPush(m.telefono)
       }
-      async function saludarSiCorresponde(phone, name) {
+      async function saludarSiCorresponde(phone, name, canal) {
         if (!auto || agenteResponde(phone)) return // si el bot responde, él saluda → evita doble msg
         const t = tail9(phone)
         if (saludados.has(t)) return
         if (esNuevoDe(phone)) {
           const s = auto.saludo_nuevo
-          if (s?.activo && String(s.texto || '').trim()) { saludados.add(t); await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: s.texto.trim() }) }
+          if (s?.activo && String(s.texto || '').trim()) { saludados.add(t); await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: s.texto.trim(), Canal: canal }) }
           return
         }
         const s = auto.saludo_reactivacion
         if (s?.activo && String(s.texto || '').trim()) {
           const horas = Number(s.horas) || 12
           const prevMs = ultimoEntranteAtDe(phone)
-          if (prevMs && Date.now() - prevMs >= horas * 3600 * 1000) { saludados.add(t); await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: s.texto.trim() }) }
+          if (prevMs && Date.now() - prevMs >= horas * 3600 * 1000) { saludados.add(t); await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: s.texto.trim(), Canal: canal }) }
         }
       }
 
@@ -290,14 +295,14 @@ export async function POST(req) {
 
         // Saludo automático (bienvenida a nuevo / "hola de vuelta" al reactivarse).
         // En background: no frena el 200 a Meta. Solo dispara si el bot NO va a responder.
-        waitUntil(saludarSiCorresponde(m.telefono, m.nombre).catch(e => console.error('[/api/webhook] saludo:', e.message)))
+        waitUntil(saludarSiCorresponde(m.telefono, m.nombre, m.phoneId).catch(e => console.error('[/api/webhook] saludo:', e.message)))
 
         // ── Auto-respuesta IA (doble candado) — solo TEXTO; media la ve un humano ──
         if (IA_ON && m.tipo === 'texto' && String(m.contenido || '').trim()) {
           const encendida = await getModoIA(m.telefono).catch(() => false)
           if (encendida) {
             // En segundo plano: Meta recibe su 200 al instante, la IA responde detrás.
-            waitUntil(responderConIA(origin, m.telefono, m.nombre, m.contenido))
+            waitUntil(responderConIA(origin, m.telefono, m.nombre, m.contenido, m.phoneId))
           }
         }
       }
