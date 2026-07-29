@@ -57,6 +57,31 @@ export default function Automatizaciones({ active }) {
   const setBloque = (bloque, campo, valor) =>
     setConfig(prev => ({ ...prev, [bloque]: { ...(prev?.[bloque] || {}), [campo]: valor } }))
 
+  // Los INTERRUPTORES se guardan solos, sin pasar por "Guardar cambios".
+  //
+  // Antes solo cambiaban el estado visual: el switch se veía apagado, la
+  // automatización seguía prendida en la base y los saludos seguían saliendo a
+  // clientes reales. Un interruptor que miente sobre si algo está enviando
+  // mensajes no puede depender de que además te acuerdes de apretar Guardar.
+  //
+  // Va un patch MÍNIMO (solo el bloque tocado): así una edición de texto a medio
+  // escribir no se guarda de contrabando y el botón Guardar sigue pidiéndola.
+  const togBloque = async (bloque, valor) => {
+    const previa = config
+    setConfig(prev => ({ ...prev, [bloque]: { ...(prev?.[bloque] || {}), activo: valor } }))
+    setSaving(true)
+    const r = await saveAutomatizaciones({ [bloque]: { activo: valor } })
+    setSaving(false)
+    if (r?.ok) {
+      setOrig(JSON.stringify(r.config || {}))
+      setToast('✅ Guardado')
+    } else {
+      setConfig(previa) // no se guardó → el switch vuelve donde estaba, sin mentir
+      setToast('❌ No se pudo guardar: ' + (r?.error || 'reintenta'))
+    }
+    setTimeout(() => setToast(null), 2500)
+  }
+
   const guardar = async () => {
     setSaving(true)
     const r = await saveAutomatizaciones(config)
@@ -107,7 +132,7 @@ export default function Automatizaciones({ active }) {
                   Se envía la primera vez que alguien te escribe. Atiende al instante aunque la IA esté apagada.
                 </div>
               </div>
-              <Switch on={!!sn.activo} onClick={() => setBloque('saludo_nuevo', 'activo', !sn.activo)} />
+              <Switch on={!!sn.activo} onClick={() => togBloque('saludo_nuevo', !sn.activo)} />
             </div>
             {sn.activo && (
               <textarea value={sn.texto || ''} onChange={e => setBloque('saludo_nuevo', 'texto', e.target.value)}
@@ -125,7 +150,7 @@ export default function Automatizaciones({ active }) {
                   Cuando un cliente reaparece después de un tiempo sin escribir.
                 </div>
               </div>
-              <Switch on={!!sr.activo} onClick={() => setBloque('saludo_reactivacion', 'activo', !sr.activo)} />
+              <Switch on={!!sr.activo} onClick={() => togBloque('saludo_reactivacion', !sr.activo)} />
             </div>
             {sr.activo && (<>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>

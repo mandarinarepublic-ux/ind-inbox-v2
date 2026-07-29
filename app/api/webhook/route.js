@@ -206,7 +206,14 @@ export async function POST(req) {
       // ── Saludos automáticos: config + SNAPSHOT de contactos leído ANTES de
       // guardar los mensajes de este lote (para detectar "nuevo" y "reactivación").
       const auto = await getAutomatizaciones().catch(() => null)
-      const contactosSnap = await getContactos().catch(() => [])
+      // `null` = TODOS los números. El webhook NO es una bandeja: atiende lo que
+      // entre por cualquier canal, así que su agenda tiene que ser completa.
+      //
+      // Con el default (solo el 3326) un contacto del 9804 no aparecía nunca en
+      // esta lista y esNuevoDe() daba siempre true: lo saludaba como nuevo EN CADA
+      // MENSAJE. El 28-jul un solo cliente recibió 11 saludos seguidos — spam puro,
+      // con riesgo de que Meta bloquee el número.
+      const contactosSnap = await getContactos(null).catch(() => [])
       const modoIAde  = (phone) => { const c = contactosSnap.find(c => tail9(c.telefono) === tail9(phone)); return c ? c.modoIA !== false : false }
       const esNuevoDe = (phone) => !contactosSnap.find(c => tail9(c.telefono) === tail9(phone))
       const ultimoEntranteAtDe = (phone) => { const c = contactosSnap.find(c => tail9(c.telefono) === tail9(phone)); return c?.ultimoEntranteAt ? new Date(c.ultimoEntranteAt).getTime() : 0 }
