@@ -1,15 +1,17 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
 import { getAutomatizaciones, saveAutomatizaciones } from '@/lib/api-client'
+import { CANALES } from '@/lib/canales'
 
 // ── Pestaña AUTOMATIZACIONES (tema IND: cream sobre negro) ─────────────────────
-// Reglas del inbox que se prenden/apagan. Hoy: dos saludos automáticos.
+// Reglas del inbox que se prenden/apagan. Hoy: cortafuegos del bot por número +
+// dos saludos automáticos.
 
 const C = {
   bg:'#0A0A0A', surface:'#0D0D0D', surface2:'#111111',
   border:'#1F1F1F', border2:'#2A2A2A',
   cream:'#F4F1EC', creamDim:'#A09A90', creamFaint:'#3A3530',
-  green:'#4ade80', amber:'#f59e0b',
+  green:'#4ade80', amber:'#f59e0b', red:'#ef4444',
 }
 
 function Switch({ on, onClick, disabled }) {
@@ -64,13 +66,13 @@ export default function Automatizaciones({ active }) {
   // clientes reales. Un interruptor que miente sobre si algo está enviando
   // mensajes no puede depender de que además te acuerdes de apretar Guardar.
   //
-  // Va un patch MÍNIMO (solo el bloque tocado): así una edición de texto a medio
-  // escribir no se guarda de contrabando y el botón Guardar sigue pidiéndola.
-  const togBloque = async (bloque, valor) => {
+  // Se manda un patch MÍNIMO (solo el bloque tocado): así una edición de texto a
+  // medio escribir no se guarda de contrabando y el botón Guardar sigue pidiéndola.
+  const guardarInterruptor = async (patch, aplicar) => {
     const previa = config
-    setConfig(prev => ({ ...prev, [bloque]: { ...(prev?.[bloque] || {}), activo: valor } }))
+    setConfig(aplicar(previa))
     setSaving(true)
-    const r = await saveAutomatizaciones({ [bloque]: { activo: valor } })
+    const r = await saveAutomatizaciones(patch)
     setSaving(false)
     if (r?.ok) {
       setOrig(JSON.stringify(r.config || {}))
@@ -81,6 +83,17 @@ export default function Automatizaciones({ active }) {
     }
     setTimeout(() => setToast(null), 2500)
   }
+
+  const togBloque = (bloque, valor) => guardarInterruptor(
+    { [bloque]: { activo: valor } },
+    prev => ({ ...prev, [bloque]: { ...(prev?.[bloque] || {}), activo: valor } }))
+
+  // Cortafuegos del bot de IND, por canal. Patch PLANO ({ia:{[canalId]:valor}}):
+  // el merge del servidor es de un solo nivel y con booleanos eso alcanza; anidar
+  // {activo} habría borrado el canal hermano.
+  const togIA = (canalId, valor) => guardarInterruptor(
+    { ia: { [canalId]: valor } },
+    prev => ({ ...prev, ia: { ...(prev?.ia || {}), [canalId]: valor } }))
 
   const guardar = async () => {
     setSaving(true)
@@ -121,6 +134,45 @@ export default function Automatizaciones({ active }) {
         {loading && <div style={{ color: C.creamFaint, fontSize: 13, padding: 20 }}>Cargando…</div>}
 
         {!loading && config && (<>
+
+          {/* CORTAFUEGOS: apaga el bot de IND entero en un número. Va PRIMERO a
+              propósito — es el botón de pánico, no puede estar enterrado abajo. */}
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18, marginBottom: 16 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.cream, marginBottom: 4 }}>🤖 IND AGENT</div>
+            <div style={{ fontSize: 12, color: C.creamDim, marginBottom: 12 }}>
+              Respuestas automáticas del bot, por número. Apagarlo aquí lo detiene en
+              TODOS los chats de ese número, sin cambiar el ajuste de cada chat: al
+              volver a prenderlo, cada conversación vuelve a como estaba.
+            </div>
+            {CANALES.map(c => {
+              const on = config?.ia?.[c.id] !== false
+              return (
+                <div key={c.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  gap: 12, padding: '10px 12px', borderRadius: 10, marginTop: 8,
+                  background: on ? 'rgba(74,222,128,.06)' : 'rgba(239,68,68,.12)',
+                  border: `1px solid ${on ? 'rgba(74,222,128,.20)' : 'rgba(239,68,68,.40)'}`,
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.cream }}>{c.etiqueta}</div>
+                    <div style={{ fontSize: 11, color: C.creamDim }}>{c.titulo}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, color: on ? C.green : C.red }}>
+                      {on ? 'Respondiendo' : '⛔ DETENIDO — el bot no contesta en este número'}
+                    </div>
+                  </div>
+                  <Switch on={on} onClick={() => togIA(c.id, !on)} />
+                </div>
+              )
+            })}
+            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 12, lineHeight: 1.5 }}>
+              ⚠️ Ojo: esto NO es el único interruptor del bot. Hay otro más general,
+              aparte de esta pantalla, que puede tener al bot completamente callado en
+              los dos números a la vez. Apagar aquí SÍ detiene el bot en ese número,
+              pase lo que pase con el otro interruptor. Pero prender aquí NO garantiza
+              que el bot hable: si ese otro interruptor sigue apagado, seguirá en
+              silencio aunque este switch esté en verde.
+            </div>
+          </div>
 
           {/* Saludo a contacto NUEVO */}
           <Card>
