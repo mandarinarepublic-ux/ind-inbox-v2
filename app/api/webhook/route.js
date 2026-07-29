@@ -3,11 +3,12 @@ import { waitUntil } from '@vercel/functions'
 import { registrarContactoEntrante, getModoIA, getContactos, marcarPush } from '@/lib/contactos'
 import { enviarPush, cuerpoDeMensaje, debeNotificar } from '@/lib/push'
 import { usaSupabaseLectura } from '@/lib/supabase'
-import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase } from '@/lib/inbox-supabase'
+import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase, asegurarConversacionSalienteSupabase } from '@/lib/inbox-supabase'
 import { archivarMedia } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirIA } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
+import { extraerEchoes } from '@/lib/echoes'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
 
@@ -108,6 +109,30 @@ async function procesarStatuses(statuses) {
   }
 }
 
+// Echoes: lo que se responde DESDE EL CELULAR llega de vuelta por el webhook.
+// Carril MÍNIMO a propósito: guardar el mensaje y archivar el medio. Nada de
+// saludos, IA, push ni cambios de estado — un echo no es un cliente escribiendo,
+// es nuestra propia respuesta. Por eso no pasa por el bucle de arriba, que es
+// donde vive todo eso: así no hay nada que acordarse de excluir.
+// Un echo que falle no debe tumbar el resto del lote (try/catch por fila).
+async function procesarEchoes(echoes) {
+  for (const e of echoes) {
+    try {
+      if (await existeWamidSupabase(e.wamid).catch(() => false)) continue
+      await asegurarConversacionSalienteSupabase(e.telefono)
+      await guardarMensajeSupabase({
+        id: e.wamid, telefono: e.telefono, nombre: '', tipo: e.tipo,
+        mensaje: e.contenido, mediaUrl: '', timestamp: e.fecha,
+        direccion: 'SALIENTE', mediaId: e.mediaId, contextoId: e.contextoId,
+        raw: e.raw, phoneId: e.phoneId,
+      })
+      if (e.mediaId) await archivarMedia({ mediaId: e.mediaId, wamid: e.wamid }).catch(() => {})
+    } catch (err) {
+      console.error('[/api/webhook echo]', e.wamid, err.message)
+    }
+  }
+}
+
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}))
@@ -125,9 +150,21 @@ export async function POST(req) {
     // Recolecta los mensajes entrantes + los statuses de entrega (✓✓)
     const nuevos = []
     const statuses = [] // read receipts: {wamid, estado}
+    const echoes = []
     for (const entry of entries) {
       for (const change of entry?.changes || []) {
         const value    = change?.value || {}
+
+        // Lo que se manda desde el CELULAR viene en value.message_echoes, no en
+        // value.messages, y con `to`/`from` al revés. Carril aparte: el `continue`
+        // garantiza que no toque nada del camino de los entrantes (si siguiera de
+        // largo, el echo se guardaría con el teléfono equivocado: en un echo,
+        // `from` somos nosotros, no el cliente).
+        if (change?.field === 'smb_message_echoes') {
+          echoes.push(...extraerEchoes(value))
+          continue
+        }
+
         // Por cuál de NUESTROS números entró esto. Con un solo número daba igual;
         // con dos es lo único que permite separar las bandejas y saber por dónde
         // responder. Meta ya lo manda en cada evento y hasta ahora lo tirábamos.
@@ -282,6 +319,8 @@ export async function POST(req) {
 
     // Read receipts (✓✓): actualizar estado de entrega en background.
     if (statuses.length) waitUntil(procesarStatuses(statuses))
+    // Echoes (respuesta desde el celular): guardar + archivar medio, en background.
+    if (echoes.length && usaSupabaseLectura()) waitUntil(procesarEchoes(echoes))
 
     // Meta exige 200 rápido o reintenta
     return NextResponse.json({ ok: true })
