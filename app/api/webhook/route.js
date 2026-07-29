@@ -6,6 +6,7 @@ import { usaSupabaseLectura } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase } from '@/lib/inbox-supabase'
 import { archivarMedia } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
+import { decidirIA } from '@/lib/ia-canal'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
 
@@ -22,9 +23,13 @@ export const revalidate = 0
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || ''
 
 // ── Auto-respuesta IA (indx-agent) — APAGADA por defecto ──────────────────────
-// DOBLE CANDADO para responder automáticamente:
+// Candados para responder automáticamente, en serie:
 //   1) master switch  IA_AUTORESPUESTA='on'  (default OFF → nada auto-responde)
-//   2) el chat en ModoIA='IA'  (se enciende por conversación desde el inbox)
+//      Este switch NO se toca acá: sigue siendo el interruptor de arriba de todo.
+//   2) el CORTAFUEGOS por número (config.ia.principal/secundario, lib/ia-canal.js)
+//   3) el chat en ModoIA='IA'  (se enciende por conversación desde el inbox)
+// Los puntos 2 y 3 los resuelve `decidirIA` (lib/ia-canal.js); `agenteResponde`
+// de abajo es el único lugar que junta eso con el master switch.
 // El agente DEVUELVE el texto; nosotros lo enviamos por /api/saliente (que lo manda
 // a Meta y lo registra en inbox.mensajes → así Indi tiene memoria del hilo).
 // Tolerante a BOM/espacios/mayúsculas (el `vercel env add` por PowerShell mete BOM).
@@ -214,10 +219,13 @@ export async function POST(req) {
       // MENSAJE. El 28-jul un solo cliente recibió 11 saludos seguidos — spam puro,
       // con riesgo de que Meta bloquee el número.
       const contactosSnap = await getContactos(null).catch(() => [])
-      const modoIAde  = (phone) => { const c = contactosSnap.find(c => tail9(c.telefono) === tail9(phone)); return c ? c.modoIA !== false : false }
-      const esNuevoDe = (phone) => !contactosSnap.find(c => tail9(c.telefono) === tail9(phone))
-      const ultimoEntranteAtDe = (phone) => { const c = contactosSnap.find(c => tail9(c.telefono) === tail9(phone)); return c?.ultimoEntranteAt ? new Date(c.ultimoEntranteAt).getTime() : 0 }
-      const agenteResponde = (phone) => IA_ON && modoIAde(phone) // ¿el bot va a contestar?
+      const contactoDe = (phone) => contactosSnap.find(c => tail9(c.telefono) === tail9(phone))
+      const esNuevoDe = (phone) => !contactoDe(phone)
+      const ultimoEntranteAtDe = (phone) => { const c = contactoDe(phone); return c?.ultimoEntranteAt ? new Date(c.ultimoEntranteAt).getTime() : 0 }
+      // ¿el bot va a contestar por este número/chat? `phoneId` = por cuál canal
+      // entro (reja del cortafuegos); `decidirIA` aplica canal Y chat, en ese orden.
+      // IA_ON manda primero: si el master switch está OFF, nada de lo de abajo importa.
+      const agenteResponde = (phone, phoneId) => IA_ON && decidirIA({ config: auto, phoneId, contacto: contactoDe(phone) })
       const saludados = new Set()
 
       // ── Aviso push de mensaje nuevo ──────────────────────────────────────────
@@ -248,7 +256,7 @@ export async function POST(req) {
         await marcarPush(m.telefono)
       }
       async function saludarSiCorresponde(phone, name, canal) {
-        if (!auto || agenteResponde(phone)) return // si el bot responde, él saluda → evita doble msg
+        if (!auto || agenteResponde(phone, canal)) return // si el bot responde, él saluda → evita doble msg
         const t = tail9(phone)
         if (saludados.has(t)) return
         if (esNuevoDe(phone)) {
@@ -304,8 +312,12 @@ export async function POST(req) {
         // En background: no frena el 200 a Meta. Solo dispara si el bot NO va a responder.
         waitUntil(saludarSiCorresponde(m.telefono, m.nombre, m.phoneId).catch(e => console.error('[/api/webhook] saludo:', e.message)))
 
-        // ── Auto-respuesta IA (doble candado) — solo TEXTO; media la ve un humano ──
-        if (IA_ON && m.tipo === 'texto' && String(m.contenido || '').trim()) {
+        // ── Auto-respuesta IA — solo TEXTO; media la ve un humano ──
+        // `agenteResponde` ya aplica master switch + cortafuegos por canal + chat
+        // (con el snapshot de contactos de este ciclo). `getModoIA` de abajo es un
+        // SEGUNDO candado que relee la base ahora mismo: no se saca, es la
+        // protección que ya existía contra que el snapshot quede desactualizado.
+        if (agenteResponde(m.telefono, m.phoneId) && m.tipo === 'texto' && String(m.contenido || '').trim()) {
           const encendida = await getModoIA(m.telefono).catch(() => false)
           if (encendida) {
             // En segundo plano: Meta recibe su 200 al instante, la IA responde detrás.
