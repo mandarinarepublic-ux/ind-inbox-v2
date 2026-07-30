@@ -1,9 +1,10 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { Avatar } from '@/components/Components'
-import { fetchRepliesFromSheet, writeReply, saveNotes, setIdVenta, fetchProductos } from '@/lib/api-client'
+import { fetchRepliesFromSheet, writeReply, reorderReplies, saveNotes, setIdVenta, fetchProductos } from '@/lib/api-client'
 import { parseDate } from '@/lib/utils'
 import { CFG } from '@/lib/config'
+import { moverItem } from '@/lib/orden-lista'
 
 const MAX_IMGS  = 10
 
@@ -254,7 +255,17 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
 
   const [replies,       setReplies]       = useState([])
   const [repliesLoaded, setRepliesLoaded] = useState(false)
-  const [editingIdx,    setEditingIdx]    = useState(null)
+  const [arrastrando, setArrastrando] = useState(null)   // índice que se está arrastrando
+  const [errorOrden, setErrorOrden]   = useState('')     // aviso si el guardado del orden falla
+  // Ids de respuestas cuya ALTA todavía no fue confirmada por el servidor (el POST
+  // de addReply sigue en vuelo). Mientras un id esté aquí no se deja editar ni
+  // reordenar esa fila: ver el comentario dentro de addReply para la carrera que evita.
+  const [savingIds, setSavingIds] = useState(() => new Set())
+  // Se guarda el ID de la respuesta en edición, NO su índice: con flechas y
+  // arrastre el índice de la fila puede cambiar mientras el formulario de edición
+  // sigue abierto (otra fila se mueve y cruza esa posición). Si se guardara por
+  // índice, `saveEdit` podría escribir el texto sobre OTRA respuesta.
+  const [editingId,      setEditingId]     = useState(null)
   const [editText,      setEditText]      = useState('')
   const [editImgUrls,   setEditImgUrls]   = useState([])
   const [newText,       setNewText]       = useState('')
@@ -291,9 +302,19 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [prodSending,     setProdSending]     = useState({})
   const productos = prodCache[fuente] ?? null                       // null = cargando
 
+  // Nombrada aparte del useEffect porque reordenar() la vuelve a llamar cuando el
+  // guardado del orden falla: el servidor escribe el orden fila por fila (no es
+  // atómico), así que un fallo a mitad de camino deja la base con parte del orden
+  // nuevo y parte del viejo. "Volver al orden anterior en memoria" ya no alcanza
+  // porque ese orden anterior puede no ser lo que quedó guardado — hay que traer
+  // la verdad desde el servidor.
+  const cargarReplies = () => {
+    fetchRepliesFromSheet().then(data => { setReplies(data || []); setRepliesLoaded(true) })
+  }
+
   useEffect(() => {
     if (repliesLoaded) return
-    fetchRepliesFromSheet().then(data => { setReplies(data || []); setRepliesLoaded(true) })
+    cargarReplies()
   }, [repliesLoaded])
 
   useEffect(() => {
@@ -340,18 +361,31 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   if (!activeConv) return null
 
   const startEdit = (idx) => {
-    setEditingIdx(idx)
+    setEditingId(replies[idx].id)
     setEditText(replies[idx].text)
     setEditImgUrls(getImgUrls(replies[idx]))
     const b = replies[idx].botones || []
     setEditBotones([b[0] || '', b[1] || '', b[2] || ''])
   }
-  const clearEdit = () => { setEditingIdx(null); setEditText(''); setEditImgUrls([]); setEditBotones(['', '', '']) }
+  const clearEdit = () => { setEditingId(null); setEditText(''); setEditImgUrls([]); setEditBotones(['', '', '']) }
   const saveEdit = async () => {
     if (!editText.trim()) return
+    // Se busca la fila por ID en el momento de GUARDAR (no se reutiliza el índice
+    // que tenía al ABRIR el formulario): entre medio pudo haberse reordenado la
+    // lista con las flechas o el arrastre, y el índice de esta respuesta pudo
+    // haber cambiado. Si la respuesta ya no está (alguien la borró mientras se
+    // editaba) no se escribe nada y se avisa con el mismo mecanismo que el error
+    // de orden.
+    const actual = replies.find(r => r.id === editingId)
+    if (!actual) {
+      clearEdit()
+      setErrorOrden('Esa respuesta ya no existe. No se guardó.')
+      setTimeout(() => setErrorOrden(''), 4000)
+      return
+    }
     const botones = editBotones.map(s => s.trim()).filter(Boolean).slice(0, 3)
-    const updated = { ...replies[editingIdx], text: editText.trim(), ...urlsToReply(editImgUrls), botones }
-    setReplies(prev => prev.map((r,i) => i===editingIdx ? updated : r))
+    const updated = { ...actual, text: editText.trim(), ...urlsToReply(editImgUrls), botones }
+    setReplies(prev => prev.map(r => r.id === editingId ? updated : r))
     clearEdit()
     await writeReply('actualizar', updated)
   }
@@ -359,13 +393,54 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     const r = replies[idx]; setReplies(prev => prev.filter((_,i) => i!==idx))
     await writeReply('eliminar', r)
   }
+
+  // Reordena en pantalla YA y guarda detrás. Si el guardado falla, VUELVE al orden
+  // anterior y avisa: una lista que se ve reordenada y no lo está en la base es
+  // peor que no poder reordenar.
+  const reordenar = async (desde, hacia) => {
+    // Bloqueo GLOBAL, no por fila: mientras haya CUALQUIER alta sin confirmar
+    // (savingIds no vacío) no se reordena nada, sea cual sea la fila que se
+    // mueva o sobre la que se suelte. El id de la fila sin confirmar todavía no
+    // existe en la base, y un UPDATE de orden sobre un id inexistente no falla
+    // ni avisa (no afecta ninguna fila) — pero el alta la inserta de todas formas
+    // arriba de todo, así que la pantalla terminaría mostrando un orden que la
+    // base no tiene. Deshabilitar solo la fila afectada no alcanza: arrastrar
+    // OTRA fila y soltarla encima de la que falta confirmar, o subir su vecina
+    // con la flecha, disparan el mismo problema. Bloquear todo es más simple y
+    // más seguro, y la ventana dura lo que tarda un POST.
+    if (savingIds.size > 0) return
+    const previa = replies
+    const nueva = moverItem(previa, desde, hacia)
+    if (nueva.length !== previa.length) return
+    if (nueva.every((r, i) => r === previa[i])) return   // no cambió nada
+    setReplies(nueva)
+    setErrorOrden('')
+    const r = await reorderReplies(nueva.map(x => x.id))
+    if (!r?.ok) {
+      setReplies(previa)
+      setErrorOrden('No se pudo guardar el orden. Reintenta.')
+      setTimeout(() => setErrorOrden(''), 4000)
+      // El guardado no es atómico (fila por fila): un fallo a mitad de camino
+      // puede dejar la base con parte del orden nuevo y parte del viejo, así que
+      // "previa" ya no es necesariamente lo que quedó guardado. Se recarga desde
+      // el servidor para que la pantalla termine mostrando lo que hay de verdad.
+      cargarReplies()
+    }
+  }
+
   const addReply = async () => {
     if (!newText.trim()) return
     const botones = newBotones.map(s => s.trim()).filter(Boolean).slice(0, 3)
     const nr = { id: crypto.randomUUID(), text: newText.trim(), ...urlsToReply(newImgUrls), botones }
-    setReplies(prev => [...prev, nr])
+    setReplies(prev => [nr, ...prev])   // la nueva entra PRIMERA, igual que en la base
+    // Se marca como "guardando" mientras el POST de alta sigue en vuelo. addReply
+    // mete la respuesta en el estado ANTES de esperar la confirmación del servidor,
+    // así que si se editara/reordenara en esa ventana la corrección se perdería o
+    // se le mandaría al servidor un id que todavía no existe. Ver reordenar().
+    setSavingIds(prev => new Set(prev).add(nr.id))
     setNewText(''); setNewImgUrls([]); setNewBotones(['', '', ''])
     await writeReply('agregar', nr)
+    setSavingIds(prev => { const n = new Set(prev); n.delete(nr.id); return n })
   }
 
   // No se espera a que termine: se dispara y el botón va mostrando "2/5". Así el
@@ -438,6 +513,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   }
 
   const contactName = contactInfo?.alias||contactInfo?.nombre||activeConv.nombre
+  // Ver el comentario dentro de reordenar(): el bloqueo por alta sin confirmar es
+  // GLOBAL (toda la lista), no solo la fila nueva — se calcula una vez acá para
+  // deshabilitar las flechas de TODAS las filas y para que el onDrop las ignore.
+  const hayAltaPendiente = savingIds.size > 0
   const btnBase  = { fontFamily:'inherit', cursor:'pointer', transition:'all .15s' }
   const inputBase = { background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, color:C.cream, fontSize:12, padding:'6px 9px', outline:'none', fontFamily:'inherit' }
 
@@ -512,9 +591,12 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
             <div style={{ padding:'0 12px', display:'flex', flexDirection:'column', gap:5 }}>
               {replies.map((reply, idx) => {
                 const imgs = getImgUrls(reply)
+                // Alta todavía sin confirmar (ver addReply): no se deja editar ni
+                // reordenar esta fila hasta que el servidor la confirme.
+                const guardando = savingIds.has(reply.id)
                 return (
                   <div key={reply.id||idx}>
-                    {editingIdx===idx ? (
+                    {editingId===reply.id ? (
                       <div style={{ background:`rgba(244,241,236,.03)`, border:`1px solid ${C.cream}`, borderRadius:9, padding:'8px', marginBottom:2 }}>
                         <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={4} placeholder="Texto..."
                           style={{ width:'100%', ...inputBase, border:`1px solid ${C.cream}`, resize:'vertical', marginBottom:5, whiteSpace:'pre-wrap', minHeight:80 }} />
@@ -527,7 +609,22 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                         </div>
                       </div>
                     ) : (
-                      <div style={{ background:`rgba(244,241,236,.02)`, border:`1px solid ${C.border}`, borderRadius:8, overflow:'hidden' }}
+                      <div
+                        draggable={!guardando}
+                        onDragStart={() => setArrastrando(idx)}
+                        onDragEnd={() => setArrastrando(null)}
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={() => {
+                          // Se ignora el drop entero (no solo si la fila afectada es la
+                          // que falta confirmar) mientras haya CUALQUIER alta pendiente:
+                          // ver el comentario largo en reordenar().
+                          if (!hayAltaPendiente && arrastrando !== null && arrastrando !== idx) reordenar(arrastrando, idx)
+                          setArrastrando(null)
+                        }}
+                        style={{ background:`rgba(244,241,236,.02)`, border:`1px solid ${C.border}`, borderRadius:8, overflow:'hidden', transition:'background .1s',
+                          opacity: arrastrando === idx ? .4 : 1,
+                          outline: arrastrando !== null && arrastrando !== idx ? `1px dashed ${C.border2}` : 'none',
+                        }}
                         onMouseEnter={e=>e.currentTarget.style.background=`rgba(244,241,236,.04)`}
                         onMouseLeave={e=>e.currentTarget.style.background=`rgba(244,241,236,.02)`}>
                         {/* Mini strip de fotos */}
@@ -544,11 +641,17 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                             {imgs.length>0&&`🖼×${imgs.length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{reply.text}
                           </span>
                           <div style={{ display:'flex', gap:2, flexShrink:0 }}>
+                            <button onClick={() => reordenar(idx, idx - 1)} disabled={idx === 0 || hayAltaPendiente}
+                              title={hayAltaPendiente ? 'Espera a que se confirme el alta pendiente' : 'Subir'}
+                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (idx === 0 || hayAltaPendiente) ? C.creamFaint : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:9, cursor: (idx === 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↑</button>
+                            <button onClick={() => reordenar(idx, idx + 1)} disabled={idx === replies.length - 1 || hayAltaPendiente}
+                              title={hayAltaPendiente ? 'Espera a que se confirme el alta pendiente' : 'Bajar'}
+                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (idx === replies.length - 1 || hayAltaPendiente) ? C.creamFaint : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:9, cursor: (idx === replies.length - 1 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↓</button>
                             <button onClick={()=>handleSendQuick(idx)} disabled={!!sending[idx]||!windowOpen}
                               style={{ ...btnBase, background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.2)`, color:C.cream, borderRadius:5, minWidth:20, height:20, padding:'0 3px', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center' }}>
                               {sending[idx] || '➤'}
                             </button>
-                            <button onClick={()=>startEdit(idx)} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:10, padding:'0 2px' }}>✏️</button>
+                            <button onClick={()=>startEdit(idx)} disabled={guardando} title={guardando ? 'Espera a que se confirme el alta' : undefined} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor: guardando ? 'default' : 'pointer', fontSize:10, padding:'0 2px' }}>✏️</button>
                             <button onClick={()=>deleteReply(idx)} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:10, padding:'0 2px' }}>🗑️</button>
                           </div>
                         </div>
@@ -557,6 +660,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                   </div>
                 )
               })}
+              {errorOrden && (
+                <div style={{ fontSize:11, color:'#ef4444', padding:'6px 8px' }}>⚠️ {errorOrden}</div>
+              )}
             </div>
 
             {/* Nueva respuesta */}
