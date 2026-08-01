@@ -9,6 +9,7 @@ import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirIA } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
 import { extraerEchoes } from '@/lib/echoes'
+import { capturarCtwaClid, revisarLeadAutomatico } from '@/lib/capi'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
 
@@ -292,6 +293,19 @@ export async function POST(req) {
         // Upsert del contacto (no pisa nombre/alias editados a mano)
         try { await registrarContactoEntrante(m.telefono, m.nombre, m.telefono) }
         catch (e) { console.error('[/api/webhook] contacto:', e.message) }
+
+        // ── Señales a Meta (Conversions API) ─────────────────────────────────
+        // 1) Guardar de qué anuncio vino, si vino de uno. Va DESPUÉS de
+        //    registrarContactoEntrante: la conversación tiene que existir para
+        //    poder escribirle el clid.
+        // 2) Avisarle a Meta cuando el chat ya se ganó el nombre de Lead.
+        // Ninguna de las dos lanza nunca (ver lib/capi.js): Meta tiene que
+        // recibir su 200 pase lo que pase, o reintenta y nos mete en rate
+        // limit (#131056).
+        await capturarCtwaClid({ telefono: m.telefono, referral: m.referral, phoneId: m.phoneId })
+          .catch(e => console.error('[/api/webhook] ctwa:', e.message))
+        await revisarLeadAutomatico(m.telefono)
+          .catch(e => console.error('[/api/webhook] lead capi:', e.message))
 
         // Aviso al equipo. Va DESPUÉS de registrarContactoEntrante para que la
         // conversación exista y se le pueda escribir ultimo_push_at.
