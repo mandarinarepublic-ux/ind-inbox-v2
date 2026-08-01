@@ -9,7 +9,7 @@ import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirIA } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
 import { extraerEchoes } from '@/lib/echoes'
-import { capturarCtwaClid, revisarLeadAutomatico } from '@/lib/capi'
+import { capturarCtwaClid, revisarLeadAutomatico, revisarVentaEnProceso } from '@/lib/capi'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
 
@@ -306,6 +306,8 @@ export async function POST(req) {
           .catch(e => console.error('[/api/webhook] ctwa:', e.message))
         await revisarLeadAutomatico(m.telefono)
           .catch(e => console.error('[/api/webhook] lead capi:', e.message))
+        await revisarVentaEnProceso(m.telefono)
+          .catch(e => console.error('[/api/webhook] venta capi:', e.message))
 
         // Aviso al equipo. Va DESPUÉS de registrarContactoEntrante para que la
         // conversación exista y se le pueda escribir ultimo_push_at.
