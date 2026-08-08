@@ -185,12 +185,13 @@ test('el aviso no afirma que haya algo escrito', () => {
 })
 
 test('la nota del pedido sale IDÉNTICA a la del camino con IA', () => {
-  // ⚠️ En IND el botón "🧾 CREAR PEDIDO" (el de la IA) SIGUE VIVO, así que los dos
-  // caminos escriben notas al mismo tiempo, en la misma tabla y en el mismo chat.
-  // Con los tres campos —lo normal— `textoNotaPedido` tiene que salir igual
-  // carácter por carácter que la plantilla cruda de `crearPedido` en
-  // RightPanel.jsx. Esta prueba es el candado: si alguien toca el formato de un
-  // lado, el historial del cliente queda con dos estilos de nota mezclados.
+  // El botón "🤖 CREAR PEDIDO CON IA" ya no existe, pero sus notas SÍ están en la
+  // base y el formato tiene que seguir siendo uno solo: en el mismo chat conviven
+  // las notas viejas del agente y las nuevas del manual. Con los tres campos —lo
+  // normal— `textoNotaPedido` tiene que salir igual carácter por carácter que la
+  // plantilla cruda que armaba `crearPedido` en RightPanel.jsx. Esta prueba es el
+  // candado: si alguien toca el formato, el historial del cliente queda con dos
+  // estilos de nota mezclados.
   const plantillaVieja = (res) => `📦 Pedido ${res.pedidoId} · $${res.montoTotal}\n${res.url || ''}`.trim()
   const respuestasDelAgente = [
     { pedidoId: 'IND-2026-0412', montoTotal: 78.9,    url: 'https://crm.apps.mandarinaec.com/dashboard/pedido/IND-2026-0412' },

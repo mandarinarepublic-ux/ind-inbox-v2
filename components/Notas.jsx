@@ -11,7 +11,7 @@ import { fetchNotas, addNota, editNota, deleteNota } from '@/lib/api-client'
  *
  * No se guarda quién escribió: el inbox no tiene login (decisión del 2-ago-2026).
  *
- * `refrescar` es un contador: el botón CREAR PEDIDO guarda el link del pedido
+ * `refrescar` es un contador: el PEDIDO MANUAL guarda el link del pedido
  * como una nota y lo incrementa para que la lista se actualice sin recargar.
  */
 
@@ -176,7 +176,7 @@ export default function Notas({ telefono, refrescar = 0 }) {
                       </>
                     ) : (
                       <>
-                        {/* El link al pedido del CRM: el botón CREAR PEDIDO deja
+                        {/* El link al pedido del CRM: el PEDIDO MANUAL deja
                             la URL dentro de una nota y así queda clickeable. */}
                         {(() => {
                           const u = (String(nota.texto).match(/https?:\/\/\S+\/dashboard\/pedido\/\S+/) || [])[0]
