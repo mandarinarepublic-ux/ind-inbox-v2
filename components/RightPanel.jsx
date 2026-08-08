@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Avatar } from '@/components/Components'
 import { fetchRepliesFromSheet, writeReply, reorderReplies, addNota, setIdVenta, fetchProductos } from '@/lib/api-client'
 import Notas from './Notas'
+import PedidoManual from './PedidoManual'
+import { textoNotaPedido } from '@/lib/pedido-manual'
 import { parseDate } from '@/lib/utils'
 import { CFG } from '@/lib/config'
 import { moverItem } from '@/lib/orden-lista'
@@ -235,7 +237,7 @@ const TABS = [
 // Etiqueta del catálogo online en el selector de la pestaña Tienda (este inbox = INDLOVERS).
 const CATALOGO_LABEL = 'INDLOVERS'
 
-export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen }) {
+export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, onPedidoManual }) {
   const [tab, setTab] = useState('respuestas')
   const [countdown, setCountdown] = useState('')
 
@@ -288,6 +290,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [pedidoLoading, setPedidoLoading] = useState(false)
   const [pedidoRes,     setPedidoRes]     = useState(null)
 
+  // ── PEDIDO MANUAL: el formulario del CRM dentro de este panel ──
+  const [manualAbierto, setManualAbierto] = useState(false)
+
   // ── Historial de pedidos del cliente (desde MANDARINACRM) ────
   const [historial,   setHistorial]   = useState(null)  // null = cargando
   const [histError,   setHistError]   = useState(false)
@@ -324,6 +329,29 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   useEffect(() => {
     if (activeConv) setPedidoRes(null)
   }, [activeConv?.telefono])
+
+  // Avisarle al padre cuando se abre o se cierra el PEDIDO MANUAL: con eso
+  // ensancha el panel y sabe que tiene que preguntar antes de cambiar de chat.
+  useEffect(() => { onPedidoManual?.(manualAbierto) }, [manualAbierto, onPedidoManual])
+
+  // Al desmontarse el panel, el formulario se va con él. Hay que avisarlo o el
+  // padre seguiría creyendo que está abierto y preguntaría de gusto para siempre.
+  const avisarRef = useRef(onPedidoManual)
+  useEffect(() => { avisarRef.current = onPedidoManual }, [onPedidoManual])
+  useEffect(() => () => { avisarRef.current?.(false) }, [])
+
+  // ☠️ Al cambiar de conversación se cierra: dejarlo abierto mostraría el
+  // formulario precargado con el cliente ANTERIOR, que es la peor forma de
+  // equivocarse.
+  //
+  // NO BORRES ESTA LÍNEA aunque parezca que sobra. Desde que el formulario
+  // sobrevive al cambio de pestaña, es tentador pensar que también debería
+  // sobrevivir al cambio de chat. NO: `PedidoManual` congela su URL con un
+  // `useState` de inicializador perezoso, que solo se vuelve a ejecutar si el
+  // componente se MONTA de nuevo. Esta línea es lo único que fuerza ese
+  // desmontaje. Sin ella, la URL conserva el teléfono del cliente anterior y el
+  // siguiente pedido sale a nombre equivocado, sin ningún error a la vista.
+  useEffect(() => { setManualAbierto(false) }, [activeConv?.telefono])
 
   const loadHistorial = async (tel, idVenta) => {
     setHistorial(null); setHistError(false)
@@ -517,6 +545,15 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:C.surface, overflow:'hidden' }}>
 
       {/* ── HEADER FIJO: INFO CONTACTO + VENTANA ── */}
+      {/* Se esconde mientras el PEDIDO MANUAL está abierto: con el formulario a
+          la vista, el nombre del cliente y el contador de la ventana no aportan
+          nada y le roban alto al asistente del CRM, que ya va justo. Vuelve solo
+          al cerrarlo.
+          Ojo: es solo el pintado. `contactName` se sigue calculando arriba y es
+          lo que arma la URL del formulario, así que no se rompe nada.
+          De regalo saca de la vista el ✏️ del alias, que era lo único que podía
+          recargar el iframe estando abierto. */}
+      {!manualAbierto && (
       <div style={{ flexShrink:0, padding:'14px 14px 10px', borderBottom:`1px solid ${C.border}` }}>
         <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:8 }}>
           <Avatar name={contactName} phone={activeConv.telefono} size={38} />
@@ -545,6 +582,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
           {!windowOpen&&<span style={{ fontFamily:'monospace', fontSize:11, color:C.creamFaint }}>Expirada</span>}
         </div>
       </div>
+      )}
 
       {/* ── BARRA DE PESTAÑAS ── */}
       <div style={{ flexShrink:0, display:'flex', background:C.bg, borderBottom:`1px solid ${C.border}` }}>
@@ -675,20 +713,89 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
           </>
         )}
 
-        {/* ═══════════ VENTAS: CREAR PEDIDO + NOTAS ═══════════ */}
-        {tab === 'ventas' && (
-          <>
-            {/* CREAR PEDIDO */}
+        {/* ═══════════ VENTAS: PEDIDO MANUAL + CREAR PEDIDO + NOTAS ═══════════ */}
+        {/* Con el PEDIDO MANUAL abierto este bloque se ESCONDE en vez de
+            desmontarse. Desmontarlo mataba el iframe, y eso encadenaba tres
+            desgracias: (1) tocar "Tienda" para mirar el catálogo —el clic más
+            natural del mundo mientras armas un pedido— tiraba lo escrito sin
+            aviso; (2) `manualAbierto` seguía en true y el padre creía que estaba
+            abierto, así que preguntaba de gusto; y (3) al aceptar esa pregunta se
+            limpiaba el mapa del guard mientras `manualAbierto` seguía true, y al
+            volver a Ventas el formulario se remontaba CON EL GUARD APAGADO: a
+            partir de ahí un pedido lleno se descartaba en silencio.
+            Escondiéndolo, el formulario sobrevive el paseo por las otras
+            pestañas y el estado nunca miente. `display:'contents'` para que el
+            envoltorio no genere caja y el layout quede exactamente igual que
+            antes; cuando no hay manual abierto, el bloque se desmonta como
+            siempre y no cambia nada. */}
+        {(tab === 'ventas' || manualAbierto) && (
+          <div style={{ display: tab === 'ventas' ? 'contents' : 'none' }}>
+            {manualAbierto ? (
+              // Todo el alto disponible del panel, no una fracción fija. Con
+              // `70vh` había que bajar DOS veces —dentro del iframe y dentro del
+              // panel— y la barra de SIGUIENTE del CRM, que es la que hace
+              // avanzar los 4 pasos, se quedaba fuera de vista. El `minHeight`
+              // queda de red por si el 100% no resolviera: nunca invisible.
+              <div style={{ height:'100%', minHeight:380 }}>
+                <PedidoManual
+                  telefono={activeConv.telefono}
+                  nombre={contactName}
+                  onCerrar={() => setManualAbierto(false)}
+                  onCreado={(aviso) => {
+                    // Deja la nota fechada con el link y marca la venta. El texto
+                    // lo arma `textoNotaPedido` porque el monto y el link son
+                    // opcionales y la nota no se puede editar después
+                    // (ver lib/pedido-manual).
+                    addNota(activeConv.telefono, textoNotaPedido(aviso))
+                      .then(() => setNotasRefrescar(n => n + 1))
+                      .catch(() => {})
+                    setIdVenta(activeConv.telefono, aviso.pedidoId).catch(() => {})
+                    setPedidoRes({ ok: true, pedidoId: aviso.pedidoId, montoTotal: aviso.montoTotal, url: aviso.url })
+                    // Cerrar el formulario: el aviso "✅ Pedido creado" se pinta
+                    // DEBAJO del iframe y, si no, hay que bajar para verlo —
+                    // parecería que apretaste y no pasó nada.
+                    setManualAbierto(false)
+                  }}
+                />
+              </div>
+            ) : (
             <div style={{ padding:'12px 12px 4px' }}>
-              <button onClick={crearPedido} disabled={pedidoLoading}
-                style={{ ...btnBase, width:'100%', padding:'9px', background: pedidoLoading?C.surface2:'linear-gradient(135deg,#10b981,#059669)', border:'1px solid rgba(16,185,129,.4)', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, cursor: pedidoLoading?'default':'pointer', letterSpacing:'.03em' }}>
-                {pedidoLoading ? '⏳ Leyendo conversación y creando…' : '🧾 CREAR PEDIDO'}
+              {/* PEDIDO MANUAL: abre la pantalla real de pedidos del CRM acá dentro,
+                  precargada con el teléfono y el nombre del chat. El pedido queda
+                  firmado por la persona que lo hizo, no por un fantasma. */}
+              <button onClick={() => setManualAbierto(true)}
+                style={{ ...btnBase, width:'100%', padding:'9px', background:'linear-gradient(135deg,#10b981,#059669)', border:'1px solid rgba(16,185,129,.4)', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, letterSpacing:'.03em' }}>
+                🧾 PEDIDO MANUAL
               </button>
 
+              {/* CREAR PEDIDO — el camino con IA. En MANDI se quitó; en IND se
+                  queda tal cual hasta que Rodrigo decida. No lo toques. */}
+              <button onClick={crearPedido} disabled={pedidoLoading}
+                style={{ ...btnBase, width:'100%', marginTop:7, padding:'9px', background: pedidoLoading?C.surface2:`rgba(244,241,236,.08)`, border:`1px solid ${C.border2}`, color:C.cream, borderRadius:8, fontSize:12, fontWeight:800, cursor: pedidoLoading?'default':'pointer', letterSpacing:'.03em' }}>
+                {pedidoLoading ? '⏳ Leyendo conversación y creando…' : '🤖 CREAR PEDIDO CON IA'}
+              </button>
+            </div>
+            )}
+
+            {/* El resultado del pedido va FUERA del ternario a propósito: el
+                formulario se cierra solo al crear el pedido (`setManualAbierto(false)`
+                dentro de `onCreado`), así que el aviso "✅ Pedido creado" se
+                pinta acá, en la rama de los botones. Metido adentro del ternario
+                no se vería NUNCA. Va detrás de `pedidoRes &&` para no dejar un
+                div vacío con relleno debajo del iframe: esos 4px de más metían
+                una barra de desplazamiento en el panel sin nada que mostrar. */}
+            {pedidoRes && (
+            <div style={{ padding:'0 12px 4px' }}>
               {pedidoRes?.ok && (
                 <div style={{ marginTop:8, padding:'9px 10px', background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.3)', borderRadius:8 }}>
                   <div style={{ fontSize:12, fontWeight:800, color:'#10b981' }}>✅ Pedido creado: {pedidoRes.pedidoId}</div>
-                  <div style={{ fontSize:11, color:C.creamDim, marginTop:2 }}>Total ${pedidoRes.montoTotal} · {pedidoRes.diasCalculado} días</div>
+                  {/* `diasCalculado` lo manda solo el camino con IA. Por el manual
+                      no viene, y sin las guardas la línea salía como
+                      "Total $undefined · undefined días". */}
+                  <div style={{ fontSize:11, color:C.creamDim, marginTop:2 }}>Total ${pedidoRes.montoTotal ?? '—'}{pedidoRes.diasCalculado ? ` · ${pedidoRes.diasCalculado} días` : ''}</div>
+                  {/* El enlace solo si hay a dónde ir: por el camino manual la url
+                      es opcional, y un "Ver pedido" que no lleva a ningún lado es
+                      peor que no mostrarlo. */}
                   {pedidoRes.url && <a href={pedidoRes.url} target="_blank" rel="noreferrer" style={{ display:'inline-block', marginTop:6, padding:'5px 10px', background:'rgba(16,185,129,.15)', border:'1px solid rgba(16,185,129,.35)', color:'#10b981', borderRadius:6, fontSize:11, fontWeight:700, textDecoration:'none' }}>📄 Ver pedido</a>}
                 </div>
               )}
@@ -713,6 +820,20 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 </div>
               )}
             </div>
+            )}
+
+            {/* Con el manual abierto, la pestaña Ventas es EL FORMULARIO Y NADA
+                MÁS: notas e historial se esconden. Le robaban alto al iframe y
+                el síntoma concreto era que la barra de SIGUIENTE del CRM —la que
+                hace avanzar los 4 pasos— quedaba fuera de vista.
+                ESCONDER y no desmontar, igual que con las pestañas, y acá con un
+                motivo extra: <Notas/> tiene su propio estado y su contador de
+                refresco, y `onCreado` dispara `addNota` + `setNotasRefrescar`
+                justo cuando el pedido se crea. Desmontado en ese momento, la
+                nota 📦 recién hecha podía no aparecer al cerrar el formulario.
+                El aviso "✅ Pedido creado" queda FUERA de este envoltorio: esa
+                confirmación se tiene que ver siempre. */}
+            <div style={{ display: manualAbierto ? 'none' : 'contents' }}>
 
             {/* NOTAS — varias por chat, cada una con su fecha */}
             <div style={{ padding:'10px 12px', borderTop:`1px solid ${C.border}`, marginTop:8, background:C.bg }}>
@@ -764,7 +885,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 )}
               </div>
             </div>
-          </>
+
+            </div>{/* fin del envoltorio que se esconde con el manual abierto */}
+          </div>
         )}
 
         {/* ═══════════ TIENDA: CATÁLOGO SHOPIFY (INDSTORE) ═══════════ */}

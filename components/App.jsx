@@ -9,6 +9,25 @@ import Contactos, { PlantillaModal } from '@/components/Contactos'
 import Automatizaciones from '@/components/Automatizaciones'
 import PushToggle from '@/components/PushToggle'
 import { actualizarNoLeidos, notificar } from '@/lib/notif'
+import { hayQueConfirmarDescarte, AVISO_DESCARTAR_PEDIDO, anchoPanelPedido, anchoPanelMinimo } from '@/lib/pedido-manual'
+import { decidirArrastre } from '@/lib/arrastre'
+
+// ── Ancho del panel derecho: UNA sola fuente ──────────────────────
+// Lo usan el asa de arrastre, la restauración de localStorage y el ensanchado
+// automático del PEDIDO MANUAL. Tienen que salir del mismo lado: si el máximo
+// del asa quedara MENOR que el ancho al que se abre el formulario, el primer
+// arrastre devolvería el panel de un salto hacia atrás y se sentiría como que el
+// asa "se queda aplastada".
+const ANCHO_MIN = 260
+const ANCHO_MAX = 680
+
+// Con el formulario abierto el panel mide lo que mide el formulario, ni más ni
+// menos: si sobra, el vacío se reparte a los lados y el panel le roba pantalla
+// al chat para nada. Y el PISO sube, porque por debajo de cierto ancho el CRM se
+// pasa solo a su diseño de celular. Los dos números se DERIVAN de `ESCALA_PEDIDO`
+// (ver lib/pedido-manual.js): si alguien toca la escala, se mueven con ella.
+const ANCHO_PEDIDO     = anchoPanelPedido()   // hoy 560 → 800 px internos
+const ANCHO_MIN_PEDIDO = anchoPanelMinimo()   // hoy 538 → 769 px internos, justo sobre el corte
 
 // Paleta IND
 const C = {
@@ -177,7 +196,115 @@ export default function App() {
   // ── Panel derecho redimensionable (arrastra el borde izquierdo) ──
   const rightWidthRef = useRef(300)
   const resizingRef   = useRef(false)
+  // Espejo en estado de `resizingRef`: solo sirve para pintar la capa que tapa
+  // el iframe mientras se arrastra (ver más abajo).
+  const [arrastrandoAsa, setArrastrandoAsa] = useState(false)
   useEffect(() => { rightWidthRef.current = rightWidth }, [rightWidth])
+
+  // El ancho anterior va en una REF, no en estado, a propósito: hay que leerlo y
+  // escribirlo dentro del mismo callback, y meter un `setRightWidth` dentro del
+  // actualizador de un `useState` es un efecto secundario en un updater — React
+  // los ejecuta dos veces en modo estricto y el ancho quedaría mal guardado.
+  const anchoPrevioRef = useRef(null)
+
+  // Qué panel tiene el formulario abierto. Son DOS y no un booleano suelto: el
+  // panel de escritorio se pinta con `{activeConv && …}`, y `activeConv` sale de
+  // un `find` sobre `convs` que se recalcula en CADA sondeo. Si un ciclo deja
+  // fuera el chat activo, ese panel se desmonta y remonta, y su limpieza manda un
+  // "false" mientras el cajón sigue con el formulario abierto. Con un booleano,
+  // ese "false" apagaba el guard y volvíamos a descartar pedidos sin preguntar.
+  const manualesRef = useRef({ escritorio: false, cajon: false })
+  // Espejo en estado del mapa de arriba. El ref es el que manda en el guard
+  // (hay que leerlo dentro del click, sin esperar a un render), pero un efecto no
+  // puede reaccionar a un ref: esto es solo para enganchar y soltar el aviso de
+  // `beforeunload` de las navegaciones duras.
+  const [hayManualAbierto, setHayManualAbierto] = useState(false)
+  const anotarManuales = useCallback((mapa) => {
+    manualesRef.current = mapa
+    setHayManualAbierto(Object.values(mapa).some(Boolean))
+  }, [])
+
+  const alPedidoManual = useCallback((donde, abierto) => {
+    anotarManuales({ ...manualesRef.current, [donde]: abierto })
+    if (abierto) {
+      if (anchoPrevioRef.current === null) anchoPrevioRef.current = rightWidthRef.current
+      // El ancho EXACTO del formulario, no "el que había si era mayor": si el
+      // panel venía ancho, quedaba vacío a los lados y era justo la queja.
+      setRightWidth(ANCHO_PEDIDO)
+      return
+    }
+    // Si el otro panel todavía lo tiene abierto, el ancho se queda como está.
+    if (Object.values(manualesRef.current).some(Boolean)) return
+    if (anchoPrevioRef.current !== null) {
+      setRightWidth(anchoPrevioRef.current)
+      anchoPrevioRef.current = null
+      return
+    }
+    // Sin ancho guardado (lo abrió el otro panel): al menos volver al techo
+    // normal, que si no el panel se queda más ancho de lo que el asa permite.
+    setRightWidth(w => Math.min(ANCHO_MAX, w))
+  }, [anotarManuales])
+
+  // Una por instancia, y ESTABLES: `RightPanel` las tiene como dependencia de un
+  // efecto, así que una función nueva en cada render lo dispararía a cada rato y
+  // le pelearía el ancho al que esté arrastrando el asa.
+  const alPedidoManualEscritorio = useCallback((abierto) => alPedidoManual('escritorio', abierto), [alPedidoManual])
+  const alPedidoManualCajon      = useCallback((abierto) => alPedidoManual('cajon', abierto), [alPedidoManual])
+
+  /**
+   * ¿Se puede soltar la conversación abierta? Decisión de Rodrigo: el asistente
+   * del CRM son 4 pasos y un clic distraído en el chat de al lado no puede
+   * tirarlos sin aviso. Devuelve false = quedarse donde estaba.
+   *
+   * Cuando el pedido se crea bien, `RightPanel` ya cerró el formulario antes de
+   * esto, así que ahí no pregunta nada.
+   */
+  const puedoDejarLaConversacion = useCallback((destino) => {
+    if (!hayQueConfirmarDescarte(manualesRef.current, activeRef.current, destino)) return true
+    if (!window.confirm(AVISO_DESCARTAR_PEDIDO)) return false
+    // Descartado: se limpia acá porque si el panel se DESMONTA (cerrar el chat,
+    // cambiar de bandeja o de canal) no queda nadie que avise que se cerró.
+    anotarManuales({ escritorio: false, cajon: false })
+    return true
+  }, [anotarManuales])
+
+  // La ✕ del cajón móvil (y tocar fuera, que hace lo mismo) cierra el panel
+  // derecho entero y con él el formulario. No es "cambiar de conversación", pero
+  // para quien lo usa es el mismo gesto y se pierde lo mismo: pasa por el mismo
+  // guard. Decisión de Rodrigo — preguntar en un caso y no en el otro se sentía
+  // arbitrario.
+  const cerrarCajonDerecho = useCallback(() => {
+    if (!puedoDejarLaConversacion(null)) return
+    setShowRight(false)
+  }, [puedoDejarLaConversacion])
+
+  // Las navegaciones DURAS —el 📊 que es un `<a href="/dashboard">` y el ↻ que
+  // hace `location.reload()`, justo al pie de la lista de chats— se llevan la
+  // página entera, y un `confirm` nuestro no las puede atrapar. El único que
+  // llega a tiempo ahí es el aviso propio del navegador. Se engancha SOLO
+  // mientras haya un formulario abierto: el resto del tiempo no molesta y no le
+  // quita el bfcache a la app.
+  useEffect(() => {
+    if (!hayManualAbierto) return
+    const alSalir = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', alSalir)
+    return () => window.removeEventListener('beforeunload', alSalir)
+  }, [hayManualAbierto])
+
+  // Los límites del asa, en una ref: el efecto de abajo se suscribe UNA vez (si
+  // se volviera a montar, repetiría la restauración de localStorage y pisaría el
+  // ancho), así que no puede leer el estado — los lee de acá en cada movimiento.
+  //
+  // Con el formulario abierto sube el PISO, no el techo: angostar de más metería
+  // el ancho interno por debajo de 768 y el CRM se pasaría a su diseño de
+  // celular a mitad de un pedido. Ensanchar no rompe nada (solo agrega vacío a
+  // los lados), así que el techo sigue siendo el de siempre.
+  const limitesRef = useRef({ min: ANCHO_MIN, max: ANCHO_MAX })
+  useEffect(() => {
+    limitesRef.current = hayManualAbierto
+      ? { min: ANCHO_MIN_PEDIDO, max: ANCHO_MAX }
+      : { min: ANCHO_MIN,        max: ANCHO_MAX }
+  }, [hayManualAbierto])
 
   // Botón "atrás" del celular: al abrir un chat empujamos una entrada de historial
   // (en openConv) y acá la consumimos para VOLVER A LA LISTA en vez de salir de la app.
@@ -195,17 +322,20 @@ export default function App() {
   useEffect(() => {
     try {
       const v = parseInt(localStorage.getItem('ind_right_width') || '', 10)
-      if (v >= 260 && v <= 680) setRightWidth(v)
+      if (v >= ANCHO_MIN && v <= ANCHO_MAX) setRightWidth(v)
     } catch {}
-    const clamp = (w) => Math.min(680, Math.max(260, w))
+    const clamp = (w) => Math.min(limitesRef.current.max, Math.max(limitesRef.current.min, w))
     const onMove = (e) => {
-      if (!resizingRef.current) return
+      const que = decidirArrastre({ arrastrando: resizingRef.current, botones: e.buttons })
+      if (que === 'nada') return
+      if (que === 'soltar') { onUp(); return }   // el mouseup se perdió: cortar acá
       const x = e.touches ? e.touches[0].clientX : e.clientX
       setRightWidth(clamp(window.innerWidth - x)) // panel pegado al borde derecho
     }
     const onUp = () => {
       if (!resizingRef.current) return
       resizingRef.current = false
+      setArrastrandoAsa(false)
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
       try { localStorage.setItem('ind_right_width', String(rightWidthRef.current)) } catch {}
@@ -214,15 +344,25 @@ export default function App() {
     window.addEventListener('mouseup', onUp)
     window.addEventListener('touchmove', onMove, { passive: false })
     window.addEventListener('touchend', onUp)
+    // Cinturones: el puntero se va de la página, la ventana pierde el foco
+    // (alt+tab a mitad de arrastre) o el sistema cancela el toque. En los tres
+    // casos el `mouseup`/`touchend` puede no llegar nunca.
+    document.addEventListener('mouseleave', onUp)
+    window.addEventListener('blur', onUp)
+    window.addEventListener('touchcancel', onUp)
     return () => {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
       window.removeEventListener('touchmove', onMove)
       window.removeEventListener('touchend', onUp)
+      document.removeEventListener('mouseleave', onUp)
+      window.removeEventListener('blur', onUp)
+      window.removeEventListener('touchcancel', onUp)
     }
   }, [])
   const startResize = () => {
     resizingRef.current = true
+    setArrastrandoAsa(true)
     document.body.style.userSelect = 'none'
     document.body.style.cursor = 'col-resize'
   }
@@ -391,6 +531,9 @@ export default function App() {
   // cliente y pasar a "Pendientes" quedaba en pantalla la conversación anterior, que
   // ya no pertenece a esa bandeja. Se deja el panel del medio en blanco para elegir.
   const cambiarFiltro = (key) => {
+    // Cierra el chat abierto → el PEDIDO MANUAL se perdería igual que al saltar
+    // a otro cliente. Sin el formulario abierto esto no pregunta nada.
+    if (!puedoDejarLaConversacion(null)) return
     setFilter(key)
     setActive(null)
     activeRef.current = null
@@ -403,6 +546,10 @@ export default function App() {
    * del otro número y la respuesta saldría por el canal equivocado.
    */
   const cambiarCanal = (id) => {
+    // Cambiar de número cierra el chat abierto y desmonta el panel derecho: el
+    // formulario se pierde. Volver a tocar el número que YA estás atendiendo no
+    // pierde nada, así que el guard solo corre cuando el canal cambia de verdad.
+    if (id !== canal && !puedoDejarLaConversacion(null)) return
     setVista('CHAT')
     if (id === canal) return
     setCanalActivo(id)        // manda a api-client: lecturas y envíos van por acá
@@ -416,6 +563,9 @@ export default function App() {
   }
 
   const openConv = (telefono) => {
+    // Único paso obligado para cambiar de chat: lo usan la lista, CONTACTOS y el
+    // salto desde un aviso push. Con esto acá, los tres quedan cubiertos.
+    if (!puedoDejarLaConversacion(telefono)) return
     setActive(telefono); activeRef.current = telefono
     setShowSidebar(false)
     setCitando(null)   // la cita pertenece al chat que estabas mirando
@@ -1021,7 +1171,19 @@ export default function App() {
       `}</style>
 
       {(showSidebar && active) && <div className="overlay" onClick={() => setShowSidebar(false)} />}
-      {showRight && <div className="overlay" onClick={() => setShowRight(false)} />}
+      {showRight && <div className="overlay" onClick={cerrarCajonDerecho} />}
+
+      {/* ⚠️ Capa transparente que TAPA EL IFRAME mientras se arrastra el asa.
+          Sin esto, al pasar el puntero sobre el formulario del CRM —que es un
+          iframe de otro origen— los eventos del mouse se los queda el documento
+          del CRM: el panel deja de seguir al asa y, peor, si se suelta el botón
+          ahí el `mouseup` no llega nunca. El arrastre se quedaba pegado y
+          después mover el mouse sin apretar nada redimensionaba el panel.
+          Con la capa puesta, el puntero nunca entra al iframe y el `mouseup`
+          siempre cae en nuestro documento. */}
+      {arrastrandoAsa && (
+        <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, zIndex:9999, cursor:'col-resize' }} />
+      )}
 
       <div style={{ display:'flex', flexDirection:'column', height:'100dvh', overflow:'hidden' }}>
 
@@ -1468,16 +1630,16 @@ export default function App() {
                 onMouseLeave={e => e.currentTarget.style.background = C.border}
               />
               <div className="right-col" style={{ width:'auto', flex:1, borderLeft:'none' }}>
-                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} />
+                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} onPedidoManual={alPedidoManualEscritorio} />
               </div>
             </div>
           )}
           {showRight && activeConv && (
             <div className="right-col">
               <div style={{ display:'flex', justifyContent:'flex-end', padding:'10px 10px 0' }}>
-                <button onClick={() => setShowRight(false)} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:17 }}>✕</button>
+                <button onClick={cerrarCajonDerecho} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:17 }}>✕</button>
               </div>
-              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} />
+              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} onPedidoManual={alPedidoManualCajon} />
             </div>
           )}
 
