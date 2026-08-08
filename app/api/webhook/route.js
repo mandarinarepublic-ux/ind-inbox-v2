@@ -38,7 +38,13 @@ const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || ''
 // Tolerante a BOM/espacios/mayúsculas (el `vercel env add` por PowerShell mete BOM).
 const IA_ON     = String(process.env.IA_AUTORESPUESTA || '').replace(/[^a-z]/gi, '').toLowerCase() === 'on'
 const AGENT_URL = process.env.INDX_AGENT_URL || 'https://indx-agent.vercel.app/api/agent'
-const AGENT_KEY = process.env.INDX_AGENT_KEY || 'mandi_republic_2024'
+// ⚠️ SIN respaldo quemado, a propósito. Acá vivía `|| 'mandi_republic_2024'`, y
+// como este repo es PÚBLICO esa era la clave de producción del agente publicada
+// en GitHub — la MISMA que abría también el agente de MANDI. Rotada el 8-ago-2026.
+//
+// Si la variable falta, el valor queda vacío y el agente responde 401: la IA deja
+// de contestar, pero NO se abre la puerta. Es la falla correcta de las dos.
+const AGENT_KEY = String(process.env.INDX_AGENT_KEY || '').replace(/[^\x21-\x7E]/g, '')
 const RE_IMG = /https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s)]*)?/gi
 
 // `auto: true` marca que el envío NO lo hizo un humano (IA, saludo automático).
