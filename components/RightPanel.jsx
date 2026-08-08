@@ -246,7 +246,7 @@ const TABS = [
 // Etiqueta del catálogo online en el selector de la pestaña Tienda (este inbox = INDLOVERS).
 const CATALOGO_LABEL = 'INDLOVERS'
 
-export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, onPedidoManual, onVerPedido }) {
+export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, onPedidoManual, onVerPedido, onEnviarHojaPedido }) {
   const [tab, setTab] = useState('respuestas')
   const [countdown, setCountdown] = useState('')
 
@@ -789,6 +789,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                   key={verPedidoId}
                   pedidoId={verPedidoId}
                   onCerrar={() => setVerPedidoId(null)}
+                  /* La hoja del pedido, hecha foto por el CRM, sale al chat
+                     abierto. El envío es el de siempre (el mismo de las fotos
+                     del 📎 y de la Tienda): acá solo se pasa el camino. */
+                  onEnviarHoja={onEnviarHojaPedido}
                 />
               </div>
             ) : (
@@ -891,7 +895,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
               <p style={{ fontSize:10, color:'#f59e0b', fontWeight:700, letterSpacing:'.08em', marginBottom:6 }}>
                 📝 NOTAS
               </p>
-              <Notas telefono={activeConv.telefono} refrescar={notasRefrescar} />
+              {/* El "📄 Ver pedido" de una nota abre el pedido acá mismo, por
+                  el MISMO camino que el "Ver →" del historial: antes era un
+                  enlace y te sacaba del inbox a otra pestaña. */}
+              <Notas telefono={activeConv.telefono} refrescar={notasRefrescar} onVerPedido={setVerPedidoId} />
             </div>
 
             {/* HISTORIAL DE PEDIDOS */}
