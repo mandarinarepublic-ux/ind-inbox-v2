@@ -133,7 +133,28 @@ function IABadge({ modoIA }) {
 }
 
 const TEMP_ICON = { caliente: '🔥', tibio: '🌤️', frio: '❄️' }
-export function ContactRow({ conv, isActive, onClick, search = '', estado, modoIA, temp = '', alerta = false, msgSnippet = null }) {
+// Etiqueta de a qué número (3326 / 9804) pertenece un resultado del buscador.
+// Solo se pinta buscando: el dueño lo pidió explícito — "el buscador debe
+// señalarme dónde está". Cuando es de OTRO canal (no el de la pestaña activa)
+// se resalta distinto: pulsarlo va a cambiar de pestaña, y eso hay que verlo venir.
+function CanalBadge({ label, distinto }) {
+  if (!label) return null
+  const color = distinto ? '#fbbf24' : C.creamFaint
+  return (
+    <span
+      title={distinto ? `Este chat está en el número ${label} — al abrirlo se cambia de pestaña` : `Número ${label}`}
+      style={{
+        fontSize: 9, fontWeight: 800, letterSpacing: '.02em', flexShrink: 0,
+        color, background: distinto ? 'rgba(251,191,36,.14)' : 'rgba(244,241,236,.06)',
+        border: `1px solid ${distinto ? 'rgba(251,191,36,.4)' : C.border2}`,
+        borderRadius: 6, padding: '1px 6px',
+      }}
+    >
+      {distinto ? '↗ ' : '📶 '}{label}
+    </span>
+  )
+}
+export function ContactRow({ conv, isActive, onClick, search = '', estado, modoIA, temp = '', alerta = false, msgSnippet = null, canalLabel = null, canalDistinto = false }) {
   const [hovered, setHovered] = useState(false)
   const searching = String(search || '').trim().length > 0
   const info = ESTADO_INFO[estado] || null
@@ -167,15 +188,17 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 11, color: C.creamFaint, fontFamily: 'monospace' }}>+{conv.telefono}</span>
               {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
+              <CanalBadge label={canalLabel} distinto={canalDistinto} />
             </div>
             <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.4 }}>
               💬 {highlight(msgSnippet, search)}
             </div>
           </div>
         ) : searching ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: C.creamDim, whiteSpace: 'nowrap' }}>📱 {highlight('+' + conv.telefono, search)}</span>
             {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
+            <CanalBadge label={canalLabel} distinto={canalDistinto} />
           </div>
         ) : (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>

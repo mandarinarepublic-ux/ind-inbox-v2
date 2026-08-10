@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendImageFile, precacheMedia, setCanalActivo } from '@/lib/api-client'
-import { CANALES, CANAL_POR_DEFECTO } from '@/lib/canales'
+import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
@@ -609,13 +609,17 @@ export default function App() {
    * si quedara el chat abierto o los hilos en memoria, se vería una conversación
    * del otro número y la respuesta saldría por el canal equivocado.
    */
+  // Devuelve true si el canal terminó activo (ya lo estaba, o se cambió de
+  // verdad); false si el guard del PEDIDO MANUAL canceló el salto. Quien llama
+  // desde el buscador lo necesita: si esto da false, no hay que esperar un
+  // chat que nunca va a llegar en el canal nuevo (porque el canal no cambió).
   const cambiarCanal = (id) => {
     // Cambiar de número cierra el chat abierto y desmonta el panel derecho: el
     // formulario se pierde. Volver a tocar el número que YA estás atendiendo no
     // pierde nada, así que el guard solo corre cuando el canal cambia de verdad.
-    if (id !== canal && !puedoDejarLaConversacion(null)) return
+    if (id !== canal && !puedoDejarLaConversacion(null)) return false
     setVista('CHAT')
-    if (id === canal) return
+    if (id === canal) return true
     setCanalActivo(id)        // manda a api-client: lecturas y envíos van por acá
     setCanal(id)
     setActive(null); activeRef.current = null
@@ -624,6 +628,7 @@ export default function App() {
     hilosRef.current = {}     // hilos cargados del canal anterior
     pendingRef.current = {}   // burbujas optimistas del canal anterior
     setTimeout(load, 0)       // recarga ya, sin esperar al siguiente poll
+    return true
   }
 
   const openConv = (telefono) => {
@@ -668,6 +673,40 @@ export default function App() {
       return merged ? { ...c, msgs: merged.msgs, last: merged.last } : c
     }))
   }, [])
+
+  // Teléfono que quedó esperando a que su canal termine de cargar, para
+  // abrirlo apenas aparezca en `convs`. Lo usa SOLO el salto desde un
+  // resultado del buscador (ver `irAResultadoBusqueda`).
+  const saltoPendienteRef = useRef(null)
+  useEffect(() => {
+    const tel = saltoPendienteRef.current
+    if (!tel) return
+    if (!convs.some(c => c.telefono === tel)) return  // aún no llegó el conv de ese canal
+    saltoPendienteRef.current = null
+    openConv(tel)
+  }, [convs])
+
+  /**
+   * Abrir un resultado del buscador (contacto o mensaje), sea del canal
+   * activo o de OTRO número. Es el único camino que puede mezclar "cambiar de
+   * pestaña" con "abrir un chat": primero mueve la pestaña con `cambiarCanal`
+   * —que ya deja todo limpio y en orden— y SOLO cuando ese canal nuevo
+   * terminó de cargar (arriba) se abre el chat. Nunca al revés: abrir el chat
+   * antes de mover la pestaña dejaría el envío armado por el número
+   * equivocado.
+   *
+   * Si el contacto ya es del canal activo, no hay nada que mover: abre
+   * directo, igual que un clic común en la lista.
+   */
+  const irAResultadoBusqueda = (telefono) => {
+    const canalDelContacto = canalDePhoneId(contacts[telefono]?.phoneId)
+    if (canalDelContacto && canalDelContacto !== canal) {
+      if (!cambiarCanal(canalDelContacto)) return  // el guard del pedido canceló el salto
+      saltoPendienteRef.current = telefono
+      return
+    }
+    openConv(telefono)
+  }
 
   // Desde la pestaña CONTACTOS: vuelve al chat y abre la conversación (match por
   // últimos 9 dígitos, por si el formato del directorio difiere).
@@ -772,15 +811,63 @@ export default function App() {
     return (start > 0 ? '…' : '') + t.slice(start, end) + (end < t.length ? '…' : '')
   }
 
+  // `contacts` viene SIN filtrar por canal (/api/inbox-sync pide getContactos(null)):
+  // trae la ficha de un cliente esté su conversación en 3326 o en 9804. `convs`, en
+  // cambio, solo trae las del canal de la pestaña activa. Sin esto, buscar a alguien
+  // que escribió por el otro número daba "Sin resultados" aunque tuviera cientos de
+  // mensajes — ver el bug medido: 73 conversaciones de IND en este caso.
+  const contactoPorTel = (tel) => {
+    const t9 = t9de(tel)
+    const par = Object.entries(contacts).find(([ctel]) => t9de(ctel) === t9)
+    return par ? par[1] : null
+  }
+  // Fila mínima para pintar un contacto que matchea pero NO está en `convs` (es de
+  // otro canal). No hace falta el hilo completo acá: se carga recién al abrir el
+  // chat (cargarHilo), igual que cualquier otra conversación.
+  const filaMinima = (tel) => {
+    const c = contactoPorTel(tel) || {}
+    return { telefono: c.telefono || tel, nombre: c.nombre || tel, msgs: [], last: { timestamp: c.ultimoMensajeAt || null }, unread: 0 }
+  }
+  // A qué número pertenece un teléfono, para la etiqueta del resultado ('3326' / '9804').
+  const canalEtiquetaDe = (tel) => {
+    const c = contacts[tel] || contactoPorTel(tel)
+    const idCanal = canalDePhoneId(c?.phoneId)
+    return CANALES.find(x => x.id === idCanal)?.etiqueta || null
+  }
+
   const searched = !isSearching ? convs
     : searchingMsgs
-      ? convs.filter(c => hitsPorTel[t9de(c.telefono)])
-      : convs.filter(c => {
-          const alias = (contacts[c.telefono]?.alias || '').toLowerCase()
-          return c.nombre.toLowerCase().includes(q) || alias.includes(q) || phoneMatch(c.telefono, search)
-        })
-  // Al BUSCAR mostramos TODOS los resultados sin importar la pestaña activa.
-  // Un solo filtro activo a la vez: venta (idVenta), temperatura (Eje 2) o bandeja (estado).
+      ? (() => {
+          // Teléfonos únicos que trajo /api/buscar (ya busca en TODO el historial,
+          // de los dos números). Los que ya están en `convs` (canal activo) se usan
+          // tal cual; el resto —de otro canal— se arma con una fila mínima.
+          const propios = convs.filter(c => hitsPorTel[t9de(c.telefono)])
+          const vistos  = new Set(propios.map(c => t9de(c.telefono)))
+          const hitTels = [...new Set(msgHits.map(h => h.telefono))]
+          const deOtros = hitTels.filter(tel => !vistos.has(t9de(tel))).map(filaMinima)
+          return [...propios, ...deOtros]
+        })()
+      : (() => {
+          const propios = convs.filter(c => {
+            const alias = (contacts[c.telefono]?.alias || '').toLowerCase()
+            return c.nombre.toLowerCase().includes(q) || alias.includes(q) || phoneMatch(c.telefono, search)
+          })
+          const vistos = new Set(propios.map(c => c.telefono))
+          const deOtros = Object.entries(contacts)
+            .filter(([tel]) => !vistos.has(tel))
+            .filter(([tel, c]) => {
+              const nombre = (c.nombre || '').toLowerCase()
+              const alias  = (c.alias  || '').toLowerCase()
+              return nombre.includes(q) || alias.includes(q) || phoneMatch(tel, search)
+            })
+            .map(([tel]) => filaMinima(tel))
+          return [...propios, ...deOtros]
+        })()
+  // Al BUSCAR mostramos TODOS los resultados sin importar la pestaña activa: ni
+  // bandeja (estado) ni NÚMERO (canal) — `searched` ya trae contactos del otro
+  // canal (arriba). Fuera de la búsqueda, acá se aplica el filtro de siempre:
+  // un solo filtro activo a la vez (venta / temperatura / bandeja), y por canal
+  // ya viene recortado `convs`.
   const filtered = isSearching
     ? searched
     : searched.filter(c =>
@@ -1247,7 +1334,10 @@ export default function App() {
   const enFila             = activeConv ? (colaLen[activeConv.telefono] || 0) : 0
   const currentStatus      = currentContact?.estado || 'pendiente'
   const currentStatusView  = activeConv ? getStatus(activeConv.telefono) : 'pendiente'
-  const displayName        = (tel) => contacts[tel]?.alias || convs.find(c=>c.telefono===tel)?.nombre || tel
+  // El fallback a contacts[tel]?.nombre hace falta para los resultados de OTRO
+  // canal: no están en `convs` (que solo trae el canal activo), así que
+  // `convs.find` nunca los encuentra y sin esto se veía el teléfono pelado.
+  const displayName        = (tel) => contacts[tel]?.alias || convs.find(c=>c.telefono===tel)?.nombre || contacts[tel]?.nombre || tel
 
   return (
     <>
@@ -1480,10 +1570,17 @@ export default function App() {
                     {filtered.length} {searchingMsgs ? (filtered.length===1?'CHAT CON':'CHATS CON') : `RESULTADO${filtered.length===1?'':'S'}`}{searchingMsgs ? ' ESE MENSAJE' : ' · TODAS LAS BANDEJAS'}
                   </div>
                 )}
-                {filtered.map(conv => (
-                  <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => openConv(conv.telefono)}
-                    search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} temp={getTemp(conv.telefono)} alerta={alertaVentana(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null} />
-                ))}
+                {filtered.map(conv => {
+                  // Solo se calcula buscando: es el único momento en que la pestaña
+                  // señala a qué número pertenece cada resultado.
+                  const canalLabel    = isSearching ? canalEtiquetaDe(conv.telefono) : null
+                  const canalDistinto = isSearching && canalLabel !== null && canalDePhoneId(contacts[conv.telefono]?.phoneId) !== canal
+                  return (
+                    <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => irAResultadoBusqueda(conv.telefono)}
+                      search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} temp={getTemp(conv.telefono)} alerta={alertaVentana(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
+                      canalLabel={canalLabel} canalDistinto={canalDistinto} />
+                  )
+                })}
               </>)}
             </div>
 
