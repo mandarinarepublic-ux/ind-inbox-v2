@@ -61,6 +61,28 @@ export async function GET(req) {
     canal: { id: canal.id, etiqueta: canal.etiqueta, wabaId: canal.wabaId, phoneId: canal.phoneId },
   }
 
+  // El token de verificación del webhook, para poder copiarlo en la consola de
+  // Meta. No es una credencial de acceso: es solo la palabra que Meta repite en
+  // el GET de verificación para probar que el endpoint es nuestro.
+  //
+  // Se muestra porque el 10-ago Meta intentó verificar el webhook 140 veces en un
+  // segundo y le respondimos 403 las 140: el valor que Meta tiene guardado NO
+  // coincide con el de acá, y eso bloquea cualquier intento de volver a guardar
+  // la configuración desde su consola. Sin poder leerlo, no hay forma de saber
+  // qué escribir allá.
+  //
+  // Solo lo ve quien tiene sesión: esta ruta está detrás del candado.
+  const verify = String(process.env.WHATSAPP_VERIFY_TOKEN || '')
+  salida.verificacion_del_webhook = {
+    verify_token: verify || '(NO CONFIGURADO)',
+    largo: verify.length,
+    // Un BOM o un espacio al final son invisibles al copiar y hacen fallar la
+    // comparación exacta del GET. Si esto sale true, ese es el problema.
+    tiene_espacios_o_bom: verify !== verify.trim() || /^﻿/.test(verify),
+    url_que_debe_estar_en_meta: 'https://ind-inbox.apps.mandarinaec.com/api/webhook',
+    nota: 'Copia verify_token TAL CUAL en la configuración del webhook de Meta.',
+  }
+
   // 1. ¿El token tiene permiso sobre esta WABA? Una lectura simple lo dice: si
   //    responde `missing permissions` (subcode 33), el activo no está asignado
   //    al usuario del sistema dueño del token.
