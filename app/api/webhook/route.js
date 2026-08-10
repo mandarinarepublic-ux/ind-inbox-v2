@@ -10,6 +10,8 @@ import { decidirIA } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
 import { extraerEchoes } from '@/lib/echoes'
 import { capturarCtwaClid, revisarLeadAutomatico, revisarVentaEnProceso } from '@/lib/capi'
+import { reportarAlertaCuenta } from '@/lib/eventos-sistema'
+import { etiquetaDeWabaId } from '@/lib/canales'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
 
@@ -158,9 +160,22 @@ export async function POST(req) {
     const nuevos = []
     const statuses = [] // read receipts: {wamid, estado}
     const echoes = []
+    const alertasCuenta = [] // account_update: {evento, wabaId}
     for (const entry of entries) {
       for (const change of entry?.changes || []) {
         const value    = change?.value || {}
+
+        // Eventos a nivel CUENTA (account_update): ACCOUNT_OFFBOARDED,
+        // DISABLED_UPDATE, restricciones. NO traen mensajes: son el aviso de Meta
+        // de que el número está en problemas. Si es un offboarding, deja de entrar
+        // y salir TODO por ese canal (10-ago-2026: el 9804 se cayó a las 15:24 y
+        // nadie se enteró hasta ver las ventas perdidas). El evento cuelga del
+        // WABA (entry.id), no de un phone_id. Carril aparte con `continue`: no
+        // toca nada del camino de los mensajes.
+        if (change?.field === 'account_update') {
+          alertasCuenta.push({ evento: String(value?.event || 'DESCONOCIDO'), wabaId: String(entry?.id || '') })
+          continue
+        }
 
         // Lo que se manda desde el CELULAR viene en value.message_echoes, no en
         // value.messages, y con `to`/`from` al revés. Carril aparte: el `continue`
@@ -343,6 +358,15 @@ export async function POST(req) {
     if (statuses.length) waitUntil(procesarStatuses(statuses))
     // Echoes (respuesta desde el celular): guardar + archivar medio, en background.
     if (echoes.length && usaSupabaseLectura()) waitUntil(procesarEchoes(echoes))
+    // Alerta de cuenta (número offboardeado/deshabilitado por Meta): avisar al
+    // equipo YA. En background para no frenar el 200 a Meta. reportarAlertaCuenta
+    // no lanza y ya se silencia a sí misma para no repetir el mismo evento.
+    for (const a of alertasCuenta) {
+      waitUntil(
+        reportarAlertaCuenta({ evento: a.evento, wabaId: a.wabaId, canal: etiquetaDeWabaId(a.wabaId) })
+          .catch(e => console.error('[/api/webhook] alerta cuenta:', e.message))
+      )
+    }
 
     // Meta exige 200 rápido o reintenta
     return NextResponse.json({ ok: true })
