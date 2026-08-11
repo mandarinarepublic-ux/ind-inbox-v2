@@ -97,8 +97,21 @@ export async function GET(req) {
     ? subs.cuerpo
     : { ok: false, status: subs.status, error: subs.cuerpo?.error }
 
+  // 2b. Estado de revisión de la cuenta: si Meta la tiene en revisión o
+  //     restringida, deja de entregar aunque todo lo demás esté bien.
+  const revision = await graph(`/${canal.wabaId}?fields=account_review_status,business_verification_status,status`)
+  salida.estado_de_la_cuenta = revision.ok
+    ? revision.cuerpo
+    : { ok: false, status: revision.status, error: revision.cuerpo?.error }
+
   // 3. Estado del número, para ver si Meta lo da por conectado.
-  const numero = await graph(`/${canal.phoneId}?fields=id,display_phone_number,verified_name,quality_rating,platform_type`)
+  // `status` es el campo que dice de verdad qué le pasa al número (CONNECTED,
+  // DISCONNECTED, FLAGGED, RESTRICTED, PENDING…). Los cuatro campos que se pedían
+  // antes no lo incluían, y por eso el diagnóstico se quedó a medias nueve horas.
+  const numero = await graph(
+    `/${canal.phoneId}?fields=id,display_phone_number,verified_name,quality_rating,` +
+    `platform_type,status,name_status,code_verification_status,throughput,messaging_limit_tier`
+  )
   salida.numero = numero.ok
     ? numero.cuerpo
     : { ok: false, status: numero.status, error: numero.cuerpo?.error }
