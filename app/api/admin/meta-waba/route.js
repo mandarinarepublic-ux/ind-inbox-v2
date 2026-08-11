@@ -116,6 +116,20 @@ export async function GET(req) {
     ? numero.cuerpo
     : { ok: false, status: numero.status, error: numero.cuerpo?.error }
 
+  // Plantillas de ESTA WABA. El error (#132001) "Template name does not exist in
+  // the translation" significa que la plantilla no existe en la WABA por la que
+  // se intenta enviar. Cuando se recrea una WABA a mano, las plantillas NO se
+  // heredan: hay que volver a crearlas y que Meta las apruebe.
+  const plantillas = await graph(`/${canal.wabaId}/message_templates?fields=name,status,language,category&limit=50`)
+  salida.plantillas = plantillas.ok
+    ? {
+        cuantas: (plantillas.cuerpo?.data || []).length,
+        lista: (plantillas.cuerpo?.data || []).map(
+          (p) => `${p.name} · ${p.language} · ${p.status}`
+        ),
+      }
+    : { ok: false, status: plantillas.status, error: plantillas.cuerpo?.error }
+
   if (accion !== 'suscribir' && accion !== 'resuscribir') {
     salida.nota = 'Diagnóstico, no se cambió nada. Para suscribir: agrega ?accion=suscribir'
     return Response.json(salida, { status: 200 })
