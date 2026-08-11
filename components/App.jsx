@@ -12,6 +12,7 @@ import AvisoSesion from '@/components/AvisoSesion'
 import { actualizarNoLeidos, notificar } from '@/lib/notif'
 import { hayQueConfirmarDescarte, AVISO_DESCARTAR_PEDIDO, anchoPanelPedido, anchoPanelMinimo, bytesDeDataUrl, MAX_HOJA_BYTES } from '@/lib/pedido-manual'
 import { decidirArrastre } from '@/lib/arrastre'
+import { decidirPegado, decidirAdjuntos, TOPE_FOTOS } from '@/lib/adjuntos'
 
 // ── Ancho del panel derecho: UNA sola fuente ──────────────────────
 // Lo usan el asa de arrastre, la restauración de localStorage y el ensanchado
@@ -73,6 +74,11 @@ async function toJpeg(file) {
       URL.revokeObjectURL(url)
       canvas.toBlob(blob => resolve(new File([blob], 'imagen.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.92)
     }
+    // Si el navegador no sabe dibujar esa imagen (un HEIC del iPhone, un archivo
+    // a medio copiar), sin esto la promesa no se resuelve NUNCA: la vista se
+    // queda esperando para siempre y no aparece ni la miniatura ni un error. Se
+    // sigue con el archivo tal cual y que decida el envío.
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
     img.src = url
   })
 }
@@ -175,6 +181,13 @@ export default function App() {
   const [imgProgress,  setImgProgress]  = useState(0)  // cuántas enviadas
   const [imgResult,    setImgResult]    = useState(null)
   const [isVideo,      setIsVideo]      = useState(false)
+  // Aviso corto de los adjuntos ("eso no es una foto", "ya no caben más"). Sin
+  // esto, pegar algo que no sirve no hace NADA en pantalla y parece un bug.
+  const [avisoAdjunto, setAvisoAdjunto] = useState('')
+  // Solo para pintar la capa de "suelta la foto acá" mientras se arrastra un
+  // archivo por encima del chat. Ojo: NO es `arrastrandoAsa`, que es el del asa
+  // del panel derecho.
+  const [soltarAqui,   setSoltarAqui]   = useState(false)
   const [filter,       setFilter]       = useState('pendiente')
   const [showBtnPanel, setShowBtnPanel] = useState(false)
   const [btnTexts,     setBtnTexts]     = useState(['', '', ''])
@@ -189,6 +202,7 @@ export default function App() {
   const msgsRef    = useRef(null)
   const autoScroll = useRef(true)
   const prevMsgLen = useRef(0)
+  const avisoRef   = useRef(null)  // temporizador del aviso de adjuntos
   // Mensaje que se está citando al responder (null = ninguno).
   const [citando, setCitando] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -1070,23 +1084,132 @@ export default function App() {
     return sendImageFile(telefono, nombre, file, url)
   }
 
-  const handleFileSelect = async (e) => {
-    const files = Array.from(e.target.files)
-    if (!files.length) return
+  const avisarAdjunto = (texto) => {
+    setAvisoAdjunto(texto || '')
+    clearTimeout(avisoRef.current)
+    if (texto) avisoRef.current = setTimeout(() => setAvisoAdjunto(''), 5000)
+  }
+  useEffect(() => () => clearTimeout(avisoRef.current), [])
+
+  /**
+   * La ÚNICA puerta de entrada de archivos a la caja de escribir. La usan el 📎,
+   * Ctrl+V y arrastrar-y-soltar: las tres traen una lista de File y de acá para
+   * abajo el camino es el mismo de siempre (`imgFiles` → `handleSendImage`).
+   * Qué se hace con esa lista lo decide `decidirAdjuntos`, que está aparte y
+   * probado (ver tests/adjuntos.test.js).
+   */
+  const agregarAdjuntos = async (entrantes) => {
+    const lista = Array.from(entrantes || [])
+    if (!lista.length) return
+    const plan = decidirAdjuntos({ actuales: imgFiles.length, esVideoActual: isVideo, entrantes: lista })
+    avisarAdjunto(plan.aviso)
+    if (plan.accion === 'nada') return
     setImgResult(null)
-    // Si hay video, solo se permite uno
-    const isVid = files[0].type.startsWith('video/')
-    setIsVideo(isVid)
-    if (isVid) {
-      setImgFiles([{ file: files[0], preview: URL.createObjectURL(files[0]) }])
+
+    if (plan.tipo === 'video') {
+      setIsVideo(true)
+      setImgFiles([{ file: plan.archivos[0], preview: URL.createObjectURL(plan.archivos[0]) }])
+      return
+    }
+
+    const procesadas = await Promise.all(plan.archivos.map(async f => ({
+      file: await toJpeg(f),
+      preview: await new Promise(res => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.readAsDataURL(f) })
+    })))
+    if (plan.accion === 'reemplazar') {
+      setIsVideo(false)
+      setImgFiles(procesadas)
     } else {
-      const processed = await Promise.all(files.slice(0, 10).map(async f => ({
-        file: await toJpeg(f),
-        preview: await new Promise(res => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.readAsDataURL(f) })
-      })))
-      setImgFiles(processed)
+      // El `slice` no sobra: procesar es asíncrono y dos pegados seguidos y
+      // rápidos deciden los dos contra el mismo `imgFiles.length` viejo. Acá,
+      // dentro del updater, se ve el estado de verdad.
+      setImgFiles(prev => [...prev, ...procesadas].slice(0, TOPE_FOTOS))
     }
   }
+
+  const handleFileSelect = async (e) => {
+    await agregarAdjuntos(e.target.files)
+    // El input se limpia siempre: si no, elegir DOS VECES la misma foto no
+    // dispara `change` la segunda vez y parece que el 📎 dejó de funcionar.
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  /**
+   * Ctrl+V en la caja de escribir, como en WhatsApp Web.
+   * Solo se mete cuando lo pegado son archivos de verdad; el pegado de texto de
+   * toda la vida NO se toca (ver la trampa de Excel en lib/adjuntos.js).
+   */
+  const handlePaste = (e) => {
+    const dt = e.clipboardData
+    if (!dt) return
+    const archivos = Array.from(dt.files || [])
+    const decision = decidirPegado({ tieneArchivos: archivos.length > 0, texto: dt.getData('text/plain') })
+    if (decision !== 'adjuntar') return
+    e.preventDefault()
+    agregarAdjuntos(archivos)
+  }
+
+  /**
+   * Ctrl+V con el chat abierto pero SIN el cursor dentro de la caja.
+   *
+   * Es el caso normal, no el raro: se toma la captura, se vuelve a la pestaña
+   * del inbox y se pega. Nadie hace clic en la caja primero. Sin esto el pegado
+   * "no funciona" la mitad de las veces y parece un bug.
+   *
+   * Solo actúa cuando NADIE más reclama el pegado: si el foco está en un campo
+   * de texto (la búsqueda, el nombre del contacto, la propia caja de escribir)
+   * manda ese campo. La caja tiene su propio `onPaste`.
+   */
+  const pasteRef = useRef(handlePaste)
+  useEffect(() => { pasteRef.current = handlePaste })
+  useEffect(() => {
+    // Solo con el chat a la vista: en CONTACTOS y AUTOMATIZACIONES el chat sigue
+    // montado detrás (se oculta con `display:none`), y pegar ahí dejaría una foto
+    // encolada en una conversación que ni se está viendo.
+    if (!activeConv || vista !== 'CHAT') return
+    const alPegarEnLaPagina = (e) => {
+      const el = e.target
+      const escribiendo = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+      if (escribiendo) return
+      pasteRef.current(e)
+    }
+    window.addEventListener('paste', alPegarEnLaPagina)
+    return () => window.removeEventListener('paste', alPegarEnLaPagina)
+  }, [activeConv, vista])
+
+  // ── Arrastrar y soltar una foto sobre el chat ──────────────────────
+  const traeArchivos = (e) => Array.from(e.dataTransfer?.types || []).includes('Files')
+
+  const alArrastrarEncima = (e) => {
+    if (!traeArchivos(e)) return
+    e.preventDefault()
+    setSoltarAqui(true)
+  }
+  const alSalirArrastrando = (e) => {
+    // `dragleave` también salta al pasar de un hijo a otro dentro del chat: si
+    // se apagara siempre, la capa parpadearía todo el rato.
+    if (e.currentTarget.contains(e.relatedTarget)) return
+    setSoltarAqui(false)
+  }
+  const alSoltar = (e) => {
+    if (!traeArchivos(e)) return
+    e.preventDefault()
+    setSoltarAqui(false)
+    agregarAdjuntos(e.dataTransfer?.files)
+  }
+
+  // Red de seguridad del navegador: si una foto se suelta FUERA del chat, por
+  // defecto Chrome navega a ese archivo y se pierde el inbox entero (chat
+  // abierto, borrador, tanda a medio armar). Esto se lo traga.
+  useEffect(() => {
+    const tragar = (e) => { if (traeArchivos(e)) e.preventDefault() }
+    window.addEventListener('dragover', tragar)
+    window.addEventListener('drop', tragar)
+    return () => {
+      window.removeEventListener('dragover', tragar)
+      window.removeEventListener('drop', tragar)
+    }
+  }, [])
 
   const handleSendImage = async () => {
     if (!imgFiles.length || !activeConv) return
@@ -1129,7 +1252,7 @@ export default function App() {
 
   const cancelImage = () => {
     imgFiles.forEach(f => { if (isVideo) URL.revokeObjectURL(f.preview) })
-    setImgFiles([]); setImgResult(null); setIsVideo(false); setImgProgress(0)
+    setImgFiles([]); setImgResult(null); setIsVideo(false); setImgProgress(0); avisarAdjunto('')
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -1604,7 +1727,22 @@ export default function App() {
 
           {/* ══════ CHAT ══════ */}
           {activeConv ? (
-            <div className="chat-col">
+            /* Todo el chat es zona de soltar, no solo la caja de escribir: la mano
+               suelta la foto donde está mirando, que es la conversación. El
+               `position:relative` es para la capa de "suelta acá" de abajo. */
+            <div className="chat-col" style={{ position:'relative' }}
+              onDragOver={alArrastrarEncima} onDragLeave={alSalirArrastrando} onDrop={alSoltar}>
+              {soltarAqui && (
+                <div style={{
+                  position:'absolute', inset:0, zIndex:50, pointerEvents:'none',
+                  background:'rgba(10,10,10,.88)', border:`2px dashed ${C.cream}`, borderRadius:12,
+                  display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10,
+                }}>
+                  <div style={{ fontSize:44 }}>📥</div>
+                  <div style={{ color:C.cream, fontWeight:800, fontSize:15 }}>Suelta la foto acá</div>
+                  <div style={{ color:C.creamDim, fontSize:11 }}>imágenes o un video · también funciona Ctrl+V</div>
+                </div>
+              )}
               {/* Header chat */}
               <div className="chat-header" style={{ padding:'8px 10px', background:C.surface, borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', flexWrap:'wrap', flexShrink:0, gap:6 }}>
                 <div className="chat-header-left" style={{ display:'flex', alignItems:'center', gap:7, minWidth:0, flex:'0 0 auto' }}>
@@ -1709,6 +1847,16 @@ export default function App() {
                     <button onClick={() => setShowTplModal(true)} style={{ background:C.cream, border:'none', color:C.bg, fontWeight:800, fontSize:11, padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>📋 Enviar plantilla</button>
                   </div>
                 )}
+                {/* Aviso de los adjuntos: lo que se pegó no servía, o ya no cabe
+                    más. Va acá arriba, pegado a la caja, porque es la respuesta a
+                    un Ctrl+V que si no se queda mudo. */}
+                {avisoAdjunto && (
+                  <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.25)', borderRadius:8, fontSize:11, color:'#fbbf24', display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ flex:1 }}>{avisoAdjunto}</span>
+                    <button onClick={() => avisarAdjunto('')} title="Cerrar"
+                      style={{ background:'transparent', border:'none', color:'#a16207', fontSize:13, cursor:'pointer', lineHeight:1, flexShrink:0 }}>✕</button>
+                  </div>
+                )}
                 {imgFiles.length > 0 && (
                   <div style={{ marginBottom:8, padding:'8px 12px', background:C.surface2, border:`1px solid ${C.border}`, borderRadius:12 }}>
                     {/* Grid de previews */}
@@ -1800,6 +1948,7 @@ export default function App() {
                       </div>
                     )}
                     <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
+                      onPaste={handlePaste}
                       placeholder={getModoIA(activeConv?.telefono) ? '🤖 IA respondiendo automáticamente...' : 'Escribe un mensaje... (Ctrl+Enter para enviar)'}
                       rows={2}
                       style={{ width:'100%', background:'transparent', border:'none', outline:'none', color:C.cream, fontSize:14, resize:'none', lineHeight:1.5, minHeight:44, maxHeight:120, overflowY:'auto' }} />
@@ -1835,7 +1984,7 @@ export default function App() {
                     queda al costado derecho de la caja, que es donde la mano lo
                     busca. Igual que en WA INBOX V2. */}
                 <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:8, flexWrap:'wrap' }}>
-                  <button onClick={() => fileRef.current?.click()} title="Adjuntar imagen o video"
+                  <button onClick={() => fileRef.current?.click()} title="Adjuntar imagen o video — también puedes pegar con Ctrl+V o arrastrar la foto al chat"
                     style={{ width:42, height:42, flexShrink:0, background:imgFiles.length?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${imgFiles.length?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center', color:imgFiles.length?C.cream:C.creamDim, transition:'all .15s', position:'relative' }}>
                     📎
                     {imgFiles.length > 0 && <span style={{ position:'absolute', top:-4, right:-4, width:16, height:16, borderRadius:'50%', background:C.cream, color:C.bg, fontSize:8, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>{imgFiles.length}</span>}
