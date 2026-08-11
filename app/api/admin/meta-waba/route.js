@@ -116,12 +116,25 @@ export async function GET(req) {
     ? numero.cuerpo
     : { ok: false, status: numero.status, error: numero.cuerpo?.error }
 
-  if (accion !== 'suscribir') {
+  if (accion !== 'suscribir' && accion !== 'resuscribir') {
     salida.nota = 'Diagnóstico, no se cambió nada. Para suscribir: agrega ?accion=suscribir'
     return Response.json(salida, { status: 200 })
   }
 
   // 4. La acción. Suscribe LA APP DUEÑA DEL TOKEN a esta WABA.
+  //
+  // Con ?accion=resuscribir se QUITA la suscripción y se vuelve a poner. Volver a
+  // suscribir a secas no hace nada cuando la app ya figura en la lista —que es el
+  // caso—; el reinicio de verdad es soltarla y engancharla otra vez.
+  //
+  // No arriesga nada: por esta WABA ya no entra un solo evento, así que quitarla
+  // no puede empeorarlo, y el otro número de IND vive en OTRA WABA
+  // (1043571971409840), así que lo que funciona ni se toca.
+  if (accion === 'resuscribir') {
+    const del = await graph(`/${canal.wabaId}/subscribed_apps`, 'DELETE')
+    salida.desuscripcion = { ok: del.ok, status: del.status, respuesta: del.cuerpo }
+  }
+
   const post = await graph(`/${canal.wabaId}/subscribed_apps`, 'POST')
   salida.suscripcion = { ok: post.ok, status: post.status, respuesta: post.cuerpo }
 
