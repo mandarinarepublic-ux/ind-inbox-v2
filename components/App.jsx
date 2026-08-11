@@ -699,6 +699,18 @@ export default function App() {
    * directo, igual que un clic común en la lista.
    */
   const irAResultadoBusqueda = (telefono) => {
+    // ⚠️ Si esta conversación YA está en la lista de la pestaña donde estás, es
+    // de este número: ábrela acá y no saltes a ningún lado.
+    //
+    // Sin esta línea, el 10-ago pulsar un chat en la pestaña del 9804 te
+    // teletransportaba a la del 3326. El motivo: la ficha del contacto guarda el
+    // número de su ÚLTIMO mensaje, que para quien escribió a los dos puede ser
+    // el otro. Se saltaba aunque la conversación estuviera ahí mismo, delante.
+    //
+    // El salto es SOLO para los resultados que el buscador trae de otro canal:
+    // esos no están en `convs` porque `convs` es de la pestaña activa.
+    if (convs.some((c) => c.telefono === telefono)) { openConv(telefono); return }
+
     const canalDelContacto = canalDePhoneId(contacts[telefono]?.phoneId)
     if (canalDelContacto && canalDelContacto !== canal) {
       if (!cambiarCanal(canalDelContacto)) return  // el guard del pedido canceló el salto
