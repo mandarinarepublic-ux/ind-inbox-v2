@@ -30,12 +30,21 @@ export async function GET(req) {
       contarPendientesPorCanalSupabase().catch(() => ({})),
     ])
     return NextResponse.json({ lista, rows, contactos, pendientes }, {
-      // Cache COMPARTIDO en el edge, corto (5s) para no agregar latencia visible al
-      // vendedor: varias pestañas que pollean dentro de la misma ventana comparten
-      // UNA ejecución de origen. stale-while-revalidate sirve al instante y revalida.
-      // El caché del edge se indexa por URL, y `canal` va en la query: cada
-      // bandeja tiene su propia entrada y no se pisan entre sí.
-      headers: { 'Cache-Control': 's-maxage=5, stale-while-revalidate=20' },
+      // Cache COMPARTIDO en el edge: varias pestañas que pollean dentro de la misma
+      // ventana comparten UNA ejecución de origen. El caché se indexa por URL, y
+      // `canal` va en la query, así que cada bandeja tiene su entrada y no se pisan.
+      //
+      // ⚠️ 2 y 4, NO 5 y 20. Con los valores viejos una respuesta podía servirse
+      // con hasta **25 segundos** de antigüedad, y eso produce fantasmas: marcas un
+      // chat como atendido, el sondeo trae el valor viejo y el chat REAPARECE en
+      // Pendientes. La protección local que tapa eso dura 35 s, así que 25 le
+      // dejaba casi nada de margen — y no cubre otra pestaña ni el celular, porque
+      // vive en memoria, mientras que este caché es compartido por todos.
+      //
+      // Estos son los mismos valores que wa-inbox-next ya usa en producción, donde
+      // se bajaron el 2-ago por lo mismo: con 5 y 20 un mensaje entrante tardaba
+      // ~35-45 s en aparecer. Ese arreglo nunca se había portado acá.
+      headers: { 'Cache-Control': 's-maxage=2, stale-while-revalidate=4' },
     })
   } catch (err) {
     console.error('[/api/inbox-sync]', err)
