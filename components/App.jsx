@@ -203,6 +203,7 @@ export default function App() {
   const autoScroll = useRef(true)
   const prevMsgLen = useRef(0)
   const avisoRef   = useRef(null)  // temporizador del aviso de adjuntos
+  const taRef      = useRef(null)  // caja de texto del compositor (para enfocarla al citar)
   // Mensaje que se está citando al responder (null = ninguno).
   const [citando, setCitando] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -1256,6 +1257,29 @@ export default function App() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  /**
+   * "↩ Responder" sobre una burbuja: además de fijar la cita, deja el cursor
+   * DENTRO de la caja. Antes había que dar un clic extra en la caja para poder
+   * escribir, y ese clic se olvida (tocas Responder, escribes, y no se escribió
+   * nada).
+   *
+   * El foco va después de pintar y no en la misma línea: al citar aparece la
+   * barra de la cita ARRIBA del textarea, que lo mueve; enfocarlo antes de que
+   * el navegador lo recoloque deja la vista saltando.
+   */
+  const responderA = (msg) => {
+    setCitando(msg)
+    requestAnimationFrame(() => {
+      const ta = taRef.current
+      if (!ta) return
+      ta.focus()
+      // El cursor al FINAL de lo que ya estuviera escrito, no al principio:
+      // citar a media frase no debe partir el borrador en dos.
+      const fin = ta.value.length
+      ta.setSelectionRange(fin, fin)
+    })
+  }
+
   // Burbuja optimista + envío de texto. Se usa DENTRO de una tarea ya encolada
   // (NO encola por su cuenta): si acá se llamara a handleSend, que sí encola, la
   // tarea quedaría esperándose a sí misma y no saldría nada.
@@ -1822,7 +1846,7 @@ export default function App() {
                           <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:11, color:C.creamFaint }}>{fmtDate(msg.timestamp)}</span>
                         </div>
                       )}
-                      <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={setCitando} />
+                      <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={responderA} />
                     </div>
                   )
                 })}
@@ -1947,7 +1971,7 @@ export default function App() {
                           style={{ background:'transparent', border:'none', color:C.creamFaint, fontSize:15, cursor:'pointer', lineHeight:1, flexShrink:0 }}>✕</button>
                       </div>
                     )}
-                    <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
+                    <textarea ref={taRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
                       onPaste={handlePaste}
                       placeholder={getModoIA(activeConv?.telefono) ? '🤖 IA respondiendo automáticamente...' : 'Escribe un mensaje... (Ctrl+Enter para enviar)'}
                       rows={2}
