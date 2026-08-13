@@ -191,12 +191,21 @@ test('el webhook manda el aviso SIN condicion (reja estructural)', () => {
   // definición también contiene el texto "avisarSiCorresponde(m)" (en
   // "async function avisarSiCorresponde(m) {"), así que buscar en el archivo
   // completo encontraría esa línea primero y nunca llegaría a la llamada real.
+  //
+  // ⚠️ 13-ago-2026: la llamada pasó de `await avisarSiCorresponde(m)` (síncrono,
+  // bloqueaba el 200 a Meta) a `waitUntil(avisarSiCorresponde(m)...)` (background,
+  // igual que `saludarSiCorresponde` dos líneas más abajo) — ver el comentario en
+  // app/api/webhook/route.js. Envolver en `waitUntil` es legítimo y por eso la
+  // reja lo acepta; lo que sigue sin poder aparecer es un `if` ANTES de la
+  // llamada disfrazando una guarda de envío. Si la línea empezara con `if (` en
+  // vez de `waitUntil(`, esta aserción tiene que romperse — se verificó a mano
+  // metiendo un `if (debeSonar(...))` de prueba antes de la llamada.
   const restoTrasLaFuncion = src.slice(hasta)
   const lineaLlamada = restoTrasLaFuncion.split('\n').find((l) => l.includes('avisarSiCorresponde(m)'))
   assert.ok(lineaLlamada, 'no encontre la llamada a avisarSiCorresponde')
   assert.match(
     lineaLlamada.trim(),
-    /^await avisarSiCorresponde\(m\)/,
-    `la llamada tiene que ser incondicional, y salio: ${lineaLlamada.trim()}`,
+    /^waitUntil\(avisarSiCorresponde\(m\)/,
+    `la llamada tiene que ser incondicional (en background), y salio: ${lineaLlamada.trim()}`,
   )
 })

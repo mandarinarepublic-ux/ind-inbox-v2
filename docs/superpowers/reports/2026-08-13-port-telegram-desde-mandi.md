@@ -2,8 +2,8 @@
 
 Fecha: 2026-08-13
 Origen: `C:\Users\RodrigoWork\Desktop\wa-inbox-next` (solo lectura, no se tocó)
-Destino: `C:\Users\RodrigoWork\Desktop\ind-inbox-next` (rama `main`, sin commit — ver
-"Estado del repo" al final)
+Destino: `C:\Users\RodrigoWork\Desktop\ind-inbox-next` (rama `main`, commit `b9c5edf`
++ cierre de revisión abajo)
 
 ## Qué se portó
 
@@ -226,13 +226,10 @@ Modificados:
 - [x] Comentarios explican el *porqué*, con la densidad de los dos repos
       (números medidos, casos reales, qué se rompe si alguien saca algo).
 
-## Estado del repo — no se hizo commit
+## Estado del repo
 
-Se dejó todo en el árbol de trabajo (`git status --short` muestra 5
-modificados + 6 nuevos, ningún commit creado) porque el encargo no pidió
-commitear explícitamente y la instrucción general es no dar por hecho ese
-paso. Si se quiere, el siguiente paso natural es un solo commit con estos 11
-archivos (nombrados explícitamente, sin `git add -A`).
+Commit `b9c5edf` en `main` con los 11 archivos del port (sin push). El cierre
+de revisión de abajo va en un segundo commit, también sin push.
 
 ## Preocupaciones / cosas a revisar
 
@@ -259,3 +256,121 @@ archivos (nombrados explícitamente, sin `git add -A`).
    estática (lectura de código + `node --check` + suite de tests) y por
    coherencia de tipos/firmas con el resto de `lib/contactos.js` /
    `lib/inbox-supabase.js`.
+
+## Cierre de revisión (13-ago-2026, segunda pasada)
+
+La revisión de "Ready to deploy" pidió un Important y dos minors sobre el
+estado de IND en general (no todos nacieron de este port). Se resolvieron los
+tres antes de desplegar.
+
+### 1 (Important) — el aviso push bloqueaba el 200 a Meta
+
+`app/api/webhook/route.js:320` hacía `await avisarSiCorresponde(m)` en el
+camino SÍNCRONO del webhook. Con el push reescrito a "avisa siempre" (puerto
+anterior, `docs/superpowers/reports/2026-08-13-port-push-desde-mandi.md`), ese
+costo —una consulta a `push_subs` + un POST HTTPS por aparato suscrito— pasó de
+pagarse una vez cada 5 min (enfriamiento viejo) a pagarse en CADA mensaje de
+CADA ráfaga, todo antes de que Meta reciba su 200. IND ya está medido como el
+lado LENTO para recibir de los dos inbox justamente por tener el webhook
+síncrono: frenar más el 200 es empeorar a propósito un problema ya conocido
+(las respuestas lentas son lo que dispara reentregas de Meta).
+
+Arreglo: se envolvió la llamada en `waitUntil`, igual que ya hacía
+`saludarSiCorresponde` dos líneas más abajo en el mismo archivo:
+
+```js
+// antes
+await avisarSiCorresponde(m)
+  .catch(e => console.error('[/api/webhook] aviso push:', e.message))
+
+// despues
+waitUntil(avisarSiCorresponde(m).catch(e => console.error('[/api/webhook] aviso push:', e.message)))
+```
+
+La reja estructural de `tests/push.test.js` afirma la FORMA exacta de la
+llamada (no solo que exista): su última aserción esperaba
+`/^await avisarSiCorresponde\(m\)/`. Se actualizó a
+`/^waitUntil\(avisarSiCorresponde\(m\)/` — acepta el envoltorio en background,
+sigue rechazando cualquier `if` puesto ANTES de la llamada.
+
+**Evidencia RED → GREEN de la reja actualizada** (no del código de producción,
+que ya estaba en GREEN — la reja es lo que se puso a prueba):
+
+```
+$ node --test tests/push.test.js        # con waitUntil, sin guarda
+✔ el webhook manda el aviso SIN condicion (reja estructural)
+ℹ tests 20 / pass 20 / fail 0
+```
+
+Se metió a mano un `if` de prueba delante de la llamada (
+`if (debeSonar(m)) waitUntil(avisarSiCorresponde(m)...)`), se corrió de nuevo:
+
+```
+$ node --test tests/push.test.js        # con guarda de prueba, RED esperado
+✖ el webhook manda el aviso SIN condicion (reja estructural)
+  AssertionError: la llamada tiene que ser incondicional (en background), y salio:
+  if (debeSonar(m)) waitUntil(avisarSiCorresponde(m).catch(...))
+  expected: /^waitUntil\(avisarSiCorresponde\(m\)/
+```
+
+Se quitó el `if` de prueba y se confirmó GREEN otra vez (20/20). La reja sigue
+cazando la guarda condicional después del cambio.
+
+### 2 (Minor) — el comentario del middleware contradecía el modo real
+
+`middleware.js:22-25` decía `☠️ ESTE INBOX SALE EN 'observar' Y NO PUEDE
+BLOQUEAR A NADIE TODAVÍA`. Verificado contra
+`docs/HANDOFF-2026-08-08-fase5-ind.md:16` (no copiada la fecha de la
+instrucción del coordinador, leída del handoff): `AUTH_MODO=bloquear` está en
+producción desde el **8-ago-2026** (Fase 5), con API sin cookie → 401 y
+páginas → login del CRM, verificado en vivo ese día por Rodrigo y Xavier
+(cero mensajes fallidos, cero 401 de usuario real). El comentario se
+reescribió para reflejar ese estado real y fechar el cambio, en vez de seguir
+describiendo un modo que ya no rige.
+
+### 3 (Minor) — off-by-one en el inventario de rutas
+
+`tests/rutas-publicas.test.js` declaraba 29 rutas; conteo propio (no el 30 que
+pasó el coordinador, verificado con `find app/api -name route.js | wc -l` +
+listado uno por uno) dio efectivamente **30**. Faltaba `/api/admin/meta-waba`
+en `PROTEGIDAS` — sin exposición real (el matcher de `middleware.js` ya la
+cubre por defecto), pero el archivo cuyo único trabajo es ser un inventario
+confiable tenía un hueco. Se agregó a `PROTEGIDAS` (ahora 27, antes 26) y se
+corrigió el total declarado a 30 (3 públicas + 27 protegidas). Sumó un test
+nuevo (`PROTEGIDA: /api/admin/meta-waba`).
+
+### Lo que no se tocó (por instrucción explícita)
+
+- El `matchMedia` con desajuste de hidratación heredado de MANDI: se deja vivo
+  en los dos repos a propósito, para no desincronizarlos.
+- `app/api/cron/seguimientos/route.js`: sigue con la autorización permisiva
+  (acepta `x-vercel-cron` siempre que esté presente). Decisión aparte del
+  dueño, no de este port.
+- El comentario de `avisoDeEntrante` en `lib/push.js` que dice que el `tag`
+  "replica la lógica de `tail9` del webhook": es impreciso (el `tail9` de IND
+  es más simple, sin quitar el prefijo `593`), pero **no lo escribí en este
+  port** — vino del port anterior del push
+  (`docs/superpowers/reports/2026-08-13-port-push-desde-mandi.md`, que ya lo
+  señala en su propia sección de preocupaciones, línea ~145). Se deja tal
+  cual, como pidió el coordinador para comentarios que no son de este trabajo.
+
+### Pruebas tras el cierre
+
+```
+$ npm test
+ℹ tests 216
+ℹ pass 216
+ℹ fail 0
+```
+
+216 = 215 del port original + 1 (`PROTEGIDA: /api/admin/meta-waba`, nueva por
+el punto 3). Ningún test preexistente cambió de resultado; el único test que
+pasó por RED en este cierre fue la reja de `push.test.js`, y fue a propósito
+(sabotaje manual, revertido).
+
+### Archivos tocados en este cierre
+
+- `C:\Users\RodrigoWork\Desktop\ind-inbox-next\app\api\webhook\route.js`
+- `C:\Users\RodrigoWork\Desktop\ind-inbox-next\middleware.js`
+- `C:\Users\RodrigoWork\Desktop\ind-inbox-next\tests\push.test.js`
+- `C:\Users\RodrigoWork\Desktop\ind-inbox-next\tests\rutas-publicas.test.js`

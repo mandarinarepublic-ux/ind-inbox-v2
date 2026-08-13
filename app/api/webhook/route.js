@@ -317,8 +317,20 @@ export async function POST(req) {
 
         // Aviso al equipo. Va DESPUÉS de registrarContactoEntrante para que la
         // conversación exista y se le pueda escribir ultimo_push_at.
-        await avisarSiCorresponde(m)
-          .catch(e => console.error('[/api/webhook] aviso push:', e.message))
+        //
+        // En background (13-ago-2026): esto era `await` en el camino SÍNCRONO del
+        // webhook — bloqueaba el 200 a Meta. Con el enfriamiento reescrito a
+        // "el aviso se manda siempre" (lib/push.js, ver su propio historial), el
+        // costo -una consulta a push_subs + un POST HTTPS por aparato suscrito- se
+        // paga en CADA mensaje de CADA ráfaga, no una vez cada 5 min como antes.
+        // IND ya está medido (auditoría IND vs MANDI, 11-ago-2026) como el lado
+        // LENTO para recibir de los dos inbox justamente por tener el webhook
+        // síncrono; frenar más el 200 a Meta es empeorar a propósito un problema
+        // ya documentado, porque una respuesta lenta es lo que dispara reentregas.
+        // MANDI no tiene este problema porque allá TODO corre dentro de
+        // `waitUntil`; acá se hace lo mismo que ya hace `saludarSiCorresponde`
+        // dos líneas más abajo.
+        waitUntil(avisarSiCorresponde(m).catch(e => console.error('[/api/webhook] aviso push:', e.message)))
 
         // Saludo automático (bienvenida a nuevo / "hola de vuelta" al reactivarse).
         // En background: no frena el 200 a Meta. Solo dispara si el bot NO va a responder.

@@ -19,10 +19,14 @@ import { puedeEntrar } from '@/lib/acceso'
 //   bloquear → rechaza de verdad
 //   apagado  → ni siquiera mira; es el interruptor de pánico
 //
-// ☠️ ESTE INBOX SALE EN `observar` Y NO PUEDE BLOQUEAR A NADIE TODAVÍA. IND tiene
-// ~1.900 salientes cada 3 días hechos por PERSONAS; encender el bloqueo sin
-// avisar deja a quien atiende con 401 en medio de un chat. Rodrigo pidió por
-// escrito que se le avise ANTES, para cerrar sesión y volver a entrar.
+// ✅ Bloqueando desde el 8-ago-2026 (Fase 5, ver
+// docs/HANDOFF-2026-08-08-fase5-ind.md): `AUTH_MODO=bloquear` en producción.
+// API sin cookie → 401; páginas sin cookie → 307 al login del CRM. Verificado
+// en vivo ese día por Rodrigo y Xavier: entra y sale OK, cero mensajes
+// fallidos, y ningún 401 de un usuario real en los registros (solo sondas).
+// Si algún día hay que volver a `observar` (por ejemplo para dar de alta
+// gente nueva sin que la sorprenda un 401), que sea decisión explícita, no el
+// default de "sin la variable".
 //
 // ⚠️ MEDIDO el 7-ago-2026 en MANDI, y NO es lo que decía el plan: cambiar
 // AUTH_MODO en Vercel **no surte efecto solo**. Next incrusta process.env en el

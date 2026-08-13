@@ -3,10 +3,16 @@
 // 8-ago-2026 convertido en red de seguridad, más `/api/cron/pendientes` sumada el
 // 13-ago-2026 al portar el recordatorio de Telegram desde MANDI.
 //
-// Van las 29 rutas REALES del repo (`find app/api -name route.js`), una por una,
+// Van las 30 rutas REALES del repo (`find app/api -name route.js`), una por una,
 // más las páginas. Si alguien agrega una ruta y no la pone acá, la prueba no
 // falla — por eso al final se comprueba también que la lista de públicas sea
 // EXACTAMENTE de tres, que es la parte que sí puede hacer daño.
+//
+// ⚠️ `/api/admin/meta-waba` faltaba en este inventario (hueco anterior al
+// 13-ago-2026, no introducido por el port de Telegram): no exponía nada —el
+// matcher de middleware.js la cubre igual, candado puesto por defecto— pero sí
+// dejaba a esta prueba contando 29 cuando el repo ya tenía 30. Sumada a
+// PROTEGIDAS acá abajo.
 import test from 'node:test'
 import assert from 'node:assert'
 import { esRutaPublica, RUTAS_PUBLICAS } from '../lib/rutas-publicas.js'
@@ -19,12 +25,12 @@ const PUBLICAS = [
   '/api/cron/pendientes',    // cron de Vercel, cada 5 min — recordatorio Telegram
 ]
 
-// Las otras 26 rutas del repo: todas son del navegador y van protegidas.
+// Las otras 27 rutas del repo: todas son del navegador y van protegidas.
 const PROTEGIDAS = [
-  '/api/automatizaciones', '/api/buscar', '/api/capi/diag', '/api/cliente-pedidos',
-  '/api/contactos', '/api/contactos/estado', '/api/conversacion', '/api/dashboard',
-  '/api/directorio', '/api/hilo', '/api/inbox-sync', '/api/lista', '/api/media',
-  '/api/media/precache', '/api/mensaje', '/api/mensajes', '/api/notas',
+  '/api/admin/meta-waba', '/api/automatizaciones', '/api/buscar', '/api/capi/diag',
+  '/api/cliente-pedidos', '/api/contactos', '/api/contactos/estado', '/api/conversacion',
+  '/api/dashboard', '/api/directorio', '/api/hilo', '/api/inbox-sync', '/api/lista',
+  '/api/media', '/api/media/precache', '/api/mensaje', '/api/mensajes', '/api/notas',
   '/api/plantillas', '/api/push/subscribe', '/api/push/test', '/api/respuestas',
   '/api/saliente', '/api/tienda', '/api/upload-foto', '/api/upload-media',
   '/api/upload-url',
@@ -32,10 +38,10 @@ const PROTEGIDAS = [
   '/', '/inbox', '/dashboard',
 ]
 
-test('las 29 rutas del repo están cubiertas por esta prueba', () => {
-  // 3 públicas + 26 protegidas = las 29 que devuelve `find app/api -name route.js`.
+test('las 30 rutas del repo están cubiertas por esta prueba', () => {
+  // 3 públicas + 27 protegidas = las 30 que devuelve `find app/api -name route.js`.
   // Si mañana alguien agrega una ruta nueva y no la suma acá, este número canta.
-  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 29)
+  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 30)
 })
 
 for (const ruta of PUBLICAS) {
