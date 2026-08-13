@@ -4,8 +4,8 @@ self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
 
 // ── Avisos de mensajes nuevos ────────────────────────────────────────────────
-// Si el inbox está al FRENTE no molestamos: igual avisamos a la pestaña para que
-// refresque su contador.
+// Si el inbox está al FRENTE no molestamos (lo pidió el usuario): igual avisamos a
+// la pestaña para que refresque su contador.
 //
 // Ojo: el navegador espera que todo push recibido muestre algo. Suprimir consume un
 // presupuesto; si se agota, Chrome muestra un genérico "Este sitio se actualizó en
@@ -34,8 +34,8 @@ self.addEventListener('push', (event) => {
 
     await self.registration.showNotification(titulo, {
       body: cuerpo,
-      tag,                       // un aviso por chat: el nuevo reemplaza al anterior
-      renotify: true,            // pero vuelve a sonar
+      tag,                                  // un aviso por chat: el nuevo reemplaza al anterior
+      renotify: d.renotify !== false,       // …y suena, salvo que sea la misma ráfaga
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       data: { url, tel },

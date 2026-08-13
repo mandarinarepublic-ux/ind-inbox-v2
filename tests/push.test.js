@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert'
-import { recortar, cuerpoDeMensaje, debeNotificar, ENFRIAMIENTO_MS } from '../lib/push.js'
+import { readFileSync } from 'node:fs'
+import { recortar, cuerpoDeMensaje, debeSonar, VENTANA_SONIDO_MS, avisoDeEntrante } from '../lib/push.js'
 
 test('recortar deja los textos cortos intactos', () => {
   assert.equal(recortar('hola'), 'hola')
@@ -38,41 +39,164 @@ test('cuerpoDeMensaje nunca queda vacio', () => {
   assert.equal(cuerpoDeMensaje({ tipo: 'texto', contenido: '   ' }), 'Mensaje nuevo')
 })
 
-test('debeNotificar deja pasar la primera vez', () => {
-  assert.equal(debeNotificar(null, Date.now()), true)
+test('debeSonar suena la primera vez', () => {
+  assert.equal(debeSonar(null, Date.now()), true)
 })
 
-test('debeNotificar bloquea dentro del enfriamiento', () => {
-  const ahora = Date.parse('2026-07-26T12:00:00Z')
-  const hace1min = new Date(ahora - 60_000).toISOString()
-  assert.equal(debeNotificar(hace1min, ahora), false)
+test('debeSonar NO suena dentro de la ventana', () => {
+  const ahora = Date.now()
+  const hace10seg = new Date(ahora - 10 * 1000).toISOString()
+  assert.equal(debeSonar(hace10seg, ahora), false)
 })
 
-test('debeNotificar deja pasar despues del enfriamiento', () => {
-  const ahora = Date.parse('2026-07-26T12:00:00Z')
-  const hace6min = new Date(ahora - 6 * 60_000).toISOString()
-  assert.equal(debeNotificar(hace6min, ahora), true)
+test('debeSonar vuelve a sonar pasada la ventana', () => {
+  const ahora = Date.now()
+  const hace2min = new Date(ahora - 2 * 60 * 1000).toISOString()
+  assert.equal(debeSonar(hace2min, ahora), true)
 })
 
-test('debeNotificar ignora una fecha corrupta y deja pasar', () => {
-  assert.equal(debeNotificar('no-es-fecha', Date.now()), true)
+test('debeSonar ignora una fecha corrupta y suena', () => {
+  assert.equal(debeSonar('no-es-fecha', Date.now()), true)
 })
 
-test('el enfriamiento es de 5 minutos', () => {
-  assert.equal(ENFRIAMIENTO_MS, 5 * 60 * 1000)
+test('la ventana de sonido es de 60 segundos, no de 5 minutos', () => {
+  assert.equal(VENTANA_SONIDO_MS, 60 * 1000)
 })
 
-// Contestar borra ultimo_push_at (lo hace limpiarPush desde /api/saliente). Este
-// test fija la consecuencia: con el campo en null SIEMPRE se avisa, aunque el aviso
-// anterior haya sido hace segundos. Sin esto volvía el bug de "solo llega el primer
-// mensaje de cada persona aunque yo ya haya respondido".
-test('tras responder (campo limpiado) se avisa aunque hayan pasado segundos', () => {
-  const ahora = Date.parse('2026-07-26T12:00:00Z')
-  assert.equal(debeNotificar(null, ahora), true)
+// Contestar borra ultimo_push_at (lo hace limpiarPush desde /api/saliente).
+// Con el significado nuevo eso quiere decir: la próxima entrante suena sí o sí.
+test('tras contestar, el siguiente mensaje vuelve a sonar', () => {
+  assert.equal(debeSonar(null, Date.now()), true)
 })
 
-test('sin responder, una rafaga seguida sigue silenciada', () => {
-  const ahora = Date.parse('2026-07-26T12:00:00Z')
-  const hace10seg = new Date(ahora - 10_000).toISOString()
-  assert.equal(debeNotificar(hace10seg, ahora), false)
+const ENTRANTE = { telefono: '593999111222', nombre: 'Karilu', tipo: 'texto', contenido: 'hola' }
+
+// LA prueba de la garantía: dentro de la ventana el aviso EXISTE igual.
+// Si alguien vuelve a usar debeSonar como guarda de envio, esto se cae.
+test('avisoDeEntrante devuelve un aviso aunque NO toque sonar', () => {
+  const ahora = Date.now()
+  const hace10seg = new Date(ahora - 10 * 1000).toISOString()
+  const aviso = avisoDeEntrante(ENTRANTE, hace10seg, ahora)
+  assert.ok(aviso, 'SIEMPRE tiene que haber aviso')
+  assert.equal(aviso.renotify, false, 'pero callado')
+  assert.equal(aviso.tel, '593999111222')
+  assert.ok(aviso.cuerpo, 'con cuerpo, no vacio')
+})
+
+test('avisoDeEntrante suena cuando la ventana ya paso', () => {
+  const ahora = Date.now()
+  const hace2min = new Date(ahora - 2 * 60 * 1000).toISOString()
+  assert.equal(avisoDeEntrante(ENTRANTE, hace2min, ahora).renotify, true)
+})
+
+test('avisoDeEntrante suena la primera vez (sin aviso previo)', () => {
+  assert.equal(avisoDeEntrante(ENTRANTE, null, Date.now()).renotify, true)
+})
+
+// Lo unico que cambia entre sonar y no sonar es `renotify`. Si algun dia cambia
+// algo mas, es que la ventana empezo a decidir cosas que no le tocan.
+test('la ventana SOLO cambia renotify, nada mas del aviso', () => {
+  const ahora = Date.now()
+  const callado = avisoDeEntrante(ENTRANTE, new Date(ahora - 10 * 1000).toISOString(), ahora)
+  const sonoro  = avisoDeEntrante(ENTRANTE, null, ahora)
+  assert.deepEqual({ ...callado, renotify: null }, { ...sonoro, renotify: null })
+})
+
+test('avisoDeEntrante cae al telefono cuando no hay nombre', () => {
+  const sinNombre = { ...ENTRANTE, nombre: '' }
+  assert.ok(avisoDeEntrante(sinNombre, null, Date.now()).titulo.includes('593999111222'))
+})
+
+// ── Reja estructural del webhook ─────────────────────────────────────────────
+// `avisarSiCorresponde` es un closure: no se exporta y no hay forma de llamarlo
+// desde acá. Y es JUSTO ahí donde vive la garantía de este plan: el aviso se
+// manda SIEMPRE, y la ventana solo decide si suena.
+//
+// Sacarlo a lib/ seria mas elegante, pero obliga a operar la ruta por donde entra
+// cada mensaje de cada clienta. Asi que en vez de eso leemos el archivo y afirmamos
+// su FORMA. Es fragil ante un reformateo — y es a proposito: preferimos un test que
+// se queje de mas a que vuelva en silencio el bug de los 12 chats sin contestar.
+//
+// Lo que se exige, sin vueltas: el envío es INCONDICIONAL, punto. No importa la
+// forma que se use para condicionarlo — un `if` nuevo, un `if` que envuelva TODO
+// desde antes del `add`, un `&&` de corto-circuito, un ternario — cualquiera de
+// esas formas tiene que romper este test. No se trata de cazar la palabra
+// `return`: se trata de que `enviarPush` corra siempre que la función corra.
+//
+// ⚠️ A diferencia de MANDI, en IND `avisarSiCorresponde` NO vive dentro de una
+// función `procesar` aparte: vive directo dentro de `POST`, anidada dentro de
+// `if (nuevos.length) { ... }`, así que su sangría real es de 6 espacios (no 2).
+// Por eso el cierre de función se ubica DINÁMICAMENTE, calculando la sangría de
+// la propia línea "async function avisarSiCorresponde" en vez de asumir un
+// número fijo de espacios — así la reja no depende de a qué profundidad quedó
+// anidada la función en cada repo.
+test('el webhook manda el aviso SIN condicion (reja estructural)', () => {
+  const ruta = new URL('../app/api/webhook/route.js', import.meta.url)
+  const src = readFileSync(ruta, 'utf8')
+
+  const desde = src.indexOf('async function avisarSiCorresponde')
+  assert.ok(desde > 0, 'no encontre avisarSiCorresponde — si la renombraste, actualiza esta reja')
+
+  // Sangria real de la linea de definicion (en IND son 6 espacios, no 2).
+  const inicioLinea = src.lastIndexOf('\n', desde) + 1
+  const sangria = src.slice(inicioLinea, desde)
+  assert.match(sangria, /^ *$/, 'la linea de "async function avisarSiCorresponde" no empieza solo con espacios')
+
+  // El cuerpo termina en el primer cierre de funcion a la MISMA sangria que la definicion.
+  const cierre = '\n' + sangria + '}'
+  const hasta = src.indexOf(cierre, desde)
+  assert.ok(hasta > desde, 'no pude delimitar el cuerpo de avisarSiCorresponde')
+  const cuerpo = src.slice(desde, hasta)
+
+  assert.ok(cuerpo.includes('enviarPush('), 'el webhook tiene que mandar el aviso')
+
+  // UN solo return: el de `avisados`, que evita dos avisos del mismo lote. Cualquier
+  // otro return es una guarda de envio y eso es exactamente lo que arreglamos.
+  const returns = cuerpo.match(/\breturn\b/g) || []
+  assert.equal(returns.length, 1, `avisarSiCorresponde tiene ${returns.length} returns; solo puede tener el de avisados`)
+  assert.ok(cuerpo.includes('if (avisados.has('), 'el unico return permitido es el de avisados')
+
+  // Y entre el add y el envio no puede aparecer ningun `if`.
+  const desdeAdd = cuerpo.indexOf('avisados.add(')
+  const desdeEnvio = cuerpo.indexOf('enviarPush(')
+  assert.ok(desdeAdd > 0 && desdeEnvio > desdeAdd, 'el orden esperado es: add, despues enviar')
+  assert.ok(
+    !cuerpo.slice(desdeAdd, desdeEnvio).includes('if '),
+    'apareció un `if` entre avisados.add y enviarPush: eso es una guarda de envio',
+  )
+
+  // UN solo `if` en TODA la funcion: el de `avisados`. Esto tapa la variante que
+  // las dos aserciones de arriba no ven — envolver la función ENTERA (add incluido)
+  // en un `if (debeSonar(...))` puesto ANTES del `add`: ahí sigue habiendo un solo
+  // `return`, sigue estando `if (avisados.has(`, y no hay ningún `if` ENTRE el add
+  // y el envío porque los dos quedaron adentro del mismo bloque condicional.
+  const ifs = cuerpo.match(/\bif\s*\(/g) || []
+  assert.equal(ifs.length, 1, `avisarSiCorresponde tiene ${ifs.length} ifs; solo puede tener el de avisados`)
+
+  // Y el envío va SOLO en su línea: nada de `&&` de corto-circuito ni ternario
+  // delante de `enviarPush(` disfrazando una condición sin `if` ni `return`.
+  const lineaEnvio = cuerpo.split('\n').find((l) => l.includes('enviarPush('))
+  assert.match(
+    lineaEnvio.trim(),
+    /^await enviarPush\(/,
+    `el envio tiene que ser incondicional, y salio: ${lineaEnvio.trim()}`,
+  )
+
+  // La reja de arriba mira DENTRO de la función. Pero la garantía también se puede
+  // romper desde AFUERA: basta condicionar la LLAMADA. Se lee como una optimización
+  // sensata —"para qué llamarla si no va a hacer nada"— y por eso hay que vigilarla
+  // igual que el cuerpo.
+  //
+  // Se busca DESPUÉS de `hasta` (el cierre de la propia función) a propósito: la
+  // definición también contiene el texto "avisarSiCorresponde(m)" (en
+  // "async function avisarSiCorresponde(m) {"), así que buscar en el archivo
+  // completo encontraría esa línea primero y nunca llegaría a la llamada real.
+  const restoTrasLaFuncion = src.slice(hasta)
+  const lineaLlamada = restoTrasLaFuncion.split('\n').find((l) => l.includes('avisarSiCorresponde(m)'))
+  assert.ok(lineaLlamada, 'no encontre la llamada a avisarSiCorresponde')
+  assert.match(
+    lineaLlamada.trim(),
+    /^await avisarSiCorresponde\(m\)/,
+    `la llamada tiene que ser incondicional, y salio: ${lineaLlamada.trim()}`,
+  )
 })

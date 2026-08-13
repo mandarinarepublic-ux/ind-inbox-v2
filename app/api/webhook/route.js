@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { registrarContactoEntrante, getModoIA, getContactos, marcarPush } from '@/lib/contactos'
-import { enviarPush, cuerpoDeMensaje, debeNotificar } from '@/lib/push'
+import { enviarPush, avisoDeEntrante } from '@/lib/push'
 import { usaSupabaseLectura } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase, asegurarConversacionSalienteSupabase } from '@/lib/inbox-supabase'
 import { archivarMedia } from '@/lib/media-archive'
@@ -235,21 +235,21 @@ export async function POST(req) {
       // acabamos de mandar hace dos mensajes.
       const avisados = new Set()
 
-      // Nunca lanza: un fallo acá no puede tocar el webhook. Sin claves VAPID,
-      // enviarPush es un no-op silencioso.
+      // Se manda SIEMPRE. Lo único que se modera es el sonido, como WhatsApp: si ya
+      // avisamos de esta conversación hace menos de un minuto, el aviso se actualiza
+      // callado en vez de volver a sonar (ver debeSonar en lib/push.js). `avisados`
+      // sigue evitando dos avisos por el mismo lote de webhook.
+      //
+      // ⚠️ Antes había un `if (!debeNotificar(...)) return` acá mismo: esa guarda
+      // era el bug. Una conversación que ya había gastado su único aviso (porque el
+      // cliente escribió una vez y esperó) no volvía a avisar nunca más, aunque el
+      // chat siguiera sin contestar horas después. Nunca lanza: un fallo acá no
+      // puede tocar el webhook. Sin claves VAPID, enviarPush es un no-op silencioso.
       async function avisarSiCorresponde(m) {
         const t = tail9(m.telefono)
         if (avisados.has(t)) return
-        if (!debeNotificar(ultimoPushAtDe(m.telefono), Date.now())) return
         avisados.add(t)
-        const nombre = m.nombre || m.telefono
-        await enviarPush({
-          titulo: `💬 ${nombre}`,
-          cuerpo: cuerpoDeMensaje({ tipo: m.tipo, contenido: m.contenido }),
-          url:    `/inbox?tel=${encodeURIComponent(m.telefono)}`,
-          tag:    `chat-${t}`,
-          tel:    m.telefono,
-        })
+        await enviarPush(avisoDeEntrante(m, ultimoPushAtDe(m.telefono), Date.now()))
         await marcarPush(m.telefono)
       }
       async function saludarSiCorresponde(phone, name, canal) {
