@@ -1,20 +1,22 @@
 // La lista de rutas públicas es lo más delicado de todo el candado: una de menos
 // y dejas de recibir mensajes de Meta. Estas pruebas son el inventario MEDIDO del
-// 8-ago-2026 convertido en red de seguridad.
+// 8-ago-2026 convertido en red de seguridad, más `/api/cron/pendientes` sumada el
+// 13-ago-2026 al portar el recordatorio de Telegram desde MANDI.
 //
-// Van las 28 rutas REALES del repo (`find app/api -name route.js`), una por una,
+// Van las 29 rutas REALES del repo (`find app/api -name route.js`), una por una,
 // más las páginas. Si alguien agrega una ruta y no la pone acá, la prueba no
 // falla — por eso al final se comprueba también que la lista de públicas sea
-// EXACTAMENTE de dos, que es la parte que sí puede hacer daño.
+// EXACTAMENTE de tres, que es la parte que sí puede hacer daño.
 import test from 'node:test'
 import assert from 'node:assert'
 import { esRutaPublica, RUTAS_PUBLICAS } from '../lib/rutas-publicas.js'
 
-// Las 2 que NUNCA pueden pedir sesión. Cada una se defiende sola.
-// Son la MITAD que en MANDI: IND no tiene SOCIAL ni dLocal.
+// Las 3 que NUNCA pueden pedir sesión. Cada una se defiende sola.
+// Son MENOS que en MANDI: IND no tiene SOCIAL ni dLocal.
 const PUBLICAS = [
   '/api/webhook',            // Meta (WhatsApp) — 7.880 llamadas en 3 días
   '/api/cron/seguimientos',  // cron de Vercel — 3 llamadas en 3 días
+  '/api/cron/pendientes',    // cron de Vercel, cada 5 min — recordatorio Telegram
 ]
 
 // Las otras 26 rutas del repo: todas son del navegador y van protegidas.
@@ -30,10 +32,10 @@ const PROTEGIDAS = [
   '/', '/inbox', '/dashboard',
 ]
 
-test('las 28 rutas del repo están cubiertas por esta prueba', () => {
-  // 2 públicas + 26 protegidas = las 28 que devuelve `find app/api -name route.js`.
+test('las 29 rutas del repo están cubiertas por esta prueba', () => {
+  // 3 públicas + 26 protegidas = las 29 que devuelve `find app/api -name route.js`.
   // Si mañana alguien agrega una ruta nueva y no la suma acá, este número canta.
-  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 28)
+  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 29)
 })
 
 for (const ruta of PUBLICAS) {
@@ -48,10 +50,10 @@ for (const ruta of PROTEGIDAS) {
   })
 }
 
-test('las públicas son EXACTAMENTE dos', () => {
+test('las públicas son EXACTAMENTE tres', () => {
   // Cada entrada de más es una puerta al internet entero. Que agregar una rompa
   // una prueba es justamente lo que se busca.
-  assert.deepStrictEqual(RUTAS_PUBLICAS, ['/api/webhook', '/api/cron/seguimientos'])
+  assert.deepStrictEqual(RUTAS_PUBLICAS, ['/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes'])
 })
 
 test('no se coló nada de MANDI que en IND ni existe', () => {

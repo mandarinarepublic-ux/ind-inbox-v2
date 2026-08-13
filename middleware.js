@@ -105,8 +105,12 @@ export async function middleware(req) {
 // `apple-touch-icon` — es un archivo estático de `public/` que el navegador pide
 // solo, sin cookie, y no tiene por qué ensuciar el registro de observación ni
 // caer al login cuando se encienda el bloqueo.
+//
+// `api/cron/pendientes` (13-ago-2026, puerto desde MANDI): recordatorio de
+// pendientes por Telegram, la llama Vercel Cron sin sesión — misma razón que
+// `api/cron/seguimientos`.
 export const config = {
   matcher: [
-    '/((?!api/webhook|api/cron/seguimientos|_next/static|_next/image|favicon.ico|sw.js|icon-|apple-touch-icon|manifest.webmanifest).*)',
+    '/((?!api/webhook|api/cron/seguimientos|api/cron/pendientes|_next/static|_next/image|favicon.ico|sw.js|icon-|apple-touch-icon|manifest.webmanifest).*)',
   ],
 }
