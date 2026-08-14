@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getContactos, marcarSeguimiento } from '@/lib/contactos'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
+import { cabecerasMaquina } from '@/lib/auth-maquina'
 
 // Cron de SEGUIMIENTOS automáticos por temperatura del lead (Eje 2).
 // Lo llama Vercel Cron (ver vercel.json). Dispara según las horas de SILENCIO del cliente
@@ -75,9 +76,11 @@ export async function GET(req) {
 
     evaluados++
     try {
+      // Mismo motivo que en el webhook: sin la credencial de máquina, el candado
+      // devuelve 401 y este cron deja de mandar seguimientos SIN decir nada.
       const r = await fetch(`${origin}/api/saliente`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: cabecerasMaquina(),
         body: JSON.stringify({
           Telefono: c.telefono,
           Nombre: c.alias || c.nombre || '',

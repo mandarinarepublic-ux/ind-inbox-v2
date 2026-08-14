@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { registrarContactoEntrante, getModoIA, getContactos, marcarPush } from '@/lib/contactos'
 import { enviarPush, avisoDeEntrante } from '@/lib/push'
+import { enviarConMaquina } from '@/lib/auth-maquina'
 import { usaSupabaseLectura } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase, asegurarConversacionSalienteSupabase } from '@/lib/inbox-supabase'
 import { archivarMedia } from '@/lib/media-archive'
@@ -55,12 +56,20 @@ const RE_IMG = /https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s)]*)?/gi
 // escribió. Sin él /api/saliente cae al número principal, y como el cliente nunca
 // escribió a ese número la ventana de 24 h está cerrada → el envío FALLA y el
 // cliente no recibe nada. Paso el 28-jul: 57 de 69 saludos perdidos.
+// ☠️ Al encender el candado (`AUTH_MODO=bloquear`) esta llamada queda SIN
+// credencial: `/api/saliente` no es ruta pública, así que devuelve 401 y se
+// mueren EN SILENCIO todos los envíos automáticos — saludos, mensaje de espera
+// y LINKPAGO. En MANDI pasó exactamente eso el 7-ago-2026 y tardó 7 días en
+// verse: 4 LINKPAGO ese día, CERO los siguientes.
+//
+// Y fue invisible porque el `.catch` de antes solo miraba errores de RED. Un 401
+// NO es un error de red: `fetch` lo devuelve como respuesta normal con `ok:false`.
+// Por eso ahora se mira `res.ok` — sin eso, el próximo rechazo vuelve a callarse.
+//
+// La credencial y el "no te calles si te rechazan" viven en lib/auth-maquina.js,
+// que explica por qué existen. Acá solo se usa.
 async function enviarSaliente(origin, body) {
-  return fetch(`${origin}/api/saliente`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, auto: true }),
-  }).catch(e => console.error('[webhook IA] envío falló:', e.message))
+  return enviarConMaquina(`${origin}/api/saliente`, { ...body, auto: true }, 'saliente automático')
 }
 
 async function responderConIA(origin, phone, name, message, canal) {
