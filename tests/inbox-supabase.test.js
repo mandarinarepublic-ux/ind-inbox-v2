@@ -57,11 +57,44 @@ test('toMensaje deriva un system viejo sin necesitar raw', () => {
   assert.ok(pintable(m))
 })
 
-test('toMensaje NO inventa texto para un tipo comun con texto vacio de verdad (fantasma real)', () => {
+// Bug #4 (MANDI, repo hermano): esta fila era un fantasma REAL de verdad —
+// hasta que se confirmó que Meta manda textos vacíos de verdad y esconde a la
+// persona entera. Ya no se trata como fantasma: un texto vacío ahora se
+// etiqueta igual que cualquier otro tipo sin contenido (ver contenidoTipoEspecial).
+test('toMensaje YA NO esconde un texto que llego de verdad vacio (bug #4)', () => {
   const fila = { telefono: '593987654321', tipo: 'texto', texto: '', media_url: '', media_id: '', botones: '' }
   const m = toMensaje(fila)
+  assert.ok(m.mensaje.trim(), 'tiene que producir una etiqueta, no vacio')
+  assert.ok(pintable(m), 'un texto vacio de verdad NO puede seguir escondiendo a la persona')
+})
+
+// El fantasma REAL que sigue existiendo: un tipo con media propio que llegó
+// SIN media, SIN caption y SIN botones. Ahí sí no hay nada que mostrar, ni
+// con la etiqueta genérica (contenidoTipoEspecial deja los tipos de media en
+// '' a propósito — ver el comentario en pintable).
+test('toMensaje SI descarta una imagen que llego sin media, caption ni botones (fantasma real)', () => {
+  const fila = { telefono: '593987654321', tipo: 'imagen', texto: '', media_url: '', media_id: '', botones: '' }
+  const m = toMensaje(fila)
   assert.equal(m.mensaje, '')
-  assert.ok(!pintable(m), 'un fantasma real se sigue descartando')
+  assert.ok(!pintable(m), 'una imagen sin nada que mostrar se sigue descartando: eso si es un fantasma')
+})
+
+// Telefono malformado: el otro guardia que el filtro sigue sosteniendo, sin
+// importar que el mensaje tenga contenido de sobra.
+test('pintable descarta un telefono malformado aunque el mensaje tenga contenido', () => {
+  const m = { telefono: '12345', mensaje: 'hola', mediaUrl: '', mediaId: '', botones: '' }
+  assert.ok(!pintable(m), 'un telefono invalido se sigue descartando')
+})
+
+// LA prueba que tiene que romperse si alguien reintroduce un allow-list: un
+// tipo INVENTADO que no existe en ningún case del código, con texto vacío y
+// sin media, tiene que seguir produciendo contenido y pasando el filtro.
+test('toMensaje/pintable nunca esconden un tipo inventado con texto vacio (rompe si vuelve el allow-list)', () => {
+  const fila = { telefono: '593987654321', tipo: 'tipo_que_no_existe_todavia', texto: '', media_url: '', media_id: '', botones: '' }
+  const m = toMensaje(fila)
+  assert.ok(m.mensaje.trim(), 'un tipo desconocido tiene que producir contenido no vacio')
+  assert.match(m.mensaje, /tipo_que_no_existe_todavia/, 'la etiqueta tiene que nombrar el tipo')
+  assert.ok(pintable(m), 'un tipo inventado NUNCA puede quedar invisible')
 })
 
 test('toMensaje respeta el texto ya derivado (fila nueva, ingestion arreglada) sin tocar raw', () => {
