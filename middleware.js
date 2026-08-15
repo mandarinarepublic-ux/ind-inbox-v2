@@ -104,17 +104,24 @@ export async function middleware(req) {
 // sesión ni siquiera corre para ellos. `lib/rutas-publicas.js` es la segunda
 // capa, por si alguien toca esto sin pensar.
 //
-// Ojo con las diferencias contra MANDI: acá NO van `api/social/webhook` ni
-// `api/pago-dlocal` porque esas rutas no existen en IND, y SÍ va
-// `apple-touch-icon` — es un archivo estático de `public/` que el navegador pide
-// solo, sin cookie, y no tiene por qué ensuciar el registro de observación ni
-// caer al login cuando se encienda el bloqueo.
+// Ojo con las diferencias contra MANDI: acá NO va `api/social/webhook` porque
+// esa ruta no existe en IND, y SÍ va `apple-touch-icon` — es un archivo
+// estático de `public/` que el navegador pide solo, sin cookie, y no tiene por
+// qué ensuciar el registro de observación ni caer al login cuando se encienda
+// el bloqueo.
 //
 // `api/cron/pendientes` (13-ago-2026, puerto desde MANDI): recordatorio de
 // pendientes por Telegram, la llama Vercel Cron sin sesión — misma razón que
 // `api/cron/seguimientos`.
+//
+// `api/pago-dlocal` (15-ago-2026, decisión explícita del dueño): IND reutiliza
+// la cuenta dLocal de MANDI para el LINK PAGO del panel Ventas (ver
+// lib/dlocal.js). dLocal llama a esta ruta desde el internet, sin sesión, y se
+// defiende sola con un secreto en la URL — mismo mecanismo que MANDI. Ya NO es
+// verdad que "IND no tiene dLocal"; si tocas esta línea, revisa también
+// lib/rutas-publicas.js y tests/rutas-publicas.test.js.
 export const config = {
   matcher: [
-    '/((?!api/webhook|api/cron/seguimientos|api/cron/pendientes|_next/static|_next/image|favicon.ico|sw.js|icon-|apple-touch-icon|manifest.webmanifest).*)',
+    '/((?!api/webhook|api/cron/seguimientos|api/cron/pendientes|api/pago-dlocal|_next/static|_next/image|favicon.ico|sw.js|icon-|apple-touch-icon|manifest.webmanifest).*)',
   ],
 }

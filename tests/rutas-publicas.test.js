@@ -1,47 +1,60 @@
 // La lista de rutas públicas es lo más delicado de todo el candado: una de menos
 // y dejas de recibir mensajes de Meta. Estas pruebas son el inventario MEDIDO del
 // 8-ago-2026 convertido en red de seguridad, más `/api/cron/pendientes` sumada el
-// 13-ago-2026 al portar el recordatorio de Telegram desde MANDI.
+// 13-ago-2026 al portar el recordatorio de Telegram desde MANDI, más
+// `/api/linkpago` y `/api/pago-dlocal` sumadas el 15-ago-2026 al portar LINK PAGO
+// (decisión explícita del dueño: IND reutiliza la cuenta dLocal de MANDI, ver
+// lib/dlocal.js).
 //
-// Van las 30 rutas REALES del repo (`find app/api -name route.js`), una por una,
+// Van las 32 rutas REALES del repo (`find app/api -name route.js`), una por una,
 // más las páginas. Si alguien agrega una ruta y no la pone acá, la prueba no
 // falla — por eso al final se comprueba también que la lista de públicas sea
-// EXACTAMENTE de tres, que es la parte que sí puede hacer daño.
+// EXACTAMENTE de cuatro, que es la parte que sí puede hacer daño.
 //
 // ⚠️ `/api/admin/meta-waba` faltaba en este inventario (hueco anterior al
 // 13-ago-2026, no introducido por el port de Telegram): no exponía nada —el
 // matcher de middleware.js la cubre igual, candado puesto por defecto— pero sí
 // dejaba a esta prueba contando 29 cuando el repo ya tenía 30. Sumada a
 // PROTEGIDAS acá abajo.
+//
+// ⚠️ El número de rutas de este archivo se rompió una vez por estar escrito a
+// mano y no recontado tras un cambio (ver el aviso de `/api/admin/meta-waba`
+// arriba). Al sumar LINK PAGO el 15-ago-2026 se corrió `find app/api -name
+// route.js` de nuevo en vez de sumar "+2" de memoria — dio 32, y es lo que
+// queda escrito abajo.
 import test from 'node:test'
 import assert from 'node:assert'
 import { esRutaPublica, RUTAS_PUBLICAS } from '../lib/rutas-publicas.js'
 
-// Las 3 que NUNCA pueden pedir sesión. Cada una se defiende sola.
-// Son MENOS que en MANDI: IND no tiene SOCIAL ni dLocal.
+// Las 4 que NUNCA pueden pedir sesión. Cada una se defiende sola.
+//
+// Son MENOS que en MANDI: IND sigue sin SOCIAL. `/api/pago-dlocal` SÍ se sumó
+// acá el 15-ago-2026 — ver el aviso grande más abajo, en el test que antes
+// comprobaba lo contrario.
 const PUBLICAS = [
   '/api/webhook',            // Meta (WhatsApp) — 7.880 llamadas en 3 días
   '/api/cron/seguimientos',  // cron de Vercel — 3 llamadas en 3 días
   '/api/cron/pendientes',    // cron de Vercel, cada 5 min — recordatorio Telegram
+  '/api/pago-dlocal',        // dLocal Go, notification_url — secreto en la URL
 ]
 
-// Las otras 27 rutas del repo: todas son del navegador y van protegidas.
+// Las otras 28 rutas del repo: todas son del navegador y van protegidas.
 const PROTEGIDAS = [
   '/api/admin/meta-waba', '/api/automatizaciones', '/api/buscar', '/api/capi/diag',
   '/api/cliente-pedidos', '/api/contactos', '/api/contactos/estado', '/api/conversacion',
-  '/api/dashboard', '/api/directorio', '/api/hilo', '/api/inbox-sync', '/api/lista',
-  '/api/media', '/api/media/precache', '/api/mensaje', '/api/mensajes', '/api/notas',
-  '/api/plantillas', '/api/push/subscribe', '/api/push/test', '/api/respuestas',
-  '/api/saliente', '/api/tienda', '/api/upload-foto', '/api/upload-media',
-  '/api/upload-url',
+  '/api/dashboard', '/api/directorio', '/api/hilo', '/api/inbox-sync', '/api/linkpago',
+  '/api/lista', '/api/media', '/api/media/precache', '/api/mensaje', '/api/mensajes',
+  '/api/notas', '/api/plantillas', '/api/push/subscribe', '/api/push/test',
+  '/api/respuestas', '/api/saliente', '/api/tienda', '/api/upload-foto',
+  '/api/upload-media', '/api/upload-url',
   // Las páginas
   '/', '/inbox', '/dashboard',
 ]
 
-test('las 30 rutas del repo están cubiertas por esta prueba', () => {
-  // 3 públicas + 27 protegidas = las 30 que devuelve `find app/api -name route.js`.
+test('las 32 rutas del repo están cubiertas por esta prueba', () => {
+  // 4 públicas + 28 protegidas = las 32 que devuelve `find app/api -name route.js`.
   // Si mañana alguien agrega una ruta nueva y no la suma acá, este número canta.
-  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 30)
+  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 32)
 })
 
 for (const ruta of PUBLICAS) {
@@ -56,17 +69,34 @@ for (const ruta of PROTEGIDAS) {
   })
 }
 
-test('las públicas son EXACTAMENTE tres', () => {
+test('las públicas son EXACTAMENTE cuatro', () => {
   // Cada entrada de más es una puerta al internet entero. Que agregar una rompa
   // una prueba es justamente lo que se busca.
-  assert.deepStrictEqual(RUTAS_PUBLICAS, ['/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes'])
+  assert.deepStrictEqual(RUTAS_PUBLICAS, [
+    '/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes', '/api/pago-dlocal',
+  ])
 })
 
-test('no se coló nada de MANDI que en IND ni existe', () => {
-  // Copiar la lista de MANDI de memoria abriría rutas inexistentes hoy… y las
-  // dejaría abiertas el día que se creen.
+// ⚠️ ESTE TEST SE INVIRTIÓ A PROPÓSITO EL 15-AGO-2026.
+//
+// Hasta ese día decía "IND no tiene SOCIAL ni dLocal" y afirmaba que
+// `/api/pago-dlocal` NO podía ser pública — y tenía razón: la ruta ni existía.
+// Un implementador anterior leyó esa afirmación, la verificó contra el código,
+// confirmó que era cierta, y se negó a portar LINK PAGO sobre un supuesto falso
+// ("IND ya tiene lib/dlocal.js"). Hizo bien en parar.
+//
+// El dueño después SÍ decidió explícitamente traer LINK PAGO a IND,
+// reutilizando la cuenta dLocal de MANDI (ver lib/dlocal.js — el `description`
+// que manda a dLocal es "Pago IND STORE", distinto del de MANDI, justamente
+// para poder separar los dos negocios dentro de la misma cuenta compartida).
+// Por eso `/api/pago-dlocal` pasa a ser pública EN SERIO, no por accidente:
+// dLocal llama a esa ruta desde el internet y se defiende con un secreto
+// compartido en la URL, no con sesión.
+//
+// SOCIAL sigue sin existir en IND — esa mitad del test viejo sigue en pie.
+test('dLocal se sumó a propósito el 15-ago-2026; SOCIAL sigue sin existir', () => {
   assert.strictEqual(esRutaPublica('/api/social/webhook'), false)
-  assert.strictEqual(esRutaPublica('/api/pago-dlocal'), false)
+  assert.strictEqual(esRutaPublica('/api/pago-dlocal'), true)
 })
 
 test('el prefijo no alcanza para colarse', () => {

@@ -58,9 +58,14 @@ const RE_IMG = /https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s)]*)?/gi
 // cliente no recibe nada. Paso el 28-jul: 57 de 69 saludos perdidos.
 // ☠️ Al encender el candado (`AUTH_MODO=bloquear`) esta llamada queda SIN
 // credencial: `/api/saliente` no es ruta pública, así que devuelve 401 y se
-// mueren EN SILENCIO todos los envíos automáticos — saludos, mensaje de espera
-// y LINKPAGO. En MANDI pasó exactamente eso el 7-ago-2026 y tardó 7 días en
-// verse: 4 LINKPAGO ese día, CERO los siguientes.
+// mueren EN SILENCIO todos los envíos automáticos — los saludos
+// (saludo_nuevo/saludo_reactivacion). Esta lista decía antes "mensaje de
+// espera y LINKPAGO", pero IND nunca tuvo esas dos cosas (son de MANDI:
+// acá una foto la ve un humano, sin auto-respuesta, y LINKPAGO no se dispara
+// por chat — ver app/api/linkpago/route.js). Corregido el 15-ago-2026: un
+// comentario falso es el mismo bug que esto documenta. En MANDI sí pasó
+// exactamente esto el 7-ago-2026 y tardó 7 días en verse: 4 LINKPAGO
+// ese día, CERO los siguientes.
 //
 // Y fue invisible porque el `.catch` de antes solo miraba errores de RED. Un 401
 // NO es un error de red: `fetch` lo devuelve como respuesta normal con `ok:false`.

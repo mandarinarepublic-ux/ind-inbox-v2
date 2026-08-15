@@ -21,11 +21,22 @@ import { pedidoIdDeNota } from '@/lib/pedido-manual'
  */
 
 const AMBAR = '#f59e0b'
+const VERDE = '#10b981'
+const ROJO  = '#f87171'
 
 // Misma paleta que el resto del panel de IND (negro/crema), no la azul de MANDI.
 const C = {
   bg: '#0A0A0A', surface2: '#111111', border: '#1F1F1F', border2: '#2A2A2A',
   cream: '#F4F1EC', creamDim: '#A09A90', creamFaint: '#3A3530',
+}
+
+// El color de la nota según su `tipo` (pago_ok = verde, pago_error = rojo,
+// null = neutral como siempre). El color NUNCA es la única señal: cada tipo
+// lleva también un marcador (✅/❌) que se lee igual sin distinguir colores.
+function estiloTipo(tipo) {
+  if (tipo === 'pago_ok')    return { color: VERDE, borde: 'rgba(16,185,129,.35)', fondo: 'rgba(16,185,129,.08)', marca: '✅' }
+  if (tipo === 'pago_error') return { color: ROJO,  borde: 'rgba(248,113,113,.35)', fondo: 'rgba(248,113,113,.08)', marca: '❌' }
+  return null
 }
 
 const sTextarea = {
@@ -149,8 +160,15 @@ export default function Notas({ telefono, refrescar = 0, onVerPedido }) {
           {notas.map(nota => {
             const abierta = abiertas.has(nota.id)
             const editando = editandoId === nota.id
+            // pago_ok = verde, pago_error = rojo, null = exactamente como antes.
+            // El color nunca es la única señal: el marcador (✅/❌) se lee igual
+            // aunque no se distingan los colores.
+            const est = estiloTipo(nota.tipo)
             return (
-              <div key={nota.id} style={{ border: `1px solid ${C.border}`, borderRadius: 7, overflow: 'hidden', background: C.surface2 }}>
+              <div key={nota.id} style={{
+                border: `1px solid ${est ? est.borde : C.border}`, borderRadius: 7, overflow: 'hidden',
+                background: est ? est.fondo : C.surface2,
+              }}>
                 <div
                   onClick={() => alternar(nota.id)}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', cursor: 'pointer' }}>
@@ -158,10 +176,11 @@ export default function Notas({ telefono, refrescar = 0, onVerPedido }) {
                   <span style={{ fontSize: 10, color: C.creamDim, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                     {fmtFecha(nota.creado_at)}
                   </span>
+                  {est && <span style={{ fontSize: 10, flexShrink: 0 }}>{est.marca}</span>}
                   {/* Cerrada muestra la primera línea: así se encuentra la nota
                       que se busca sin tener que abrirlas todas. */}
                   {!abierta && (
-                    <span style={{ fontSize: 11, color: C.creamDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 11, color: est ? est.color : C.creamDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {primeraLinea(nota.texto)}
                     </span>
                   )}
@@ -202,7 +221,9 @@ export default function Notas({ telefono, refrescar = 0, onVerPedido }) {
                               style={{ display: 'inline-block', marginBottom: 5, padding: '3px 8px', background: 'rgba(16,185,129,.15)', border: '1px solid rgba(16,185,129,.35)', color: '#10b981', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📄 Ver pedido</button>
                           ) : null
                         })()}
-                        <div style={{ fontSize: 11, color: C.cream, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{nota.texto}</div>
+                        <div style={{ fontSize: 11, color: est ? est.color : C.cream, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {est ? `${est.marca} ` : ''}{nota.texto}
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
                           <button onClick={() => { setEditandoId(nota.id); setEditTexto(nota.texto) }}
                             style={{ background: 'none', border: 'none', padding: 0, color: C.creamDim, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>✏️ Editar</button>
