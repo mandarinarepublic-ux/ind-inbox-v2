@@ -1782,6 +1782,11 @@ export default function App() {
                   {[
                     { s:'pendiente',    icon:'🔴', label:'Pendiente',  activeColor:'#f87171' },
                     { s:'atendido',     icon:'🟢', label:'Atendido',   activeColor:'#4ade80' },
+                    // 💰 Venta en proceso — agregado el 15-ago-2026. El filtro "Ventas"
+                    // ya existía en la lista de la izquierda, pero NO había forma de
+                    // poner un chat en ese estado: era un filtro que jamás podía mostrar
+                    // nada (medido: 0 chats en VENTA en IND, contra 8 en MANDI).
+                    { s:'venta',        icon:'💰', label:'Venta en proceso', activeColor:'#10b981' },
                     { s:'soporte',      icon:'🎧', label:'Soporte',    activeColor:'#a78bfa' },
                     { s:'archivado',    icon:'⚫', label:'Archivar',   activeColor:C.creamDim },
                   ].map(({ s, icon, label, activeColor }) => (
