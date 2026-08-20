@@ -1,0 +1,42 @@
+# Shopify — Mandarina Republic (mandarinaec.com)
+
+Este directorio **no es parte de la app Next.js** de IND INBOX. Es el lugar donde
+versionamos los archivos de tema de Shopify que se editan desde acá, para que no
+se pierdan cuando el entorno remoto se recicla.
+
+## `sections/mrh-mapa.liquid` — MR · Mapa interactivo
+
+Mapa top-down navegable en pixel art para el home. Cada edificio es una colección:
+al pisar la puerta (o tocar el edificio, o el chip de abajo) se abre un diálogo
+estilo RPG con el nombre del universo, un par de productos y el botón a la colección.
+
+- **Arte 100% original dibujado por código.** No hay imágenes que descargar ni un
+  solo asset de terceros: el mundo, los edificios y los personajes se pintan en
+  un `<canvas>` a partir de rectángulos y sprites en texto. Cero tiles copiados.
+- **Autocontenida.** Trae sus propios tokens, tipografías y script; no depende de
+  `mrh.css` ni de `mrh.js`. El mismo archivo funciona en el tema live y en
+  cualquier tema viejo que se use de sandbox.
+- **Accesible y rastreable.** Los nombres de los edificios y los chips son `<a>`
+  reales con el link a la colección, así que sirven con teclado, con lector de
+  pantalla y para Google aunque el canvas no llegue a dibujarse. Las flechas solo
+  se capturan cuando el mapa tiene el foco: nunca le roban el scroll a la página.
+- **Barata de correr.** El mundo se pinta una sola vez en un canvas fuera de
+  pantalla; el bucle solo corre mientras la sección está visible y la pestaña
+  activa. Resolución interna ~2.4 px por píxel del mundo: panorámico en
+  escritorio, de cerca en el móvil.
+
+### Cómo se controla
+- Escritorio: tocar el mapa para enfocarlo, flechas o WASD para caminar, `E` /
+  Enter para entrar, `Escape` para cerrar.
+- Móvil: D-pad y botón `E`; también se puede tocar un edificio directamente.
+- Los chips de abajo son viaje rápido: llevan al personaje a la puerta y abren
+  el universo.
+
+### Editable desde el editor de temas
+Cada universo es un bloque (colección, nombre en el mapa, color del techo, texto
+del diálogo). El mapa se arma solo alrededor de los bloques que haya: dos filas
+de edificios, avenidas, callejones y bosque de borde se generan según cuántos
+sean. Máximo 12.
+
+## `backups/`
+Copias de archivos de tema **antes** de tocarlos, por si hay que restaurar.
