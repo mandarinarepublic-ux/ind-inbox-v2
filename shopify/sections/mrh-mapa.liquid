@@ -63,7 +63,16 @@
          data-watext="{{ wa_txt }}"
          data-tienda="{{ section.settings.map }}"
          data-tienda-nombre="{{ section.settings.store_title | escape }}"
-         data-tienda-txt="{{ section.settings.store_text | escape }}">
+         data-tienda-txt="{{ section.settings.store_text | escape }}"
+         data-promo="{% if section.settings.promo_on and section.settings.promo_code != blank %}1{% endif %}"
+         data-promo-code="{{ section.settings.promo_code | escape }}"
+         data-promo-title="{{ section.settings.promo_title | escape }}"
+         data-promo-text="{{ section.settings.promo_text | escape }}"
+         data-promo-cta="{{ section.settings.promo_cta | escape }}"
+         data-promo-url="{% if section.settings.promo_url != blank %}{{ section.settings.promo_url }}{% else %}/discount/{{ section.settings.promo_code | url_encode }}?redirect=/collections/all{% endif %}"
+         data-promo-suelta="{{ section.settings.promo_loose | escape }}"
+         data-promo-espera="{{ section.settings.promo_wait | escape }}"
+         data-promo-respawn="{{ section.settings.promo_respawn }}">
 
   <div class="mrmap-wrap">
     <header class="mrmap-head">
@@ -81,6 +90,8 @@
 
         <p class="mrmap__hint">Toca el mapa · <b>← ↑ ↓ →</b> caminar · <b>E</b> entrar</p>
 
+        <p class="mrmap__promo" hidden></p>
+
         <div class="mrmap__pad" aria-hidden="true">
           <div class="mrmap__dpad">
             <button type="button" class="mrmap__d mrmap__d--u" data-dir="u" tabindex="-1"></button>
@@ -97,6 +108,10 @@
           <h3 class="mrmap__dlgt" id="mrmap-dt-{{ section.id }}"></h3>
           <p class="mrmap__dlgp"></p>
           <div class="mrmap__thumbs"></div>
+          <div class="mrmap__code" hidden>
+            <b></b>
+            <button type="button" class="mrmap__copy">Copiar</button>
+          </div>
           <a class="mrmap__cta" href="/collections/all">Entrar</a>
         </div>
       </div>
@@ -137,7 +152,18 @@
     { "type": "header", "content": "Personaje de la tienda física" },
     { "type": "text", "id": "store_title", "label": "Título", "default": "Visítanos en Quito" },
     { "type": "textarea", "id": "store_text", "label": "Texto", "default": "Av. 6 de Diciembre y Mercurio, Quito. Lunes a sábado de 10h30 a 18h00. Envío GRATIS a todo el Ecuador." },
-    { "type": "url", "id": "map", "label": "Link del mapa" }
+    { "type": "url", "id": "map", "label": "Link del mapa" },
+    { "type": "header", "content": "Mandarina salvaje (promo)" },
+    { "type": "paragraph", "content": "Suelta una mandarina por el mapa. Huye cuando te acercas; si la alcanzas, suelta el código." },
+    { "type": "checkbox", "id": "promo_on", "label": "Soltar la mandarina salvaje", "default": true },
+    { "type": "text", "id": "promo_code", "label": "Código de descuento", "info": "Tiene que ser un código que ya exista y esté activo en Descuentos.", "default": "MANDARINA10" },
+    { "type": "text", "id": "promo_title", "label": "Título al atraparla", "default": "¡La atrapaste!" },
+    { "type": "textarea", "id": "promo_text", "label": "Texto al atraparla", "default": "Se te escapaba por poco. Llévate el descuento con este código — se aplica solo al pasar por el botón." },
+    { "type": "text", "id": "promo_cta", "label": "Texto del botón", "default": "Usar el descuento →" },
+    { "type": "url", "id": "promo_url", "label": "A dónde lleva el botón", "info": "Si lo dejas vacío va al catálogo con el código ya aplicado." },
+    { "type": "text", "id": "promo_loose", "label": "Aviso mientras anda suelta", "default": "🍊 Hay una mandarina suelta — atrápala" },
+    { "type": "text", "id": "promo_wait", "label": "Aviso mientras no está", "default": "🍊 Se escondió… vuelve en un rato" },
+    { "type": "range", "id": "promo_respawn", "label": "Vuelve a salir a los", "unit": "s", "min": 5, "max": 60, "step": 5, "default": 20 }
   ],
   "blocks": [
     {

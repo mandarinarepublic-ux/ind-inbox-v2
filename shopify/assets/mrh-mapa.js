@@ -312,6 +312,15 @@
   var SET_WA    = bakeSet({ C:'#25D366', c:'#128C4A', T:'#0F3D24', M:'#FFF8F2', H:'#1B1B1B' });
   var SET_SHOP  = bakeSet({ C:'#FFC400', c:'#D19A00', T:'#2E9BE8', M:'#FFF8F2', H:'#3B2410' });
 
+  /* la mandarina salvaje: bicho propio, redondo y con hoja */
+  var SPR_WILD = [
+    '......KGK.....','.....KGGK.....','....KKOOKK....','...KOOOOOOK...',
+    '..KOhhOOOOOK..','.KOOOOOOOOOOK.','.KOOKOOOOKOOK.','.KOOKOOOOKOOK.',
+    '.KOOOOOOOOOOK.','.KOoOOOOOOoOK.','..KOOOOOOOOK..','...KOOOOOOK...',
+    '....KKOOKK....','.....KBBK.....'
+  ];
+  var IMG_WILD = bake(SPR_WILD, { O:'#FF7A1A', o:'#D14E00', h:'#FFBE7A', G:'#3F9438', B:'#8A5A20' }, 0, 0);
+
   /* ═══════════ jugador, NPCs, cámara ═══════════ */
   function walkable(x, y) { return at(x, y) !== G_SOLID; }
   /* la salida tiene que estar despejada: si no, la fuente o un arbusto
@@ -358,6 +367,77 @@
     var sp2 = spawn(); hero.x = sp2.x; hero.y = sp2.y;
   }
 
+  /* ── mandarina salvaje: anda suelta, huye si te acercas y al
+        alcanzarla suelta el código de descuento ── */
+  var CODIGO  = ROOT.dataset.promoCode || '';
+  var PROMO   = ROOT.dataset.promo === '1' && CODIGO !== '';
+  var RESPAWN = Math.max(5, parseInt(ROOT.dataset.promoRespawn, 10) || 20);
+  var pill = ROOT.querySelector('.mrmap__promo');
+  var wild = null, chispa = 0, chispaX = 0, chispaY = 0, avisoT = null;
+
+  function puntoLibre(lejosDe) {
+    for (var i = 0; i < 240; i++) {
+      var tx = 3 + ((Math.random() * (WT - 6)) | 0), ty = 3 + ((Math.random() * (HT - 6)) | 0);
+      if (!walkable(tx, ty)) continue;
+      var wx = tx * TS + 8, wy = ty * TS + 12;
+      if (lejosDe && Math.abs(wx - lejosDe.x) < 100 && Math.abs(wy - lejosDe.y) < 100) continue;
+      return { x: wx, y: wy };
+    }
+    return { x: hero.x + 90, y: hero.y };
+  }
+  function pintarPill(estado) {
+    if (!pill || !wild) return;
+    pill.hidden = false;
+    if (estado === 'atrapada') { pill.textContent = '🎁 ' + CODIGO; pill.className = 'mrmap__promo is-hit'; }
+    else if (estado === 'espera') { pill.textContent = ROOT.dataset.promoEspera || ''; pill.className = 'mrmap__promo is-wait'; }
+    else { pill.textContent = ROOT.dataset.promoSuelta || ''; pill.className = 'mrmap__promo'; }
+    if (!pill.textContent) pill.hidden = true;
+  }
+  function pasoWild(dt) {
+    if (!wild) return;
+    if (wild.oculta) {
+      wild.vuelve -= dt;
+      if (wild.vuelve <= 0) {
+        var q = puntoLibre(hero);
+        wild.x = q.x; wild.y = q.y; wild.oculta = false; pintarPill('suelta');
+      }
+      return;
+    }
+    if (!dlg.hidden) return;                       /* se queda quieta mientras lees */
+    var dx = wild.x - hero.x, dy = wild.y - hero.y;
+    var d = Math.sqrt(dx * dx + dy * dy) || 1;
+    if (d < 13) { atrapar(); return; }
+    wild.prox -= dt;
+    if (d < 72) {                                  /* huye, pero más lenta que vos */
+      wild.vx = dx / d; wild.vy = dy / d; wild.sp = 82; wild.prox = 0.2;
+    } else if (wild.prox <= 0) {                   /* si no, pasea */
+      var a = Math.random() * 6.2832;
+      if (Math.random() < 0.22) { wild.vx = 0; wild.vy = 0; }
+      else { wild.vx = Math.cos(a); wild.vy = Math.sin(a); }
+      wild.sp = 38; wild.prox = 0.5 + Math.random();
+    }
+    var nx = wild.x + wild.vx * wild.sp * dt, ny = wild.y + wild.vy * wild.sp * dt;
+    if (canBe(nx, wild.y)) wild.x = nx; else { wild.vx = -wild.vx; wild.prox = 0.35; }
+    if (canBe(wild.x, ny)) wild.y = ny; else { wild.vy = -wild.vy; wild.prox = 0.35; }
+    wild.t += dt;
+    wild.frame = (wild.vx || wild.vy) ? (((wild.t * 7) | 0) % 2) : 0;
+  }
+  function atrapar() {
+    wild.oculta = true; wild.vuelve = RESPAWN;
+    chispa = 0.8; chispaX = wild.x; chispaY = wild.y;
+    pintarPill('atrapada');
+    if (avisoT) clearTimeout(avisoT);
+    avisoT = setTimeout(function () { if (wild && wild.oculta) pintarPill('espera'); }, 2600);
+    show({
+      color: '#FFC400', eyebrow: 'Mandarina salvaje',
+      title: ROOT.dataset.promoTitle || '¡La atrapaste!',
+      text: ROOT.dataset.promoText || '',
+      items: [], code: CODIGO,
+      href: ROOT.dataset.promoUrl || '/collections/all',
+      cta: ROOT.dataset.promoCta || 'Usar el descuento'
+    });
+  }
+
   var HB_W = 10, HB_H = 7;
   function canBe(cx, cy) {
     var x0 = Math.floor((cx - HB_W / 2) / TS), x1 = Math.floor((cx + HB_W / 2 - 1) / TS);
@@ -381,6 +461,8 @@
   var dEye = dlg.querySelector('.mrmap__dlgeye'), dTit = dlg.querySelector('.mrmap__dlgt');
   var dTxt = dlg.querySelector('.mrmap__dlgp'), dThm = dlg.querySelector('.mrmap__thumbs');
   var dCta = dlg.querySelector('.mrmap__cta');
+  var dCode = dlg.querySelector('.mrmap__code');
+  var dCodeB = dCode.querySelector('b'), dCopy = dlg.querySelector('.mrmap__copy');
   var typer = null, openIdx = -1;
 
   function type(el, text) {
@@ -408,6 +490,10 @@
       dThm.appendChild(a);
     });
     dThm.style.display = dThm.children.length ? '' : 'none';
+    if (o.code) {
+      dCodeB.textContent = o.code; dCode.hidden = false;
+      dCopy.textContent = 'Copiar'; dCopy.className = 'mrmap__copy';
+    } else dCode.hidden = true;
     dCta.href = o.href; dCta.textContent = o.cta;
     dCta.style.background = o.color;
     dlg.hidden = false;
@@ -452,6 +538,19 @@
     if (estaba) stage.focus({ preventScroll: true });
   }
   dlg.querySelector('.mrmap__x').addEventListener('click', closeDlg);
+  dCopy.addEventListener('click', function () {
+    var txt = dCodeB.textContent;
+    function ok() { dCopy.textContent = '¡Copiado!'; dCopy.className = 'mrmap__copy is-ok'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(ok, function () {});
+      return;
+    }
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok(); } catch (e) {}
+    document.body.removeChild(ta);
+  });
   /* con el foco dentro del diálogo, Escape tiene que seguir cerrando */
   dlg.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); closeDlg(); } });
 
@@ -561,13 +660,15 @@
     }
     hero.x = Math.max(TS, Math.min(WT * TS - TS, hero.x));
     hero.y = Math.max(TS, Math.min(HT * TS - 4, hero.y));
+    if (chispa > 0) chispa -= dt;
+    pasoWild(dt);
   }
 
   /* ═══════════ dibujo ═══════════ */
-  function actor(a, set, dir, frame, flip) {
-    var img = set[dir][frame];
-    var sx = Math.round(a.x - cam.x - SW / 2), sy = Math.round(a.y - cam.y - 21);
-    px(ctx, sx + 3, sy + 19, 10, 3, 'rgba(0,0,0,.22)');
+  function actor(a, img, flip, anclaje) {
+    var an = anclaje || 21;
+    var sx = Math.round(a.x - cam.x - SW / 2), sy = Math.round(a.y - cam.y - an);
+    px(ctx, sx + 3, Math.round(a.y - cam.y - 3), 10, 3, 'rgba(0,0,0,.22)');
     if (flip) { ctx.save(); ctx.translate(sx + SW, sy); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
     else ctx.drawImage(img, sx, sy);
   }
@@ -584,10 +685,21 @@
       px(ctx, fx + 14, fy + 4 + w, 1, 2, '#BFE9FF');
     }
 
-    var cast = npcs.map(function (n) { return { a:n, set:n.set, dir:'down', frame:0, flip:false }; });
-    cast.push({ a: hero, set: SET_HERO, dir: hero.dir, frame: hero.frame, flip: hero.flip });
+    var cast = npcs.map(function (n) { return { a: n, img: n.set.down[0], flip: false, an: 21 }; });
+    cast.push({ a: hero, img: SET_HERO[hero.dir][hero.frame], flip: hero.flip, an: 21 });
+    if (wild && !wild.oculta) cast.push({ a: wild, img: IMG_WILD, flip: wild.vx < 0, an: 15 + (wild.frame ? 1 : 0) });
     cast.sort(function (p, q) { return p.a.y - q.a.y; });
-    cast.forEach(function (c) { actor(c.a, c.set, c.dir, c.frame, c.flip); });
+    cast.forEach(function (c) { actor(c.a, c.img, c.flip, c.an); });
+
+    /* chispas al atraparla */
+    if (chispa > 0) {
+      var rad = (1 - Math.max(0, chispa) / 0.8) * 24;
+      var kx = Math.round(chispaX - cam.x), ky = Math.round(chispaY - cam.y - 8);
+      for (var s = 0; s < 8; s++) {
+        var ang = s * 0.7854;
+        px(ctx, kx + Math.round(Math.cos(ang) * rad), ky + Math.round(Math.sin(ang) * rad), 2, 2, s % 2 ? C.zest : '#FFF8F2');
+      }
+    }
 
     var n = dlg.hidden ? near() : null;
     if (n) {
@@ -641,6 +753,12 @@
     }
     draw();
   }
+  if (PROMO) {
+    var p0 = puntoLibre(hero);
+    wild = { x: p0.x, y: p0.y, vx: 1, vy: 0, sp: 38, prox: 0, t: 0, frame: 0, oculta: false, vuelve: 0 };
+    pintarPill('suelta');
+  }
+
   ctx.imageSmoothingEnabled = false;
   addEventListener('resize', resize, { passive: true });
   if (window.ResizeObserver) { ro = new ResizeObserver(resize); ro.observe(stage); }
@@ -658,6 +776,7 @@
      el bucle y los listeners, quedan mapas fantasma consumiendo frames */
   ROOT.mrmapDestruir = function () {
     muerto = true; stop();
+    if (avisoT) clearTimeout(avisoT);
     if (io) io.disconnect();
     if (ro) ro.disconnect();
     removeEventListener('resize', resize);

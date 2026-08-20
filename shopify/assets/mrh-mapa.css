@@ -71,6 +71,19 @@
 .mrmap__hint b { color: var(--zest); }
 .mrmap__hint.is-off { opacity: 0; }
 
+/* aviso de la mandarina salvaje: arriba a la derecha, sin tapar el mapa */
+.mrmap__promo {
+  position: absolute; right: 10px; top: 10px; z-index: 3;
+  font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  color: var(--ink); background: var(--zest); border: 2px solid var(--ink);
+  padding: 5px 10px; border-radius: 999px; pointer-events: none;
+  box-shadow: 0 3px 0 rgba(0,0,0,.4); max-width: 60%; text-align: center; line-height: 1.3;
+}
+.mrmap__promo[hidden] { display: none; }
+.mrmap__promo.is-wait { background: var(--ink-3); color: var(--mute); border-color: var(--bd); box-shadow: none; }
+.mrmap__promo.is-hit { animation: mrmapHit .45s ease-out 3; }
+@keyframes mrmapHit { 0%, 100% { transform: none; } 50% { transform: scale(1.12) rotate(-3deg); } }
+
 /* ── controles táctiles ── */
 .mrmap__pad { position: absolute; inset: auto 0 0 0; z-index: 4; display: none; align-items: flex-end; justify-content: space-between; padding: 8px; opacity: .88; }
 .mrmap__dpad { position: relative; width: 90px; height: 90px; }
@@ -112,6 +125,25 @@
 .mrmap__thumbs a:hover { border-color: var(--accent, var(--mr)); transform: translateY(-3px); }
 .mrmap__thumbs img { display: block; width: 100%; aspect-ratio: 4/5; object-fit: cover; }
 .mrmap__thumbs b { display: block; font-family: var(--mono); font-size: 9px; padding: 4px 5px; color: var(--paper); }
+/* caja del código: se lee de lejos y se copia de un toque */
+.mrmap__code { display: flex; align-items: stretch; gap: 8px; margin: 12px 0 14px; }
+.mrmap__code[hidden] { display: none; }
+.mrmap__code b {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 700; font-size: clamp(15px, 4vw, 20px);
+  letter-spacing: .14em; color: var(--zest);
+  border: 2px dashed var(--zest); border-radius: 10px; padding: 10px 12px;
+  background: rgba(255,196,0,.08);
+}
+.mrmap__copy {
+  flex: none; font-family: var(--mono); font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em; padding: 0 14px;
+  border: 2px solid var(--bd); border-radius: 10px; color: var(--paper);
+  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
+}
+.mrmap__copy:hover { background: var(--paper); color: var(--ink); border-color: var(--paper); }
+.mrmap__copy.is-ok { background: var(--zest); color: var(--ink); border-color: var(--zest); }
+
 .mrmap__cta {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   font-weight: 700; font-size: 13px; letter-spacing: .03em; text-transform: uppercase;
@@ -149,4 +181,5 @@
 @media (prefers-reduced-motion: reduce) {
   .mrmap__tag.is-near { animation: none; }
   .mrmap__dlg { animation: none; }
+  .mrmap__promo.is-hit { animation: none; }
 }

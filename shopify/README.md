@@ -25,6 +25,19 @@ estilo RPG con el nombre del universo, un par de productos y el botón a la cole
   activa. Resolución interna ~2.4 px por píxel del mundo: panorámico en
   escritorio, de cerca en el móvil.
 
+### La mandarina salvaje (promo)
+Hay una mandarina andando suelta por el mapa. Pasea sola, y si te le acercas
+huye — un poco más lenta que vos, así que se deja alcanzar con algo de insistencia.
+Al tocarla suelta el código de descuento en una caja con botón de copiar y un
+botón que lleva al catálogo **con el código ya aplicado** (`/discount/CODIGO`).
+Después se esconde y vuelve a salir en otro punto del mapa a los N segundos.
+
+El código, los textos y el tiempo de reaparición se configuran en la sección.
+Por defecto usa `MANDARINA10`, que ya existe y está activo en la tienda: la
+sección **no crea descuentos**, solo usa uno que ya exista. Si se pone un código
+que no existe, el botón lleva a un descuento inválido — hay que crearlo primero
+en Shopify → Descuentos.
+
 ### Cómo se controla
 - Escritorio: tocar el mapa para enfocarlo, flechas o WASD para caminar, `E` /
   Enter para entrar, `Escape` para cerrar.
