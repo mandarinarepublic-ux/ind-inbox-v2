@@ -51,5 +51,22 @@ del diálogo). El mapa se arma solo alrededor de los bloques que haya: dos filas
 de edificios, avenidas, callejones y bosque de borde se generan según cuántos
 sean. Máximo 12.
 
+## Dónde se puede montar
+
+La misma sección sirve en tres lugares, y no se estorban entre sí:
+
+1. **En el home**, como una sección más del `index.json` (se agrega desde el
+   editor de temas: *Agregar sección → MR · Mapa interactivo*).
+2. **En una página propia** — es lo que conviene si la idea es que la gente
+   entre a jugar. La página `Mandarina World` (`/pages/mandarina-world`) usa el
+   sufijo de plantilla `mapa`, que carga `templates/page.mapa.json`. Al tener URL
+   fija se puede poner en el menú, compartir en redes y linkear desde el home.
+3. **Como home alternativo** para probar, con `templates/index.mapa.json` y
+   `?view=mapa` — sin tocar el `index.json` que ya tenga el tema.
+
+El cuerpo de la página trae un texto de respaldo a propósito: si se abre con un
+tema que todavía no tiene `templates/page.mapa.json`, se ve una página normal con
+la intro y un link al catálogo, nunca una página vacía.
+
 ## `backups/`
 Copias de archivos de tema **antes** de tocarlos, por si hay que restaurar.

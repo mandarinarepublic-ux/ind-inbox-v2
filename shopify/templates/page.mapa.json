@@ -1,0 +1,121 @@
+{
+  "sections": {
+    "mapa": {
+      "type": "mrh-mapa",
+      "blocks": {
+        "z1": {
+          "type": "zona",
+          "settings": {
+            "collection": "🐉-chaqueta-dragon-ball",
+            "title": "Dragon Ball",
+            "color": "#FF7A29",
+            "eyebrow": "Universo · energía Saiyan",
+            "text": "Sube tu poder al máximo. Goku, Vegeta y toda la saga en chaquetas full color."
+          }
+        },
+        "z2": {
+          "type": "zona",
+          "settings": {
+            "collection": "coleccion-power-rangers-elige-tu-ranger-favorito",
+            "title": "Power Rangers",
+            "color": "#EC3B8B",
+            "eyebrow": "Universo · es hora de la morfosis",
+            "text": "Rojo, Rosa, Azul, Amarillo, Negro y Blanco. Elige tu Ranger."
+          }
+        },
+        "z3": {
+          "type": "zona",
+          "settings": {
+            "collection": "onepiece",
+            "title": "One Piece",
+            "color": "#2E9BE8",
+            "eyebrow": "Universo · rumbo al One Piece",
+            "text": "Iza las velas con los Sombrero de Paja. Luffy, Zoro, Sanji y Chopper."
+          }
+        },
+        "z4": {
+          "type": "zona",
+          "settings": {
+            "collection": "pokemon-universe",
+            "title": "Pokémon",
+            "color": "#FFC400",
+            "eyebrow": "Universo · hazte con todas",
+            "text": "Charizard, Bulbasaur, Gengar y Squirtle en chaquetas de colección."
+          }
+        },
+        "z5": {
+          "type": "zona",
+          "settings": {
+            "collection": "tortugas-ninja",
+            "title": "Tortugas Ninja",
+            "color": "#4CC23A",
+            "eyebrow": "Universo · héroes en media concha",
+            "text": "Pizza, alcantarillas y artes marciales. Leo, Rafa, Mikey y Donnie."
+          }
+        },
+        "z6": {
+          "type": "zona",
+          "settings": {
+            "collection": "spiderman-universe",
+            "title": "Spider-Man",
+            "color": "#E5342B",
+            "eyebrow": "Universo · el vecino amigable",
+            "text": "Del multiverso a tu clóset. Rojo y azul a tope de contraste."
+          }
+        },
+        "z7": {
+          "type": "zona",
+          "settings": {
+            "collection": "coleccion-x-men",
+            "title": "X-Men",
+            "color": "#4DA3FF",
+            "eyebrow": "Universo · mutantes",
+            "text": "Wolverine, Gambito, Cíclope y Storm. La escuela de Xavier en hoodie."
+          }
+        },
+        "z8": {
+          "type": "zona",
+          "settings": {
+            "collection": "lo-mas-vendido",
+            "title": "Lo más vendido",
+            "color": "#FF5E0E",
+            "eyebrow": "Catálogo · lo que más sale",
+            "text": "Los diseños que más vuelan. Si dudas, empieza por aquí."
+          }
+        }
+      },
+      "block_order": [
+        "z1",
+        "z2",
+        "z3",
+        "z4",
+        "z5",
+        "z6",
+        "z7",
+        "z8"
+      ],
+      "settings": {
+        "eyebrow": "Juega y descubre",
+        "title": "Mandarina World",
+        "text": "Un mapa para caminar por todos nuestros universos: entra a cada tienda y mira los diseños desde adentro. Y ojo — hay una mandarina salvaje suelta: si la atrapas, te llevas un descuento. 🍊",
+        "load_fonts": true,
+        "whatsapp": "593983745757",
+        "wa_text": "Hola Mandarina! Quiero un diseño personalizado 🎨",
+        "store_title": "Visítanos en Quito",
+        "store_text": "Av. 6 de Diciembre y Mercurio, Quito. Lunes a sábado de 10h30 a 18h00. Envío GRATIS a todo el Ecuador.",
+        "map": "https://maps.app.goo.gl/syJs8kcQ9CEnqd8A7",
+        "promo_on": true,
+        "promo_code": "MANDARINA10",
+        "promo_title": "¡La atrapaste!",
+        "promo_text": "Se te escapaba por poco. Llévate el descuento con este código — el botón ya te lo deja aplicado.",
+        "promo_cta": "Usar el descuento",
+        "promo_loose": "🍊 Hay una mandarina suelta — atrápala",
+        "promo_wait": "🍊 Se escondió… vuelve en un rato",
+        "promo_respawn": 20
+      }
+    }
+  },
+  "order": [
+    "mapa"
+  ]
+}
