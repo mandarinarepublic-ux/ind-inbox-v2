@@ -127,6 +127,45 @@ function construir(body) {
     }
   }
 
+  // AUDIO por URL pública (Supabase Storage). Mismo camino que el video: el
+  // navegador sube directo a Supabase y Meta baja el archivo del link.
+  //
+  // ⚠️ Si el archivo es OGG/Opus, WhatsApp lo pinta como NOTA DE VOZ —la burbuja
+  // del micrófono con las ondas—. Cualquier otro formato llega como archivo
+  // adjunto: suena igual pero se ve como envío masivo en vez de una persona
+  // hablándote. La conversión la hace el navegador ANTES de subir, porque ahí
+  // decodificar el MP3 es gratis (API nativa) y en el servidor haría falta ffmpeg,
+  // que pesa 80 MB. Ver lib/audio-nota-voz.js.
+  //
+  // ⚠️ El audio NO acepta caption: la Cloud API lo ignora. Si el vendedor escribió
+  // texto además del audio, salen como DOS mensajes — está avisado en la interfaz.
+  if (body.AudioURL) {
+    return {
+      tipo: 'audio',
+      contenido: '', mediaUrl: body.AudioURL, mediaId: '',
+      payload: {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'audio',
+        audio: { link: body.AudioURL },
+      },
+    }
+  }
+
+  // Audio por MediaID (subido antes a Meta), mismo criterio que el de video.
+  if (body.AudioMediaId) {
+    return {
+      tipo: 'audio',
+      contenido: '', mediaUrl: body.AudioURL || '', mediaId: body.AudioMediaId,
+      payload: {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'audio',
+        audio: { id: body.AudioMediaId },
+      },
+    }
+  }
+
   // Imagen por MediaID (subida antes vía /api/media/upload — camino sin terceros)
   if (body.ImagenMediaId) {
     return {

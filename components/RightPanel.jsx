@@ -1,7 +1,9 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { Avatar } from '@/components/Components'
-import { fetchRepliesFromSheet, writeReply, reorderReplies, addNota, setIdVenta, fetchProductos, generarLinkPago } from '@/lib/api-client'
+import { fetchRepliesFromSheet, writeReply, reorderReplies, addNota, setIdVenta, fetchProductos, generarLinkPago , subirAudioNota } from '@/lib/api-client'
+import { esAudio as esAudioArchivo } from '@/lib/audio-nota-voz'
+import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
 import Notas from './Notas'
 import PedidoManual from './PedidoManual'
 import VerPedido from './VerPedido'
@@ -89,24 +91,40 @@ async function subirFoto(file) {
   return data.url
 }
 
-// Extrae todas las urls de imagen de un reply
+// Los adjuntos de un reply EN ORDEN, con su tipo. La lógica —incluido el respaldo
+// para las respuestas viejas, que solo tienen imageUrl1..10— vive en
+// lib/adjuntos-respuesta.js, probada aparte.
 function getImgUrls(reply) {
-  return Array.from({length: MAX_IMGS}, (_, i) =>
-    i === 0 ? (reply.imageUrl || '') : (reply[`imageUrl${i+1}`] || '')
-  ).filter(Boolean)
+  return adjuntosDeRespuesta(reply)
 }
 
-// Convierte array de urls a objeto reply { imageUrl, imageUrl2, ... }
-function urlsToReply(urls) {
-  const obj = {}
+/**
+ * Adjuntos ordenados → lo que se manda a guardar.
+ *
+ * Se mandan las dos formas a propósito: `adjuntos` (la lista ordenada, la verdad
+ * nueva) e `imageUrl1..N` (el formato viejo que espera la ruta de guardado).
+ *
+ * Los audios NO entran en `imageUrlN`: si entraran, se mandarían como fotos y Meta
+ * los rechazaría.
+ */
+function urlsToReply(adjuntos) {
+  const lista = Array.isArray(adjuntos) ? adjuntos : []
+  const obj = { adjuntos: lista }
+  const fotos = lista.filter(a => a?.tipo !== 'audio').map(a => a?.url || '')
   for (let i = 0; i < MAX_IMGS; i++) {
     const key = i === 0 ? 'imageUrl' : `imageUrl${i+1}`
-    obj[key] = urls[i] || ''
+    obj[key] = fotos[i] || ''
   }
   return obj
 }
 
 // ── MultiImgEditor — editor de hasta 10 fotos ────────────────────
+// ⚠️ EL ORDEN ES DEL VENDEDOR: cada adjunto nuevo se AGREGA donde se cargó y nunca
+// se reordena por tipo. WhatsApp entrega cada uno como un mensaje aparte, así que
+// ese orden es el que ve el cliente.
+//
+// Trabaja con `[{tipo,url}]` y no con una lista de urls: dos listas separadas
+// —fotos por un lado, audios por otro— no pueden expresar "foto, audio, foto".
 function MultiImgEditor({ urls, onChange }) {
   const [uploading, setUploading] = useState({})
   const refs = Array.from({length: MAX_IMGS}, () => useRef(null))
@@ -115,13 +133,24 @@ function MultiImgEditor({ urls, onChange }) {
     const f = e.target.files[0]; if (!f) return
     setUploading(p => ({...p, [idx]: true}))
     try {
-      const url = await subirFoto(f).catch(e => { console.error('[RightPanel] subirFoto:', e); return '' })
+      // El audio se convierte a OGG/Opus ACÁ, una sola vez. A partir de entonces
+      // usar la respuesta solo manda el link: ni codificador ni espera.
+      const esAud = esAudioArchivo(f)
+      const url = esAud
+        ? await subirAudioNota(f).catch(e => { console.error('[RightPanel] subirAudio:', e); return '' })
+        : await subirFoto(f).catch(e => { console.error('[RightPanel] subirFoto:', e); return '' })
       if (url) {
-        const next = [...urls]
-        next[idx] = url
-        // compactar — quitar huecos
-        const compacted = next.filter(Boolean)
-        onChange(compacted)
+        // ⚠️ SE ACTUALIZA CON FUNCIÓN, NO CON `urls` A SECAS. `urls` es el valor del
+        // render en que se hizo clic, y subir tarda —un audio más, porque además se
+        // convierte—. Si mientras sube uno se agrega otro, el segundo partiría de la
+        // lista VIEJA y al terminar pisaría al primero: se pierde un adjunto sin
+        // ningún error. Pasó en MANDI el 21-ago (6 subidos, 5 guardados).
+        onChange(prev => {
+          const base = Array.isArray(prev) ? prev : []
+          const next = [...base]
+          next[idx] = { tipo: esAud ? 'audio' : 'imagen', url }
+          return next.filter(Boolean)   // compactar, conservando el orden
+        })
       }
     } finally {
       setUploading(p => ({...p, [idx]: false}))
@@ -129,10 +158,9 @@ function MultiImgEditor({ urls, onChange }) {
     }
   }
 
-  const removeImg = (idx) => {
-    const next = urls.filter((_, i) => i !== idx)
-    onChange(next)
-  }
+  // También con updater: quitar uno mientras otro sube repondría el que ya se había
+  // ido, o borraría el recién llegado.
+  const removeImg = (idx) => onChange(prev => (Array.isArray(prev) ? prev : []).filter((_, i) => i !== idx))
 
   // Slots a mostrar: fotos existentes + 1 vacío (si hay espacio)
   const slots = urls.length < MAX_IMGS ? [...urls, null] : urls
@@ -143,8 +171,18 @@ function MultiImgEditor({ urls, onChange }) {
         <div key={idx} style={{ position:'relative', width:44, height:44 }}>
           {url ? (
             <>
-              <img src={url} style={{ width:44, height:44, borderRadius:6, objectFit:'cover', display:'block' }} alt=""
+              {url.tipo === 'audio' ? (
+                // El audio no tiene miniatura. El número dice su lugar en la fila:
+                // sin él no se sabe si la voz sale antes o después de las fotos.
+                <div title={`Nota de voz — sale en el lugar ${idx + 1}`}
+                  style={{ width:44, height:44, borderRadius:6, background:'#132437', border:'1px solid #1e3a52', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:1 }}>
+                  <span style={{ fontSize:15 }}>🎤</span>
+                  <span style={{ fontSize:8, color:'#64748b' }}>{idx + 1}º</span>
+                </div>
+              ) : (
+              <img src={url.url} style={{ width:44, height:44, borderRadius:6, objectFit:'cover', display:'block' }} alt=""
                 onError={e => e.currentTarget.style.display='none'} />
+              )}
               {uploading[idx] && (
                 <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.55)', borderRadius:6,
                   display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, color:'#F4F1EC' }}>↑</div>
@@ -162,7 +200,7 @@ function MultiImgEditor({ urls, onChange }) {
                   alignItems:'center', justifyContent:'center', fontFamily:'inherit' }}>
                 {uploading[idx] ? '↑' : '+'}
               </button>
-              <input ref={refs[idx]} type="file" accept="image/*" style={{ display:'none' }}
+              <input ref={refs[idx]} type="file" accept="image/*,audio/*" style={{ display:'none' }}
                 onChange={e => handleFile(e, idx)} />
             </>
           )}
@@ -170,7 +208,7 @@ function MultiImgEditor({ urls, onChange }) {
       ))}
       {urls.length > 0 && (
         <div style={{ width:'100%', fontSize:9, color:C.creamFaint, marginTop:2 }}>
-          {urls.length}/{MAX_IMGS} fotos
+          {urls.length}/{MAX_IMGS} adjuntos · salen en este orden
         </div>
       )}
     </div>
@@ -685,7 +723,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                       <div style={{ background:`rgba(244,241,236,.03)`, border:`1px solid ${C.cream}`, borderRadius:9, padding:'8px', marginBottom:2 }}>
                         <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={4} placeholder="Texto..."
                           style={{ width:'100%', ...inputBase, border:`1px solid ${C.cream}`, resize:'vertical', marginBottom:5, whiteSpace:'pre-wrap', minHeight:80 }} />
-                        <p style={{ fontSize:9, color:C.creamFaint, marginBottom:3 }}>Fotos ({editImgUrls.length}/{MAX_IMGS})</p>
+                        <p style={{ fontSize:9, color:C.creamFaint, marginBottom:3 }}>Adjuntos ({editImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
                         <MultiImgEditor urls={editImgUrls} onChange={setEditImgUrls} />
                         <BotonesEditor botones={editBotones} onChange={setEditBotones} />
                         <div style={{ display:'flex', gap:3, marginTop:7 }}>
@@ -716,14 +754,19 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                         {imgs.length>0&&(
                           <div style={{ display:'flex', gap:1, height:36 }}>
                             {imgs.map((u,i)=>(
-                              <img key={i} src={u} style={{ flex:1, objectFit:'cover', display:'block', maxWidth: `${100/imgs.length}%` }} alt=""
+                              u.tipo === 'audio'
+                              // Un audio no tiene miniatura. Pintar un <img> con su
+                              // url daría el icono de imagen rota, que se lee como
+                              // "algo falló" cuando está todo bien.
+                              ? <div key={i} title="Nota de voz" style={{ flex:1, maxWidth: `${100/imgs.length}%`, display:'flex', alignItems:'center', justifyContent:'center', background:'#132437', fontSize:14 }}>🎤</div>
+                              : <img key={i} src={u.url} style={{ flex:1, objectFit:'cover', display:'block', maxWidth: `${100/imgs.length}%` }} alt=""
                                 onError={e=>e.currentTarget.style.display='none'} />
                             ))}
                           </div>
                         )}
                         <div style={{ padding:'5px 7px', display:'flex', alignItems:'flex-start', gap:3 }}>
                           <span style={{ flex:1, fontSize:11, color:C.creamDim, lineHeight:1.35, overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>
-                            {imgs.length>0&&`🖼×${imgs.length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{reply.text}
+                            {imgs.filter(a=>a.tipo!=='audio').length>0&&`🖼×${imgs.filter(a=>a.tipo!=='audio').length} `}{imgs.filter(a=>a.tipo==='audio').length>0&&`🎤×${imgs.filter(a=>a.tipo==='audio').length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{reply.text}
                           </span>
                           <div style={{ display:'flex', gap:2, flexShrink:0 }}>
                             <button onClick={() => reordenar(idx, idx - 1)} disabled={idx === 0 || hayAltaPendiente}
@@ -756,7 +799,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
               <textarea value={newText} onChange={e=>setNewText(e.target.value)} placeholder="Texto..." rows={2}
                 style={{ width:'100%', ...inputBase, fontSize:11, padding:'5px 7px', resize:'none', marginBottom:5, whiteSpace:'pre-wrap' }}
                 onFocus={e=>e.target.style.borderColor=C.cream} onBlur={e=>e.target.style.borderColor=C.border} />
-              <p style={{ fontSize:9, color:C.creamFaint, marginBottom:3 }}>Fotos ({newImgUrls.length}/{MAX_IMGS})</p>
+              <p style={{ fontSize:9, color:C.creamFaint, marginBottom:3 }}>Adjuntos ({newImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
               <MultiImgEditor urls={newImgUrls} onChange={setNewImgUrls} />
               <BotonesEditor botones={newBotones} onChange={setNewBotones} />
               <button onClick={addReply} disabled={!newText.trim()}
