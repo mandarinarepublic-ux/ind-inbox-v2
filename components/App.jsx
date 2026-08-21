@@ -1401,7 +1401,13 @@ export default function App() {
       for (let i = 0; i < adjuntos.length; i++) {
         const a = adjuntos[i]
         let ok
-        if (a.tipo === 'audio') {
+        if (a.tipo === 'documento') {
+          // ⚠️ Esta rama va ANTES del `else` de imagen a proposito: sin ella el
+          // documento caeria ahi y se mandaria como FOTO. Meta lo rechazaria y
+          // el vendedor no se enteraria.
+          const r = await enviarDocumentoUrl(telefono, nombre, a.url, a.nombre)
+          ok = r?.ok !== false
+        } else if (a.tipo === 'audio') {
           // El audio de una respuesta rápida YA está en OGG/Opus: se convirtió una
           // sola vez, al guardar la respuesta. Acá solo se manda el link, así que
           // sale tan rápido como una foto cacheada.
