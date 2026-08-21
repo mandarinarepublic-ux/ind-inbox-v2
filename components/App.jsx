@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendAudio, enviarAudioUrl, sendImageFile, precacheMedia, setCanalActivo } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, sendImageFile, precacheMedia, setCanalActivo } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
@@ -186,6 +186,9 @@ export default function App() {
   // Un audio seleccionado. Va aparte de `isVideo` porque se manda por otro camino
   // (`sendAudio`, que además CONVIERTE a OGG/Opus para que salga como nota de voz).
   const [isAudio,      setIsAudio]      = useState(false)
+  // Un DOCUMENTO ocupa la tanda entero, igual que el video y el audio: no se
+  // mezcla con fotos ni se manda de a varios.
+  const [isDoc,        setIsDoc]        = useState(false)
   // Aviso de qué va a pasar con el archivo: "se convertirá" o "ya está listo". Se
   // muestra ANTES de mandar — enterarse por el chat del cliente de que salió como
   // adjunto en vez de nota de voz es la pantalla mintiendo.
@@ -1111,7 +1114,7 @@ export default function App() {
   const agregarAdjuntos = async (entrantes) => {
     const lista = Array.from(entrantes || [])
     if (!lista.length) return
-    const plan = decidirAdjuntos({ actuales: imgFiles.length, esVideoActual: isVideo || isAudio, entrantes: lista })
+    const plan = decidirAdjuntos({ actuales: imgFiles.length, esVideoActual: isVideo || isAudio || isDoc, entrantes: lista })
     avisarAdjunto(plan.aviso)
     if (plan.accion === 'nada') return
     setImgResult(null)
@@ -1119,14 +1122,22 @@ export default function App() {
     if (plan.tipo === 'audio') {
       // El audio NO pasa por `toJpeg` ni genera miniatura: se muestra su nombre y
       // el aviso de formato.
-      setIsAudio(true); setIsVideo(false)
+      setIsAudio(true); setIsVideo(false); setIsDoc(false)
       setAvisoAudio(avisoDeFormato(plan.archivos[0]))
       setImgFiles([{ file: plan.archivos[0], preview: '' }])
       return
     }
 
+    if (plan.tipo === 'documento') {
+      // Sin miniatura ni conversion: se muestra el nombre del archivo, que es
+      // ademas lo que va a ver el cliente en su WhatsApp.
+      setIsDoc(true); setIsVideo(false); setIsAudio(false); setAvisoAudio('')
+      setImgFiles([{ file: plan.archivos[0], preview: '' }])
+      return
+    }
+
     if (plan.tipo === 'video') {
-      setIsVideo(true); setIsAudio(false); setAvisoAudio('')
+      setIsVideo(true); setIsAudio(false); setIsDoc(false); setAvisoAudio('')
       setImgFiles([{ file: plan.archivos[0], preview: URL.createObjectURL(plan.archivos[0]) }])
       return
     }
@@ -1136,7 +1147,7 @@ export default function App() {
       preview: await new Promise(res => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.readAsDataURL(f) })
     })))
     if (plan.accion === 'reemplazar') {
-      setIsVideo(false); setIsAudio(false); setAvisoAudio('')
+      setIsVideo(false); setIsAudio(false); setIsDoc(false); setAvisoAudio('')
       setImgFiles(procesadas)
     } else {
       // El `slice` no sobra: procesar es asíncrono y dos pegados seguidos y
@@ -1251,6 +1262,15 @@ export default function App() {
         })
         allOk = result.ok
         if (!result.ok) sendErr = result.error || ''
+      } else if (isDoc) {
+        // El documento SI acepta texto pegado, asi que lo escrito en la caja
+        // viaja CON el archivo y sale un solo mensaje. La caja se limpia al
+        // final para que ese texto no se mande otra vez.
+        const caption = input.trim()
+        const result = await sendDocumento(telefono, nombre, archivos[0].file, caption)
+        allOk = result.ok
+        if (!result.ok) sendErr = result.error || ''
+        if (result.ok && caption) setInput('')
       } else if (isVideo) {
         const result = await sendVideo(telefono, nombre, archivos[0].file)
         allOk = result.ok
@@ -1271,7 +1291,7 @@ export default function App() {
       // chat tiene que seguir en PENDIENTES.
       if (allOk) await changeStatus(telefono, estadoDestino)
       })
-      setTimeout(() => { setImgFiles([]); setImgResult(null); setIsVideo(false); setIsAudio(false); setAvisoAudio(''); setImgProgress(0); if (fileRef.current) fileRef.current.value = '' }, 1500)
+      setTimeout(() => { setImgFiles([]); setImgResult(null); setIsVideo(false); setIsAudio(false); setIsDoc(false); setAvisoAudio(''); setImgProgress(0); if (fileRef.current) fileRef.current.value = '' }, 1500)
       setTimeout(load, 4000)
     } catch { setImgResult({ ok: false }) }
     finally  { setImgUploading(false) }
@@ -1279,7 +1299,7 @@ export default function App() {
 
   const cancelImage = () => {
     imgFiles.forEach(f => { if (isVideo) URL.revokeObjectURL(f.preview) })
-    setImgFiles([]); setImgResult(null); setIsVideo(false); setIsAudio(false); setAvisoAudio(''); setImgProgress(0); avisarAdjunto('')
+    setImgFiles([]); setImgResult(null); setIsVideo(false); setIsAudio(false); setIsDoc(false); setAvisoAudio(''); setImgProgress(0); avisarAdjunto('')
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -1937,6 +1957,9 @@ export default function App() {
                             // `<img src="">` con el icono de imagen rota, que se lee
                             // como "algo falló" cuando está todo bien.
                             ? <div style={{ width:44, height:44, borderRadius:8, background:'#132437', border:'1px solid #1e3a52', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>🎤</div>
+                            : isDoc
+                            // Un documento tampoco tiene miniatura, por lo mismo.
+                            ? <div style={{ width:44, height:44, borderRadius:8, background:'#132437', border:'1px solid #1e3a52', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>📄</div>
                             : isVideo
                             ? <video src={item.preview} style={{ width:64, height:44, borderRadius:8, objectFit:'cover' }} muted />
                             : <img src={item.preview} style={{ width:44, height:44, borderRadius:8, objectFit:'cover' }} alt={`preview-${i}`} />
@@ -1958,8 +1981,12 @@ export default function App() {
                         {imgUploading
                           ? `Enviando ${imgProgress}/${imgFiles.length}...`
                           : imgResult
-                            ? imgResult.ok ? (isAudio ? '✓ nota de voz enviada' : isVideo ? '✓ video enviado' : `✓ ${imgFiles.length} enviada${imgFiles.length>1?'s':''}`) : `✗ ${imgResult.error || 'Error al enviar'}`
-                            : isAudio ? `🎤 ${imgFiles[0]?.file?.name || 'audio'}${avisoAudio ? ' — ' + avisoAudio : ''}` : isVideo ? '1 video seleccionado' : `${imgFiles.length} foto${imgFiles.length>1?'s':''} seleccionada${imgFiles.length>1?'s':''}`
+                            ? imgResult.ok ? (isAudio ? '✓ nota de voz enviada' : isDoc ? '✓ documento enviado' : isVideo ? '✓ video enviado' : `✓ ${imgFiles.length} enviada${imgFiles.length>1?'s':''}`) : `✗ ${imgResult.error || 'Error al enviar'}`
+                            : isAudio ? `🎤 ${imgFiles[0]?.file?.name || 'audio'}${avisoAudio ? ' — ' + avisoAudio : ''}`
+                            // Se avisa que el texto viaja PEGADO al archivo. Sin el aviso, el
+                            // vendedor no sabe si tiene que mandarlo aparte.
+                            : isDoc ? `📄 ${imgFiles[0]?.file?.name || 'documento'} — lo que escribas va con el archivo`
+                            : isVideo ? '1 video seleccionado' : `${imgFiles.length} foto${imgFiles.length>1?'s':''} seleccionada${imgFiles.length>1?'s':''}`
                         }
                       </span>
                       {!imgResult && (
@@ -1976,7 +2003,11 @@ export default function App() {
                 )}
 
                 <div style={{ display:'flex', gap:8, alignItems:'flex-end' }}>
-                  <input ref={fileRef} type="file" accept="image/*,video/*,audio/*" multiple style={{ display:'none' }} onChange={handleFileSelect} />
+                  {/* Sin `accept`: desde que se pueden mandar documentos no hay tipo prohibido,
+                    y una lista aca volveria a esconder archivos — el dialogo del sistema
+                    los ocultaria y pareceria que el archivo "no se puede". decidirAdjuntos
+                    decide que hacer con lo que entre. */}
+                <input ref={fileRef} type="file" multiple style={{ display:'none' }} onChange={handleFileSelect} />
 
                   {showEmoji && <EmojiPicker onSelect={(emoji) => setInput(prev => prev + emoji)} onClose={() => setShowEmoji(false)} />}
 
