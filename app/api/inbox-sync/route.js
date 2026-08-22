@@ -12,7 +12,27 @@ export async function GET(req) {
   try {
     // ?canal=<phone_id>. Cada bandeja pide la suya; sin parámetro, el número
     // principal (así una pestaña vieja en caché sigue viendo lo de siempre).
-    const canal = new URL(req.url).searchParams.get('canal') || undefined
+    const url = new URL(req.url)
+    const canal = url.searchParams.get('canal') || undefined
+
+    // ── Latido ligero (?solo=pendientes) ──────────────────────────────────
+    // Lo pide la pantalla cuando está EN PAUSA por inactividad. Devuelve solo
+    // el contador —unos bytes— en vez de los 4,36 MB del ciclo completo.
+    //
+    // ⚠️ Existe para que la pausa no deje al equipo sin aviso: IND tiene UNA
+    // sola suscripción de push, así que esa pantalla ES la notificación; y
+    // desde el 21-ago la pauta entra por el 3326, que no vive en ningún
+    // celular. Sin este latido, la pausa cambiaría unos dólares de tráfico
+    // por un lead pagado esperando en silencio.
+    if (url.searchParams.get('solo') === 'pendientes') {
+      const pendientes = await contarPendientesPorCanalSupabase().catch(() => ({}))
+      return NextResponse.json({ pendientes }, {
+        // Misma ventana de caché que el ciclo completo, por lo mismo: varias
+        // pantallas en pausa comparten una sola ejecución de origen.
+        headers: { 'Cache-Control': 's-maxage=2, stale-while-revalidate=4' },
+      })
+    }
+
     const [lista, rows, contactos, pendientes] = await Promise.all([
       getLista(canal),
       getMensajes(canal),

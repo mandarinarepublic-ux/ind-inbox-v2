@@ -4,6 +4,7 @@ import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
+import { debePausar, hayNovedad, EVENTOS_ACTIVIDAD } from '@/lib/inactividad'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
@@ -171,6 +172,18 @@ export default function App() {
   // encendía desde que handleSend dejó de bloquear).
   const [colaLen,      setColaLen]      = useState({})
   const [loading,      setLoading]      = useState(true)
+
+  // ── Pausa por inactividad ───────────────────────────────────────
+  // La pantalla encendida pero abandonada polleaba toda la noche: 1.177
+  // llamadas de 4,36 MB entre la 1 y las 5 de la mañana, para 2 mensajes.
+  // Los refs (y no estado) son a propósito: el tick los lee sin obligar a
+  // meter nada en las dependencias del useEffect del polling, que es donde
+  // vive el riesgo de dejar intervalos huérfanos.
+  const actividadRef = useRef(Date.now())
+  const pausadoRef   = useRef(false)
+  const basePendRef  = useRef(null)      // contador al momento de pausar
+  const [pausado, setPausado] = useState(false)
+  const [novedadEnPausa, setNovedadEnPausa] = useState(false)
   const [lastSync,     setLastSync]     = useState(null)
   const [search,       setSearch]       = useState('')
   const [searchMode,   setSearchMode]   = useState('contacto') // 'contacto' | 'mensaje'
@@ -535,13 +548,63 @@ export default function App() {
     //  · sin chat abierto      → 25s: solo lista/contactos, mucho más barato.
     // Y SOLO con la pestaña visible; en segundo plano se pausa (al volver refresca).
     const ms = active ? 10000 : 25000
-    const start = () => { if (!pollRef.current) pollRef.current = setInterval(load, ms) }
+
+    // Despertar: cualquier gesto deliberado reanuda y refresca al instante.
+    const despertar = () => {
+      actividadRef.current = Date.now()
+      if (!pausadoRef.current) return
+      pausadoRef.current = false
+      basePendRef.current = null
+      setPausado(false)
+      setNovedadEnPausa(false)
+      load()
+    }
+
+    // El intervalo NO cambia: sigue latiendo (es local y gratis). Lo que decide
+    // este tick es QUÉ se pide — el ciclo completo o solo el contador.
+    const tick = async () => {
+      if (!debePausar(actividadRef.current, Date.now())) {
+        if (pausadoRef.current) { pausadoRef.current = false; setPausado(false); setNovedadEnPausa(false); basePendRef.current = null }
+        return load()
+      }
+
+      if (!pausadoRef.current) { pausadoRef.current = true; setPausado(true) }
+
+      // EN PAUSA: unos bytes en vez de 4,36 MB. Este latido es lo que impide
+      // que la pausa deje al equipo sin aviso — ver lib/inactividad.js.
+      let datos = null
+      try {
+        const res = await fetch('/api/inbox-sync?solo=pendientes', { cache: 'no-store' })
+        // ⚠️ res.ok: fetch NO lanza con 4xx/5xx. Sin esto, una sesión vencida
+        // devolvería el HTML del login y se leería como "no pasa nada".
+        if (res.ok) datos = await res.json()
+      } catch { /* red caída: se reintenta al siguiente tick */ }
+      if (!datos) return
+
+      if (basePendRef.current === null) { basePendRef.current = datos.pendientes; return }
+
+      if (hayNovedad(basePendRef.current, datos.pendientes)) {
+        // Llegó algo. Se hace UNA carga completa para que la pantalla quede al
+        // día, y se sigue en pausa: no hubo gesto humano, así que el próximo
+        // tick vuelve al latido barato.
+        basePendRef.current = datos.pendientes
+        setNovedadEnPausa(true)
+        load()
+      }
+    }
+
+    const start = () => { if (!pollRef.current) pollRef.current = setInterval(tick, ms) }
     const stop  = () => { clearInterval(pollRef.current); pollRef.current = null }
-    const onVisibility = () => { if (document.hidden) stop(); else { load(); start() } }
+    const onVisibility = () => { if (document.hidden) stop(); else { despertar(); start() } }
     load()
     start()
     document.addEventListener('visibilitychange', onVisibility)
-    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
+    for (const ev of EVENTOS_ACTIVIDAD) window.addEventListener(ev, despertar, { passive: true })
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+      for (const ev of EVENTOS_ACTIVIDAD) window.removeEventListener(ev, despertar)
+    }
   }, [load, active])
 
   useEffect(() => {
@@ -1810,7 +1873,23 @@ export default function App() {
             </div>
 
             <div style={{ padding:'7px 14px', borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
-              <span style={{ fontSize:10, color:C.creamFaint }}>{lastSync?'Sync '+lastSync.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—'}</span>
+              {/* ⚠️ La pausa NO puede ser silenciosa. Una pantalla en estado
+                  degradado sin aviso ya costó 3 mensajes perdidos cuando no se
+                  avisaba que faltaba la sesión. Cualquier gesto reanuda, así
+                  que esto es informativo — pero sin ello, una pantalla que dejó
+                  de actualizarse se ve idéntica a una al día. */}
+              {pausado ? (
+                <span style={{
+                  fontSize:10, fontWeight:600, cursor:'pointer',
+                  color: novedadEnPausa ? '#f0b429' : '#b98f4a',
+                }}>
+                  {novedadEnPausa
+                    ? '🔔 Llegaron mensajes — toca para volver'
+                    : '⏸ En pausa por inactividad — toca para reanudar'}
+                </span>
+              ) : (
+                <span style={{ fontSize:10, color:C.creamFaint }}>{lastSync?'Sync '+lastSync.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—'}</span>
+              )}
               <button onClick={() => window.location.reload()} style={{ background:`rgba(244,241,236,.06)`, border:`1px solid rgba(244,241,236,.15)`, color:C.cream, borderRadius:7, width:30, height:30, cursor:'pointer', fontSize:15, display:'flex', alignItems:'center', justifyContent:'center' }}>↻</button>
             </div>
           </div>
