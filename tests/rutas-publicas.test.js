@@ -6,7 +6,7 @@
 // (decisión explícita del dueño: IND reutiliza la cuenta dLocal de MANDI, ver
 // lib/dlocal.js).
 //
-// Van las 32 rutas REALES del repo (`find app/api -name route.js`), una por una,
+// Van las 33 rutas REALES del repo (`find app/api -name route.js`), una por una,
 // más las páginas. Si alguien agrega una ruta y no la pone acá, la prueba no
 // falla — por eso al final se comprueba también que la lista de públicas sea
 // EXACTAMENTE de cuatro, que es la parte que sí puede hacer daño.
@@ -20,7 +20,7 @@
 // ⚠️ El número de rutas de este archivo se rompió una vez por estar escrito a
 // mano y no recontado tras un cambio (ver el aviso de `/api/admin/meta-waba`
 // arriba). Al sumar LINK PAGO el 15-ago-2026 se corrió `find app/api -name
-// route.js` de nuevo en vez de sumar "+2" de memoria — dio 32, y es lo que
+// route.js` de nuevo en vez de sumar "+2" de memoria — dio 33, y es lo que
 // queda escrito abajo.
 import test from 'node:test'
 import assert from 'node:assert'
@@ -35,6 +35,7 @@ const PUBLICAS = [
   '/api/webhook',            // Meta (WhatsApp) — 7.880 llamadas en 3 días
   '/api/cron/seguimientos',  // cron de Vercel — 3 llamadas en 3 días
   '/api/cron/pendientes',    // cron de Vercel, cada 5 min — recordatorio Telegram
+  '/api/cron/entregas',      // cron de Vercel, cada 30 min — aviso de entregas fallidas
   '/api/pago-dlocal',        // dLocal Go, notification_url — secreto en la URL
 ]
 
@@ -51,10 +52,10 @@ const PROTEGIDAS = [
   '/', '/inbox', '/dashboard',
 ]
 
-test('las 32 rutas del repo están cubiertas por esta prueba', () => {
-  // 4 públicas + 28 protegidas = las 32 que devuelve `find app/api -name route.js`.
+test('las 33 rutas del repo están cubiertas por esta prueba', () => {
+  // 5 públicas + 28 protegidas = las 33 que devuelve `find app/api -name route.js`.
   // Si mañana alguien agrega una ruta nueva y no la suma acá, este número canta.
-  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 32)
+  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 33)
 })
 
 for (const ruta of PUBLICAS) {
@@ -69,11 +70,12 @@ for (const ruta of PROTEGIDAS) {
   })
 }
 
-test('las públicas son EXACTAMENTE cuatro', () => {
+test('las públicas son EXACTAMENTE cinco', () => {
   // Cada entrada de más es una puerta al internet entero. Que agregar una rompa
   // una prueba es justamente lo que se busca.
   assert.deepStrictEqual(RUTAS_PUBLICAS, [
-    '/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes', '/api/pago-dlocal',
+    '/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes',
+    '/api/cron/entregas', '/api/pago-dlocal',
   ])
 })
 
@@ -120,4 +122,48 @@ test('basura y vacío no son públicos', () => {
   assert.strictEqual(esRutaPublica(''), false)
   assert.strictEqual(esRutaPublica(null), false)
   assert.strictEqual(esRutaPublica(undefined), false)
+})
+
+// ⚠️ ESTO PASÓ DE VERDAD, en MANDI, el 21-ago. `/api/cron/entregas` —el aviso de
+// mensajes que NO le llegaron al cliente— se desplegó sin estar en el `matcher`
+// del middleware. Vercel lo llamaba, el middleware lo mandaba al login, y la
+// tarea no corría NUNCA: sin error, sin registro, sin nada. Un aviso construido
+// para romper un silencio, muerto en el mismo silencio.
+//
+// Estas dos pruebas leen `vercel.json` y exigen que TODO cron programado esté
+// fuera del candado, en las DOS capas. Un cron nuevo que se olvide de la lista
+// rompe acá, no en producción tres semanas después.
+import { readFileSync } from 'node:fs'
+
+test('todo cron de vercel.json queda fuera del candado', () => {
+  const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+  const crons = (vercel.crons || []).map(c => c.path)
+  assert.ok(crons.length > 0, 'vercel.json debería tener crons')
+  for (const ruta of crons) {
+    assert.ok(esRutaPublica(ruta),
+      `${ruta} está programado como cron pero el candado lo bloquea: agrégalo a RUTAS_PUBLICAS y al matcher de middleware.js`)
+  }
+})
+
+test('y el matcher del middleware también los excluye', () => {
+  // La lista de rutas públicas es la SEGUNDA capa. Si el `matcher` no los excluye,
+  // el middleware corre igual y redirige antes de que nadie mire la lista.
+  const mw = readFileSync(new URL('../middleware.js', import.meta.url), 'utf8')
+  const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+
+  // ⚠️ Se mira SOLO el patrón del matcher, no el archivo entero. Un `includes`
+  // sobre todo el archivo pasa por cualquier COMENTARIO que nombre la ruta — y
+  // este archivo está lleno de comentarios que las nombran. Una prueba que no se
+  // cae cuando el bug está presente es peor que no tener prueba: da permiso para
+  // no mirar. Verificado quitando la ruta del matcher a propósito.
+  const desde = mw.indexOf("(?!")
+  const hasta = mw.indexOf(")", desde)
+  assert.ok(desde > 0 && hasta > desde, "no se pudo leer el patrón del matcher de middleware.js")
+  const excluidasDelMatcher = mw.slice(desde + 3, hasta).split("|").map(s => s.trim())
+
+  for (const ruta of (vercel.crons || []).map(c => c.path)) {
+    const sinBarra = ruta.slice(1)
+    assert.ok(excluidasDelMatcher.includes(sinBarra),
+      `${ruta} no está excluido en el matcher de middleware.js: el cron se va a redirigir al login y no correrá nunca`)
+  }
 })

@@ -122,6 +122,6 @@ export async function middleware(req) {
 // lib/rutas-publicas.js y tests/rutas-publicas.test.js.
 export const config = {
   matcher: [
-    '/((?!api/webhook|api/cron/seguimientos|api/cron/pendientes|api/pago-dlocal|_next/static|_next/image|favicon.ico|sw.js|icon-|apple-touch-icon|manifest.webmanifest).*)',
+    '/((?!api/webhook|api/cron/seguimientos|api/cron/pendientes|api/cron/entregas|api/pago-dlocal|_next/static|_next/image|favicon.ico|sw.js|icon-|apple-touch-icon|manifest.webmanifest).*)',
   ],
 }
