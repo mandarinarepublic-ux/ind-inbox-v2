@@ -145,13 +145,30 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
   const [texto,   setTexto]   = useState('')
   const [sending, setSending] = useState(false)
 
+  // ── Por cuál número sale ────────────────────────────────────────────────
+  // El sistema NO adivina: muestra los dos con su estado y deja elegir, con el
+  // más fresco preseleccionado. Elegir solo fallaba en un caso muy real — el
+  // cliente escribe al 3326 por un pedido y al 9804 por otra cosa: el vendedor
+  // contesta el hilo del 3326 y el mensaje sale por el 9804, en silencio.
+  //
+  // Si `canales` no viene (respuesta vieja del API, o un navegador con el JS
+  // anterior), se arma una opción con lo que haya: mejor eso que un panel roto.
+  const opciones = (c.canales && c.canales.length)
+    ? c.canales
+    : (c.canal ? [{ phoneId: c.canal, etiqueta: c.canal, dentro24h: !!c.dentro24h, ultimoEntranteAt: c.ultimoEntranteDelCanal || null, preseleccionado: true }] : [])
+  const [canalSel, setCanalSel] = useState(() => (opciones.find(o => o.preseleccionado) || {}).phoneId || '')
+  const elegido = opciones.find(o => o.phoneId === canalSel) || null
+  // ⚠️ La ventana es la DEL CANAL ELEGIDO, no la de la persona. Ese era el bug:
+  // pintaba verde porque el cliente había escrito al OTRO número.
+  const abierta = Boolean(elegido && elegido.dentro24h)
+
   const enviarLibre = async () => {
-    if (!texto.trim()) return
+    if (!texto.trim() || !canalSel) return
     setSending(true)
     // El canal del CLIENTE (por dónde escribió él), no el de la pestaña. Sin
     // esto, escribirle desde la agenda salía por la bandeja en la que estabas
     // parado y Meta lo rechazaba con 131047 — 79 mensajes en agosto.
-    const r = await sendReply(c.telefono, c.nombre || '', texto.trim(), '', c.canal || '')
+    const r = await sendReply(c.telefono, c.nombre || '', texto.trim(), '', canalSel)
     setSending(false)
     if (r?.ok) { flash('✅ Mensaje enviado'); onClose() }
     else flash('❌ No se pudo enviar')
@@ -177,21 +194,52 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.creamFaint, cursor: 'pointer', fontSize: 20 }}>✕</button>
         </div>
 
-        <div style={{ marginBottom: 14 }}><Badge24h on={c.dentro24h} /></div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: C.creamDim, marginBottom: 8 }}>¿Por cuál número le escribes?</div>
+          {opciones.length === 0 && (
+            <div style={{ fontSize: 12.5, color: C.creamFaint, padding: '10px 12px', borderRadius: 10, border: `1px dashed ${C.border2}` }}>
+              No hay números configurados.
+            </div>
+          )}
+          {opciones.map((o) => {
+            const sel = o.phoneId === canalSel
+            return (
+              <button key={o.phoneId} onClick={() => setCanalSel(o.phoneId)} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
+                padding: '10px 12px', marginBottom: 6, borderRadius: 11, cursor: 'pointer',
+                background: sel ? C.surface2 : 'transparent',
+                border: `1px solid ${sel ? C.cream : C.border2}`,
+                color: C.cream, fontFamily: 'Outfit,sans-serif',
+              }}>
+                <span style={{ fontSize: 13, opacity: sel ? 1 : .45 }}>{sel ? '◉' : '○'}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 800, flex: 1 }}>{o.etiqueta}</span>
+                <Badge24h on={o.dentro24h} />
+              </button>
+            )
+          })}
+          {opciones.length > 0 && !canalSel && (
+            // Sin preseleccionado = no sabemos por dónde escribió. Que elija a
+            // propósito es justo lo que impide un envío que muere en Meta.
+            <div style={{ fontSize: 11.5, color: C.amber, marginTop: 6 }}>
+              Este contacto no ha escrito por ninguno de los dos. Elige uno para escribirle por plantilla.
+            </div>
+          )}
+        </div>
 
         <button onClick={() => { onOpenChat?.(c.telefono); onClose() }}
           style={{ width: '100%', padding: '11px', borderRadius: 11, border: `1px solid ${C.border2}`, marginBottom: 16, background: C.surface2, color: C.cream, fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: 'Outfit,sans-serif' }}>💬 Abrir la conversación</button>
 
-        {c.dentro24h ? (
+        {abierta ? (
           <div>
             <div style={{ fontSize: 12, fontWeight: 800, color: C.creamDim, marginBottom: 8 }}>Enviar mensaje (texto libre)</div>
             <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={3} placeholder="Escribe tu mensaje…"
               style={{ width: '100%', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.cream, fontSize: 13, padding: '10px 12px', fontFamily: 'Outfit,sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
-            <button onClick={enviarLibre} disabled={!texto.trim() || sending}
+            <button onClick={enviarLibre} disabled={!texto.trim() || sending || !canalSel}
               style={{ width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: texto.trim() ? C.cream : C.border, color: texto.trim() ? C.bg : C.creamFaint, fontWeight: 900, fontSize: 14, cursor: texto.trim() && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif' }}>{sending ? 'Enviando…' : 'Enviar'}</button>
           </div>
         ) : (
-          <SelectorPlantilla contacto={c} flash={flash} onClose={onClose} />
+          // La plantilla sale por el MISMO número elegido arriba.
+          <SelectorPlantilla contacto={{ ...c, canal: canalSel }} flash={flash} onClose={onClose} />
         )}
       </div>
     </>

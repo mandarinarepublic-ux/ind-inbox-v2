@@ -25,6 +25,7 @@ import {
   patchesDeMensaje,
   reabrePorEntregaFallida,
   canalParaEscribir,
+  opcionesDeCanal,
   VENTANA_MS,
 } from '../lib/bandeja.js'
 
@@ -244,4 +245,69 @@ test('una fecha corrupta no puede ganar el canal', () => {
   ], ahora)
   assert.equal(r.canal, N3326)
   assert.equal(r.dentro24h, true)
+})
+
+// ── Las opciones que ve el vendedor al escribir ──────────────────────────────
+// Regla de Rodrigo: el sistema NO adivina por dónde mandar. Muestra los dos
+// números con su estado real —"por acá está vivo, por acá toca plantilla"— y
+// deja elegir, con el más fresco preseleccionado.
+//
+// Por qué es mejor que elegir solo: `canalParaEscribir` toma el último entrante,
+// y eso falla en un caso muy real — el cliente escribe al 3326 por un pedido a
+// las 10 y al 9804 por otra cosa a las 11. El vendedor está contestando el hilo
+// del 3326 y el código manda por el 9804, EN SILENCIO. Acá `canalParaEscribir`
+// pasa de decidir a PRESELECCIONAR.
+
+const CANALES_IND = [
+  { phoneId: N3326, etiqueta: '3326' },
+  { phoneId: N9804, etiqueta: '9804' },
+]
+
+test('muestra TODOS los números, no solo por los que escribió', () => {
+  // Un número al que nunca escribió sigue siendo alcanzable POR PLANTILLA. Si se
+  // esconde, el vendedor no tiene cómo llegarle y no sabe por qué.
+  const ops = opcionesDeCanal([{ phone_id: N3326, ultimo_entrante_at: '2026-08-27T04:15:19Z' }],
+                              CANALES_IND, Date.parse('2026-08-27T04:20:00Z'))
+  assert.equal(ops.length, 2)
+  assert.deepEqual(ops.map(o => o.etiqueta), ['3326', '9804'])
+})
+
+test('el más fresco va primero y viene preseleccionado', () => {
+  const ops = opcionesDeCanal([
+    { phone_id: N9804, ultimo_entrante_at: '2026-08-27T03:18:22Z' },
+    { phone_id: N3326, ultimo_entrante_at: '2026-08-27T04:15:19Z' },
+  ], CANALES_IND, Date.parse('2026-08-27T04:20:00Z'))
+  assert.equal(ops[0].etiqueta, '3326')
+  assert.equal(ops[0].preseleccionado, true)
+  assert.equal(ops[1].preseleccionado, false)
+})
+
+test('dice por cuál se puede escribir libre y por cuál toca plantilla', () => {
+  const ops = opcionesDeCanal([
+    { phone_id: N3326, ultimo_entrante_at: '2026-08-27T04:15:19Z' },  // hace 5 min
+    { phone_id: N9804, ultimo_entrante_at: '2026-08-25T22:00:00Z' },  // hace 30 h
+  ], CANALES_IND, Date.parse('2026-08-27T04:20:00Z'))
+  assert.equal(ops.find(o => o.etiqueta === '3326').dentro24h, true)
+  assert.equal(ops.find(o => o.etiqueta === '9804').dentro24h, false)
+})
+
+test('un número al que nunca escribió va como cerrado, nunca como abierto', () => {
+  const ops = opcionesDeCanal([{ phone_id: N3326, ultimo_entrante_at: '2026-08-27T04:15:19Z' }],
+                              CANALES_IND, Date.parse('2026-08-27T04:20:00Z'))
+  const n = ops.find(o => o.etiqueta === '9804')
+  assert.equal(n.dentro24h, false)
+  assert.equal(n.ultimoEntranteAt, null)
+})
+
+test('si no escribió por NINGUNO, no hay preseleccionado', () => {
+  // ⚠️ Es el caso que mata la clase entera de fallo: sin preselección la pantalla
+  // no puede mandar sola, y el vendedor tiene que elegir a propósito.
+  const ops = opcionesDeCanal([], CANALES_IND, Date.now())
+  assert.equal(ops.length, 2)
+  assert.equal(ops.some(o => o.preseleccionado), false)
+  assert.equal(ops.every(o => o.dentro24h === false), true)
+})
+
+test('sin canales configurados devuelve lista vacía, no inventa uno', () => {
+  assert.deepEqual(opcionesDeCanal([{ phone_id: N3326, ultimo_entrante_at: '2026-08-27T04:15:19Z' }], [], Date.now()), [])
 })
