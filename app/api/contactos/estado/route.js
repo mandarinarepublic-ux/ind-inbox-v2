@@ -10,7 +10,10 @@ export const dynamic = 'force-dynamic'
 // campo: 'estado' | 'modoIA' | 'notas' | 'alias' | 'idVenta' | 'temperatura'
 export async function PATCH(req) {
   try {
-    const { telefono, campo, valor } = await req.json()
+    // `canal` opcional: el número de ESTA conversación. Sin él, el estado solo
+    // se escribe en el lado viejo (una fila por persona) y la bandeja de ese
+    // número se queda atrás.
+    const { telefono, campo, valor, canal } = await req.json()
     if (!telefono || !campo) {
       return NextResponse.json({ error: 'Faltan campos: telefono, campo' }, { status: 400 })
     }
@@ -18,7 +21,7 @@ export async function PATCH(req) {
     let result
     switch (campo) {
       case 'estado':
-        result = await updateEstado(telefono, valor)
+        result = await updateEstado(telefono, valor, canal || '')
         break
       case 'modoIA':
         result = await updateModoIA(telefono, valor) // 'IA' | 'HUMANO'
