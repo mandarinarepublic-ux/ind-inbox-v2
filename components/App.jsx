@@ -1,10 +1,11 @@
 'use client'
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, sendImageFile, precacheMedia, setCanalActivo } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
 import { debePausar, hayNovedad, EVENTOS_ACTIVIDAD } from '@/lib/inactividad'
+import { estadoVisible } from '@/lib/bandeja'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
@@ -848,7 +849,33 @@ export default function App() {
   //   excluye archivados. Así un cliente con venta que vuelve a escribir aparece en
   //   PENDIENTE (para atenderlo) y a la vez sigue en 💰 Ventas.
   const hasVenta      = (tel) => String(contacts[tel]?.idVenta || '').trim() !== ''
-  const getStatus     = (tel) => contacts[tel]?.estado || 'pendiente'
+  // ── El estado de bandeja, POR NÚMERO ────────────────────────────────────
+  // Viene PEGADO a la fila de la lista (`estadoBandeja`, vista inbox.lista_bandeja),
+  // no en una lectura aparte: si se leyera por separado, el mapa arrancaría vacío
+  // y —como "sin fila" significa PENDIENTE— al abrir el inbox TODO se vería
+  // pendiente hasta que llegara la respuesta. MANDI ya pagó ese error.
+  //
+  // Es un mapa y no un `convs.find()` dentro de getStatus a propósito: getStatus
+  // se llama una vez por fila al filtrar cada bandeja, y con ~3.900 conversaciones
+  // el find anidado sería cuadrático.
+  //
+  // ⚠️ Cae al estado VIEJO (el de la persona) cuando la fila todavía no trae
+  // `estadoBandeja` — por ejemplo mientras carga, o en un chat que solo existe en
+  // los hilos. Vacío ≠ pendiente.
+  const estadoDeBandeja = useMemo(() => {
+    const m = {}
+    for (const c of convs) if (c.estadoBandeja) m[c.telefono] = c.estadoBandeja
+    return m
+  }, [convs])
+  // El orden (override → bandeja del canal → persona) vive en `estadoVisible`,
+  // como función pura y con pruebas: sin el override, marcar ATENDIDO se revertía
+  // solo al siguiente poll, porque el estado de bandeja pasa por un caché de edge
+  // de hasta 25 s.
+  const getStatus     = (tel) => estadoVisible({
+    override:      localStatusRef.current[tel],
+    estadoBandeja: estadoDeBandeja[tel],
+    estadoPersona: contacts[tel]?.estado,
+  })
   const esVentaActiva = (tel) => hasVenta(tel) && getStatus(tel) !== 'archivado'
   // Eje 2: temperatura del lead ('' = sin clasificar).
   const getTemp = (tel) => contacts[tel]?.temperatura || ''
@@ -995,7 +1022,10 @@ export default function App() {
 
   const changingRef = useRef({})
   const changeStatus = async (telefono, status) => {
-    const estadoActual = contacts[telefono]?.estado || 'pendiente'
+    // Se compara contra lo que se VE (bandeja de este canal), no contra el estado
+    // de la persona: si no, marcar ATENDIDO en un canal donde ya lo estaba la
+    // persona salía por este `return` y no escribía nunca la fila del canal.
+    const estadoActual = getStatus(telefono)
     if (estadoActual === status) return
     if (changingRef.current[telefono]) return
     changingRef.current[telefono] = true
@@ -1034,7 +1064,7 @@ export default function App() {
   const handleUpdateContact = async ({ alias }) => {
     if (!activeConv) return
     const tel = activeConv.telefono
-    const currentStatus = contacts[tel]?.estado || 'pendiente'
+    const currentStatus = getStatus(tel)
     setContacts(prev => ({ ...prev, [tel]: { ...(prev[tel] || {}), alias } }))
     await updateContact(tel, activeConv.nombre, currentStatus, alias)
   }
