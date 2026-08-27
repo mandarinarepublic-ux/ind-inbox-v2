@@ -24,6 +24,7 @@ import {
   ventanaAbierta,
   patchesDeMensaje,
   reabrePorEntregaFallida,
+  canalParaEscribir,
   VENTANA_MS,
 } from '../lib/bandeja.js'
 
@@ -175,4 +176,72 @@ test('si no se sabe en qué estado está el chat, un failed lo reabre igual', ()
 
 test('FAILED en mayúsculas se trata igual', () => {
   assert.equal(reabrePorEntregaFallida('FAILED', 'ATENDIDO'), true)
+})
+
+// ── A qué número se le escribe desde CONTACTOS (los 79) ──────────────────────
+// `/api/directorio` es la AGENDA: una fila por persona, sin canal. Calculaba
+// `dentro24h` con el último entrante de la PERSONA —mezclando los dos números— y
+// mandaba con el canal de la PESTAÑA. Las dos cosas a la vez: pintaba la ventana
+// en verde porque el cliente había escrito al OTRO número, y después mandaba por
+// el que estaba abierto en pantalla. 79 mensajes murieron así.
+//
+// Ahora que `inbox.bandeja` tiene una fila por (cliente, número), la pregunta se
+// puede contestar bien: ¿por cuál número es alcanzable ESTA persona?
+
+test('elige el canal donde el cliente escribió, no el de la pestaña', () => {
+  // Caso real 0993752371: escribió al 3326 a las 13:37 y le contestaron por el
+  // 9804, donde no había escrito nunca. 25 mensajes muertos.
+  const ahora = Date.parse('2026-08-26T18:42:00Z')
+  const r = canalParaEscribir([
+    { phone_id: N3326, ultimo_entrante_at: '2026-08-26T18:37:00Z' },
+    { phone_id: N9804, ultimo_entrante_at: null },
+  ], ahora)
+  assert.equal(r.canal, N3326)
+  assert.equal(r.dentro24h, true)
+})
+
+test('con los dos abiertos gana el más reciente', () => {
+  const ahora = Date.parse('2026-08-27T04:20:00Z')
+  const r = canalParaEscribir([
+    { phone_id: N9804, ultimo_entrante_at: '2026-08-27T03:18:22Z' },
+    { phone_id: N3326, ultimo_entrante_at: '2026-08-27T04:15:19Z' },
+  ], ahora)
+  assert.equal(r.canal, N3326, 'el último entrante manda')
+})
+
+test('un canal SIN entrante nunca gana, aunque sea el único con mensajes', () => {
+  // Los 48 pares de IND en los que escribimos a alguien que jamás nos escribió
+  // por ese número. Sin entrante no hay ventana: nunca se abrió.
+  const r = canalParaEscribir([{ phone_id: N9804, ultimo_entrante_at: null }], Date.now())
+  assert.equal(r.canal, '')
+  assert.equal(r.dentro24h, false)
+})
+
+test('sin ninguna fila no inventa un canal', () => {
+  // ⚠️ Devolver el número principal acá es exactamente cómo mueren los mensajes:
+  // el envío sale, Meta lo rechaza y el vendedor lo ve salir.
+  assert.deepEqual(canalParaEscribir([], Date.now()), { canal: '', dentro24h: false, ultimoEntranteAt: null })
+  assert.deepEqual(canalParaEscribir(null, Date.now()), { canal: '', dentro24h: false, ultimoEntranteAt: null })
+})
+
+test('la ventana se mide contra EL CANAL ELEGIDO, no contra la persona', () => {
+  // El bug de `/api/directorio`: escribió al 9804 hace 30 h y al 3326 nunca. La
+  // agenda decía "escribió hace 30 h" y pintaba cerrado — bien — pero si hubiera
+  // escrito al 9804 hace 1 h, pintaba ABIERTO y mandaba por el 3326.
+  const ahora = Date.parse('2026-08-27T04:00:00Z')
+  const r = canalParaEscribir([
+    { phone_id: N9804, ultimo_entrante_at: '2026-08-25T22:00:00Z' },  // 30 h
+  ], ahora)
+  assert.equal(r.canal, N9804)
+  assert.equal(r.dentro24h, false, 'cerrada: 30 h en ESE número')
+})
+
+test('una fecha corrupta no puede ganar el canal', () => {
+  const ahora = Date.parse('2026-08-27T04:00:00Z')
+  const r = canalParaEscribir([
+    { phone_id: N9804, ultimo_entrante_at: 'no-es-fecha' },
+    { phone_id: N3326, ultimo_entrante_at: '2026-08-27T03:50:00Z' },
+  ], ahora)
+  assert.equal(r.canal, N3326)
+  assert.equal(r.dentro24h, true)
 })
