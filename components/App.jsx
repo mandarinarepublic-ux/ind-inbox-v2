@@ -4,6 +4,7 @@ import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
+import { citaUnaVez } from '@/lib/cita'
 import { debePausar, hayNovedad, EVENTOS_ACTIVIDAD } from '@/lib/inactividad'
 import { estadoVisible } from '@/lib/bandeja'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
@@ -1422,11 +1423,11 @@ export default function App() {
   // Burbuja optimista + envío de texto. Se usa DENTRO de una tarea ya encolada
   // (NO encola por su cuenta): si acá se llamara a handleSend, que sí encola, la
   // tarea quedaría esperándose a sí misma y no saldría nada.
-  const enviarTextoSuelto = async (telefono, nombre, texto) => {
-    const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: texto, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+  const enviarTextoSuelto = async (telefono, nombre, texto, contextoId = '') => {
+    const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: texto, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now(), contextoId }
     setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
     pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
-    const result = await sendReply(telefono, nombre, texto).catch(() => null)
+    const result = await sendReply(telefono, nombre, texto, contextoId).catch(() => null)
     if (!result || result.ok === false) marcarFallido(telefono, tmpMsg.id)
     return result
   }
@@ -1439,6 +1440,21 @@ export default function App() {
     const telefono = activeConv.telefono
     const nombre   = activeConv.nombre
     const estadoDestino = estadoAlResponder(currentStatus)
+
+    // La cita se toma ANTES de limpiarla y se congela acá, igual que el teléfono:
+    // si el envío espera turno en la fila, la barra ya no está en pantalla pero el
+    // wamid citado tiene que viajar igual.
+    //
+    // `citaUnaVez` la entrega a la PRIMERA pieza que salga y a ninguna más: una
+    // respuesta rápida puede ser un texto y cinco fotos, y WhatsApp manda cada una
+    // como mensaje aparte — citar en todas le mostraría al cliente su propia
+    // pregunta siete veces. Ver lib/cita.js.
+    // Se guarda el id en una constante ANTES de limpiar: leer `citando` más abajo
+    // funcionaría por el closure, pero depender de eso es la clase de sutileza que
+    // se rompe en el próximo refactor sin que nadie lo note.
+    const citaOriginal = citando?.id || ''
+    const tomarCita = citaUnaVez(citaOriginal)
+    setCitando(null)
 
     // Recoger hasta 10 imágenes
     // Los adjuntos EN ORDEN, mezclando fotos y audios como los cargó el vendedor.
@@ -1473,16 +1489,16 @@ export default function App() {
         // El servidor guarda SOLO el cuerpo en `mensaje`; los botones van aparte en `botones`
         // (así el texto optimista coincide con lo guardado → la reconciliación descarta el
         // temporal sin duplicar, y la burbuja pinta los botones desde `botones`).
-        const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+        const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now(), contextoId: citaOriginal }
         setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
         pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
         // Se ESPERA (antes iba suelto): las fotos tienen que salir después del texto.
-        const r = await sendInteractiveButtons(telefono, nombre, reply.text, validBtns).catch(() => null)
+        const r = await sendInteractiveButtons(telefono, nombre, reply.text, validBtns, tomarCita()).catch(() => null)
         if (!r || r.ok === false) { todoOk = false; marcarFallido(telefono, tmpMsg.id) }
         avanzar()
       } else if (reply.text) {
         // enviarTextoSuelto ya marca su propia burbuja si falla.
-        const r = await enviarTextoSuelto(telefono, nombre, reply.text)
+        const r = await enviarTextoSuelto(telefono, nombre, reply.text, tomarCita())
         if (!r || r.ok === false) todoOk = false
         avanzar()
       }
@@ -1498,16 +1514,16 @@ export default function App() {
           // ⚠️ Esta rama va ANTES del `else` de imagen a proposito: sin ella el
           // documento caeria ahi y se mandaria como FOTO. Meta lo rechazaria y
           // el vendedor no se enteraria.
-          const r = await enviarDocumentoUrl(telefono, nombre, a.url, a.nombre)
+          const r = await enviarDocumentoUrl(telefono, nombre, a.url, a.nombre, tomarCita())
           ok = r?.ok !== false
         } else if (a.tipo === 'audio') {
           // El audio de una respuesta rápida YA está en OGG/Opus: se convirtió una
           // sola vez, al guardar la respuesta. Acá solo se manda el link, así que
           // sale tan rápido como una foto cacheada.
-          const r = await enviarAudioUrl(telefono, nombre, a.url)
+          const r = await enviarAudioUrl(telefono, nombre, a.url, tomarCita())
           ok = r?.ok !== false
         } else {
-          ok = await sendImageUrl(telefono, nombre, a.url, ids[a.url] || '')
+          ok = await sendImageUrl(telefono, nombre, a.url, ids[a.url] || '', tomarCita())
         }
         if (!ok) todoOk = false
         avanzar()

@@ -358,7 +358,7 @@ function MediaContent({ tipo, mediaUrl, mediaId }) {
 // Si el mensaje citado quedó fuera de lo que hay cargado, se pide por API; y si aun
 // así no aparece, se muestra un aviso en vez de NADA (antes desaparecía en silencio
 // y parecía que el cliente no había citado nada).
-function QuotedMessage({ contextoId, allMsgs }) {
+function QuotedMessage({ contextoId, allMsgs, esReaccion = false }) {
   const [fetched, setFetched] = useState(null)
   const valid    = !!contextoId && contextoId.startsWith('wamid.')
   // Comparar por HASH del wamid (el envoltorio difiere aunque sea el mismo mensaje)
@@ -379,6 +379,11 @@ function QuotedMessage({ contextoId, allMsgs }) {
   if (!valid) return null
 
   if (!cited) {
+    // Una REACCIÓN cuyo mensaje no tenemos guardado no pinta nada: la burbuja ya
+    // dice "❤️ Reaccionó a un mensaje", y encima de eso un "Respondió a un
+    // mensaje anterior" sería redundante Y con el verbo equivocado. Pasa sobre
+    // todo con reacciones a mensajes anteriores a nuestro historial.
+    if (esReaccion) return null
     return (
       <div style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, fontSize: 11, color: C.creamDim, fontStyle: 'italic' }}>
         ↩️ Respondió a un mensaje anterior
@@ -498,7 +503,7 @@ export function MessageBubble({ msg, allMsgs, onResponder }) {
         cursor: onResponder ? 'pointer' : 'default',
       }}>
         {msg.referral && <ReferralCard referral={msg.referral} />}
-        {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} />}
+        {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} esReaccion={msg.tipo === 'reaction'} />}
         {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} />}
         {hasText && <p style={{ margin: 0, fontSize: 14, color: C.cream, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.mensaje}</p>}
         {/* Botones interactivos enviados por nosotros */}
