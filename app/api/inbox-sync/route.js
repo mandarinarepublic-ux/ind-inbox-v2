@@ -46,10 +46,20 @@ export async function GET(req) {
     // ⚠️ Ante la duda se manda todo: `sinCambios` devuelve false si la versión no
     // se pudo calcular. Un falso "no cambió" congelaría la pantalla del vendedor.
     const etagActual = etagDe(await versionInboxSupabase())
-    const etagCliente = req.headers.get('if-none-match')
-    // Diagnóstico del borde: sin esto no se distingue "el inbox está ocupado" de
-    // "el condicional no está llegando". Se quita cuando el 304 esté confirmado.
-    console.log('[etag] cliente=', etagCliente || 'NINGUNO', 'servidor=', etagActual || 'VACIO')
+    // ⚠️ La versión del cliente viaja por QUERY, no por cabecera.
+    //
+    // El primer intento usó `If-None-Match` / `ETag`, que es lo estándar, y NO
+    // funcionó: el log del borde mostró `cliente=NINGUNO` en todos los polls
+    // mientras el servidor calculaba la versión perfecto. O el navegador nunca
+    // llegó a capturar el `ETag` de la respuesta, o alguna capa lo quitó — y
+    // averiguar cuál de las dos costaba más que sacarse la incógnita de encima.
+    // Un parámetro de query y un campo del cuerpo son cosas que ninguna capa
+    // intermedia toca.
+    //
+    // Que la URL cambie con la versión NO rompe nada: el caché compartido del
+    // edge ya se quitó (daba 40 MISS de 40), y aunque estuviera, todos los
+    // clientes convergen a la MISMA versión, así que compartirían la entrada.
+    const etagCliente = url.searchParams.get('v') || req.headers.get('if-none-match')
     if (sinCambios(etagCliente, etagActual)) {
       // 304 sin cuerpo: cero bytes de Fast Origin Transfer.
       return new Response(null, {
@@ -74,7 +84,8 @@ export async function GET(req) {
       // del botón de la otra bandeja.
       contarPendientesPorCanalSupabase().catch(() => ({})),
     ])
-    return NextResponse.json({ lista, rows, contactos, pendientes }, {
+    // `v` va en el cuerpo: es de donde el cliente la toma para la próxima vuelta.
+    return NextResponse.json({ lista, rows, contactos, pendientes, v: etagActual }, {
       // Cache COMPARTIDO en el edge: varias pestañas que pollean dentro de la misma
       // ventana comparten UNA ejecución de origen. El caché se indexa por URL, y
       // `canal` va en la query, así que cada bandeja tiene su entrada y no se pisan.
