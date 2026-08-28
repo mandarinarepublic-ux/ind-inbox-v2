@@ -46,7 +46,11 @@ export async function GET(req) {
     // ⚠️ Ante la duda se manda todo: `sinCambios` devuelve false si la versión no
     // se pudo calcular. Un falso "no cambió" congelaría la pantalla del vendedor.
     const etagActual = etagDe(await versionInboxSupabase())
-    if (sinCambios(req.headers.get('if-none-match'), etagActual)) {
+    const etagCliente = req.headers.get('if-none-match')
+    // Diagnóstico del borde: sin esto no se distingue "el inbox está ocupado" de
+    // "el condicional no está llegando". Se quita cuando el 304 esté confirmado.
+    console.log('[etag] cliente=', etagCliente || 'NINGUNO', 'servidor=', etagActual || 'VACIO')
+    if (sinCambios(etagCliente, etagActual)) {
       // 304 sin cuerpo: cero bytes de Fast Origin Transfer.
       return new Response(null, {
         status: 304,
