@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getLista, getMensajes } from '@/lib/mensajes'
 import { getContactos } from '@/lib/contactos'
-import { contarPendientesPorCanalSupabase } from '@/lib/inbox-supabase'
+import { contarPendientesPorCanalSupabase, versionInboxSupabase } from '@/lib/inbox-supabase'
+import { etagDe, sinCambios } from '@/lib/version-inbox'
 
 // Sync unificado del inbox: UNA sola función en vez de 3 (/api/lista +
 // /api/mensajes + /api/contactos) por cada ciclo de polling → 1/3 de las
@@ -30,6 +31,26 @@ export async function GET(req) {
         // Misma ventana de caché que el ciclo completo, por lo mismo: varias
         // pantallas en pausa comparten una sola ejecución de origen.
         headers: { 'Cache-Control': 's-maxage=2, stale-while-revalidate=4' },
+      })
+    }
+
+    // ── "¿Cambió algo desde tu última pregunta?" ──────────────────────────
+    // Medido el 28-ago en horario de atención: 3 de cada 4 ciclos de IND (74,8%)
+    // y 9 de cada 10 de MANDI (93,6%) NO traen nada nuevo. Hasta hoy esos polls
+    // devolvían igual ~370 KB completos, y eso es el 63% de la factura de Vercel.
+    //
+    // Cuesta 5,4 ms (dos max() sobre índices) contra los ~8 viajes del ciclo
+    // completo. Si cambió CUALQUIER cosa se manda TODO, igual que siempre: esto
+    // NO es un delta y no puede perder un mensaje.
+    //
+    // ⚠️ Ante la duda se manda todo: `sinCambios` devuelve false si la versión no
+    // se pudo calcular. Un falso "no cambió" congelaría la pantalla del vendedor.
+    const etagActual = etagDe(await versionInboxSupabase())
+    if (sinCambios(req.headers.get('if-none-match'), etagActual)) {
+      // 304 sin cuerpo: cero bytes de Fast Origin Transfer.
+      return new Response(null, {
+        status: 304,
+        headers: { ETag: etagActual, 'Cache-Control': 'no-store' },
       })
     }
 
@@ -64,7 +85,18 @@ export async function GET(req) {
       // Estos son los mismos valores que wa-inbox-next ya usa en producción, donde
       // se bajaron el 2-ago por lo mismo: con 5 y 20 un mensaje entrante tardaba
       // ~35-45 s en aparecer. Ese arreglo nunca se había portado acá.
-      headers: { 'Cache-Control': 's-maxage=2, stale-while-revalidate=4' },
+      //
+      // ⚠️ 28-ago: el caché compartido SE QUITA y se reemplaza por el ETag. Dos
+      // razones, y la primera es una medición: de 40 respuestas seguidas de este
+      // endpoint, **40 dieron `cache=MISS`**. Con `s-maxage=2` y polls cada 10 s
+      // la entrada siempre expiró antes del siguiente ciclo: no estaba
+      // ahorrando NADA. Y la segunda es correctitud: un caché compartido por URL
+      // no distingue `If-None-Match`, así que podría guardar un 304 y servírselo
+      // a otra pestaña que sí necesitaba el cuerpo.
+      //
+      // Lo que se pierde (una ejecución compartida entre pestañas) vale $0,75 al
+      // mes en invocaciones; lo que se gana son ~$19 en transferencia.
+      headers: { ETag: etagActual, 'Cache-Control': 'no-store' },
     })
   } catch (err) {
     console.error('[/api/inbox-sync]', err)
