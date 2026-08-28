@@ -60,6 +60,12 @@ export async function GET(req) {
     // edge ya se quitó (daba 40 MISS de 40), y aunque estuviera, todos los
     // clientes convergen a la MISMA versión, así que compartirían la entrada.
     const etagCliente = url.searchParams.get('v') || req.headers.get('if-none-match')
+    // ⚠️ NO QUITAR hasta ver 304 en los logs. Ya lo saqué una vez antes de
+    // confirmar y quedé ciego una vuelta entera.
+    console.log('[etag] q=', url.searchParams.get('v') || '-',
+                'hdr=', req.headers.get('if-none-match') || '-',
+                'srv=', etagActual || 'VACIO',
+                'corta=', sinCambios(etagCliente, etagActual))
     if (sinCambios(etagCliente, etagActual)) {
       // 304 sin cuerpo: cero bytes de Fast Origin Transfer.
       return new Response(null, {
