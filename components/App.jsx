@@ -233,6 +233,19 @@ export default function App() {
   const taRef      = useRef(null)  // caja de texto del compositor (para enfocarla al citar)
   // Mensaje que se está citando al responder (null = ninguno).
   const [citando, setCitando] = useState(null)
+
+  // ── Cuántas filas se DIBUJAN de la lista ────────────────────────────────
+  // ⚠️ Es un tope de DIBUJADO, no de carga. Los datos siguen completos: el
+  // buscador encuentra a todos y los contadores de cada bandeja cuentan sobre
+  // el total. Esconder conversaciones es el bug que más ha vuelto en este
+  // inbox; recortar lo que React tiene que pintar no esconde nada.
+  //
+  // Medido el 28-ago: la bandeja ATENDIDOS de IND tiene 4.011 conversaciones
+  // contra 43 de PENDIENTES. Sin tope, CADA LETRA que se escribe en la caja
+  // vuelve a construir esas 4.011 filas —el texto vive en el estado de este
+  // componente— y por eso las letras aparecían con retraso. No era la red.
+  const [tope, setTope] = useState(100)
+
   const [refreshKey, setRefreshKey] = useState(0)
   const localStatusRef = useRef({})
   const localTempRef   = useRef({}) // override optimista de temperatura (Eje 2), hasta que el poll confirme
@@ -998,6 +1011,10 @@ export default function App() {
   // canal (arriba). Fuera de la búsqueda, acá se aplica el filtro de siempre:
   // un solo filtro activo a la vez (venta / temperatura / bandeja), y por canal
   // ya viene recortado `convs`.
+  // El tope vuelve a 100 al cambiar de bandeja, de número o al buscar: cada
+  // lista empieza de cero y nadie hereda el "ver más" de otra.
+  useEffect(() => { setTope(100) }, [filter, search, canal])
+
   const filtered = isSearching
     ? searched
     : searched.filter(c =>
@@ -1904,7 +1921,7 @@ export default function App() {
                     {filtered.length} {searchingMsgs ? (filtered.length===1?'CHAT CON':'CHATS CON') : `RESULTADO${filtered.length===1?'':'S'}`}{searchingMsgs ? ' ESE MENSAJE' : ' · TODAS LAS BANDEJAS'}
                   </div>
                 )}
-                {filtered.map(conv => {
+                {filtered.slice(0, tope).map(conv => {
                   // Solo se calcula buscando: es el único momento en que la pestaña
                   // señala a qué número pertenece cada resultado.
                   const canalLabel    = isSearching ? canalEtiquetaDe(conv.telefono) : null
@@ -1915,6 +1932,19 @@ export default function App() {
                       canalLabel={canalLabel} canalDistinto={canalDistinto} />
                   )
                 })}
+                {filtered.length > tope && (
+                  // Se dice CUÁNTAS faltan y se puede seguir bajando. Un tope
+                  // mudo se ve idéntico a "no hay más", y ahí es donde un chat
+                  // parece desaparecido.
+                  <button onClick={() => setTope(t => t + 200)} style={{
+                    width:'100%', padding:'12px 16px', background:'transparent',
+                    border:'none', borderTop:`1px solid ${C.borderFaint}`,
+                    color:C.creamDim, fontSize:11.5, fontWeight:700, cursor:'pointer',
+                    fontFamily:'Outfit,sans-serif',
+                  }}>
+                    Mostrando {tope} de {filtered.length} · ver 200 más
+                  </button>
+                )}
               </>)}
             </div>
 
