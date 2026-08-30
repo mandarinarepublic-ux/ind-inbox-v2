@@ -744,8 +744,29 @@ export default function App() {
   // ⚠️ Se guarda SOLO el número, no la vista. Volver siempre a CHAT es lo
   // correcto: nadie quiere abrir el inbox y aterrizar en Automatizaciones.
   const CANAL_KEY = 'ind_canal'
+  // ☠️ LO GUARDADO SE LEE EN EL PRIMER RENDER, no dentro de un efecto.
+  //
+  // La primera versión leía dentro del efecto de restaurar, y NO FUNCIONABA: los
+  // dos efectos corren al montar, el de guardar está declarado antes, y escribía
+  // el valor por defecto ANTES de que el de restaurar alcanzara a leer. Se
+  // pisaba a sí mismo, así que siempre volvía al número principal.
+  //
+  // Leerlo acá lo pone a salvo de ese orden y de cualquier reordenamiento futuro.
+  const guardadoRef = useRef(undefined)
+  if (guardadoRef.current === undefined) {
+    let g = ''
+    try { g = localStorage.getItem(CANAL_KEY) || '' } catch { /* SSR o modo privado */ }
+    guardadoRef.current = g
+  }
+
+  // Y el efecto de guardar SALTA su primera corrida: si no, escribiría el valor
+  // por defecto encima de lo guardado cuando no hay nada que restaurar.
+  const yaGuardeUnaVez = useRef(false)
   useEffect(() => {
+    if (!yaGuardeUnaVez.current) { yaGuardeUnaVez.current = true; return }
+    if (!CANALES.map(c => c.id).includes(canal)) return
     try { localStorage.setItem(CANAL_KEY, canal) } catch { /* modo privado */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal])
 
   // ☠️ La restauración pasa por `cambiarCanal`, NUNCA por `setCanal` a mano.
@@ -757,9 +778,7 @@ export default function App() {
   // Y lo guardado se valida contra los canales que existen: un id viejo o basura
   // en el navegador se descarta y se arranca como siempre (ver lib/pestana.js).
   useEffect(() => {
-    let guardado = ''
-    try { guardado = localStorage.getItem(CANAL_KEY) || '' } catch { /* modo privado */ }
-    const valido = pestanaGuardada(guardado, CANALES.map(c => c.id))
+    const valido = pestanaGuardada(guardadoRef.current, CANALES.map(c => c.id))
     if (valido && valido !== canal) cambiarCanal(valido)
     // Solo al montar: después manda el vendedor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
