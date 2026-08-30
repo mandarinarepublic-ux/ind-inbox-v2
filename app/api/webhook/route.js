@@ -9,6 +9,7 @@ import { archivarMedia } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirIA } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
+import { observarFirmaMeta } from '@/lib/firma-meta'
 import { extraerEchoes } from '@/lib/echoes'
 import { capturarCtwaClid, revisarLeadAutomatico, revisarVentaEnProceso } from '@/lib/capi'
 
@@ -156,7 +157,35 @@ async function procesarEchoes(echoes) {
 
 export async function POST(req) {
   try {
-    const body = await req.json().catch(() => ({}))
+    // ⚠️ El cuerpo se lee UNA SOLA VEZ, como texto. NO se puede hacer `req.text()`
+    // y después `req.json()`: el cuerpo se consume y el segundo se queda sin nada,
+    // o sea que el webhook dejaría de procesar mensajes de clientes. Se lee crudo
+    // porque la firma de Meta se calcula sobre esos bytes EXACTOS —re-serializar
+    // el JSON cambia espacios y orden de claves y el sello ya no cuadraría— y de
+    // ahí se parsea el objeto que usa todo lo de abajo.
+    //
+    // El comportamiento ante basura es idéntico al de antes: `req.json()` fallaba
+    // a `{}`, y acá un texto vacío o no-JSON también termina en `{}`.
+    const crudo = await req.text().catch(() => '')
+    let body = {}
+    try { body = crudo ? JSON.parse(crudo) : {} } catch { body = {} }
+
+    // Solo ANOTA si la firma habría coincidido. NO rechaza nada, a propósito: es
+    // la misma decisión que en MANDI desde el 8-ago, y es de Rodrigo —
+    // "EXCLUSIVAMENTE modo observación, BAJO NINGÚN CONCEPTO vas a modificar nada
+    // que implique dejar de recibir o enviar mensajes por 1 segundo".
+    //
+    // Y tiene razón: si el sello se calculara mal (secreto equivocado, otra app,
+    // el cuerpo alterado en el camino) y esto rechazara, IND dejaría de recibir
+    // clientes. Ya pasó una vez por otra causa: 22 horas sin despachar.
+    //
+    // ⚠️ Mientras `META_APP_SECRET` no esté configurado en este proyecto, el
+    // veredicto será `sin-secreto`. Eso es esperado y NO rompe nada.
+    //
+    // Envuelto por si acaso, aunque la función ya se traga sus propios errores:
+    // nada acá puede tumbar la recepción de un mensaje.
+    try { observarFirmaMeta(req.headers.get('x-hub-signature-256'), crudo) } catch {}
+
     const entries = body?.entry || []
     const _host  = req.headers.get('x-forwarded-host') || req.headers.get('host')
     const _proto = req.headers.get('x-forwarded-proto') || 'https'
