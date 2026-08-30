@@ -6,6 +6,7 @@ import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
 import { citaUnaVez } from '@/lib/cita'
 import { debePausar, hayNovedad, EVENTOS_ACTIVIDAD } from '@/lib/inactividad'
+import { pestanaGuardada } from '@/lib/pestana'
 import { estadoVisible } from '@/lib/bandeja'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
@@ -735,6 +736,34 @@ export default function App() {
     setTimeout(load, 0)       // recarga ya, sin esperar al siguiente poll
     return true
   }
+
+  // ── Recordar en qué número quedaste ──────────────────────────────────────
+  // Antes la pestaña arrancaba siempre en el número principal: estaba fija en el
+  // código y no se guardaba. Ahora se recuerda.
+  //
+  // ⚠️ Se guarda SOLO el número, no la vista. Volver siempre a CHAT es lo
+  // correcto: nadie quiere abrir el inbox y aterrizar en Automatizaciones.
+  const CANAL_KEY = 'ind_canal'
+  useEffect(() => {
+    try { localStorage.setItem(CANAL_KEY, canal) } catch { /* modo privado */ }
+  }, [canal])
+
+  // ☠️ La restauración pasa por `cambiarCanal`, NUNCA por `setCanal` a mano.
+  // Esa función es la que además mueve el canal del módulo de envíos
+  // (`setCanalActivo`) y limpia los hilos del canal anterior. Pintar la pestaña
+  // sin eso dejaría la pantalla mostrando un número y los mensajes saliendo por
+  // otro — el bug del número equivocado, que ya llegó a producción cinco veces.
+  //
+  // Y lo guardado se valida contra los canales que existen: un id viejo o basura
+  // en el navegador se descarta y se arranca como siempre (ver lib/pestana.js).
+  useEffect(() => {
+    let guardado = ''
+    try { guardado = localStorage.getItem(CANAL_KEY) || '' } catch { /* modo privado */ }
+    const valido = pestanaGuardada(guardado, CANALES.map(c => c.id))
+    if (valido && valido !== canal) cambiarCanal(valido)
+    // Solo al montar: después manda el vendedor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const openConv = (telefono) => {
     // Único paso obligado para cambiar de chat: lo usan la lista, CONTACTOS y el
