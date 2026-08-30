@@ -113,3 +113,64 @@ test('el archivo NO tiene ninguna rama que rechace', async () => {
     assert.ok(!codigo.includes(prohibido), `firma-meta.js no puede contener "${prohibido}" en el código`)
   }
 })
+
+// ── Detectar SIN tener el secreto ────────────────────────────────────────────
+// Rodrigo no pudo recuperar META_APP_SECRET, así que la comparación completa no
+// se puede hacer. Pero lo más grave SÍ se detecta sin él:
+//
+//   Meta manda SIEMPRE la cabecera `x-hub-signature-256`. Un POST que llega sin
+//   ninguna cabecera casi con certeza NO es Meta.
+//
+// ☠️ El orden original tapaba justo eso: `sin-secreto` se evaluaba ANTES que
+// `sin-cabecera`, así que sin el secreto TODO daba 'sin-secreto' y un atacante
+// —que tampoco manda firma— se veía igual que la operación normal. La única
+// señal que quedaba, escondida detrás de nuestra propia falta de configuración.
+
+test('sin secreto TODAVIA distingue a quien no manda firma', () => {
+  assert.equal(evaluarFirmaMeta({ secreto: '', cabecera: null, crudo: '{}' }), 'sin-cabecera')
+})
+
+test('sin secreto tambien caza una cabecera con formato raro', () => {
+  assert.equal(evaluarFirmaMeta({ secreto: '', cabecera: 'sha256=nada', crudo: '{}' }), 'formato-raro')
+})
+
+test('con cabecera valida y sin secreto, se admite que no se puede comprobar', () => {
+  const firma = 'sha256=' + 'a'.repeat(64)
+  assert.equal(evaluarFirmaMeta({ secreto: '', cabecera: firma, crudo: '{}' }), 'sin-secreto')
+})
+
+test('con secreto, el comportamiento de siempre no cambia', () => {
+  assert.equal(evaluarFirmaMeta({ secreto: 'x', cabecera: null, crudo: '{}' }), 'sin-cabecera')
+  assert.equal(evaluarFirmaMeta({ secreto: 'x', cabecera: 'sha256=' + 'a'.repeat(64), crudo: '' }), 'sin-cuerpo')
+})
+
+// ── Qué merece despertar a alguien por Telegram ──────────────────────────────
+import { debeAvisar } from '../lib/firma-meta.js'
+
+test('avisa cuando alguien postea SIN firma', () => {
+  assert.equal(debeAvisar('sin-cabecera'), true)
+})
+
+test('avisa si la firma no cuadra o viene deforme', () => {
+  assert.equal(debeAvisar('NO-coincide'), true)
+  assert.equal(debeAvisar('formato-raro'), true)
+})
+
+test('NO avisa cuando todo esta bien', () => {
+  assert.equal(debeAvisar('coincide'), false)
+})
+
+test('☠️ NO avisa por sin-secreto: es NUESTRA falta, no un ataque', () => {
+  // IND recibe 2.684 webhooks al día. Avisar por esto sería un mensaje de
+  // Telegram cada 30 segundos, y en dos horas nadie mira más esa alerta —
+  // justo cuando llegue la de verdad.
+  assert.equal(debeAvisar('sin-secreto'), false)
+})
+
+test('un veredicto desconocido NO despierta a nadie', () => {
+  // Si mañana se agrega un veredicto nuevo, que no empiece a sonar solo: se
+  // decide a propósito si merece aviso.
+  assert.equal(debeAvisar('inventado'), false)
+  assert.equal(debeAvisar(''), false)
+  assert.equal(debeAvisar(null), false)
+})

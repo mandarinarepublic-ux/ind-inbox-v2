@@ -9,7 +9,9 @@ import { archivarMedia } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirIA } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
-import { observarFirmaMeta } from '@/lib/firma-meta'
+import { observarFirmaMeta, evaluarFirmaMeta, debeAvisar } from '@/lib/firma-meta'
+import { enviarTelegram, telegramConfigurado } from '@/lib/telegram'
+import { getMarcaAvisoFirmaSupabase, setMarcaAvisoFirmaSupabase } from '@/lib/inbox-supabase'
 import { extraerEchoes } from '@/lib/echoes'
 import { capturarCtwaClid, revisarLeadAutomatico, revisarVentaEnProceso } from '@/lib/capi'
 
@@ -184,7 +186,53 @@ export async function POST(req) {
     //
     // Envuelto por si acaso, aunque la función ya se traga sus propios errores:
     // nada acá puede tumbar la recepción de un mensaje.
-    try { observarFirmaMeta(req.headers.get('x-hub-signature-256'), crudo) } catch {}
+    const cabeceraFirma = req.headers.get('x-hub-signature-256')
+    try { observarFirmaMeta(cabeceraFirma, crudo) } catch {}
+
+    // ── Aviso por Telegram si algo huele mal ────────────────────────────────
+    // Sin META_APP_SECRET no se puede comparar la firma, pero SÍ se detecta lo
+    // más grave: Meta manda siempre la cabecera, así que un POST sin ella casi
+    // con certeza no es Meta. Eso es justo lo que un atacante NO puede fingir
+    // sin el secreto.
+    //
+    // ⚠️ Va en `waitUntil`: el aviso no puede demorar el 200 que espera Meta —
+    // si tardamos, Meta reintenta y se duplican mensajes. Y no puede ir suelto
+    // sin waitUntil, porque la función serverless se congela al responder y el
+    // aviso moriría a medio camino, que es como se pierden los registros.
+    try {
+      const veredicto = evaluarFirmaMeta({
+        secreto: process.env.META_APP_SECRET, crudo, cabecera: cabeceraFirma,
+      })
+      if (debeAvisar(veredicto) && telegramConfigurado()) {
+        waitUntil((async () => {
+          try {
+            // Enfriamiento de 1 hora: un atacante en bucle no puede convertir
+            // la alarma en ruido. La marca vive en la base, no en memoria.
+            const previo = await getMarcaAvisoFirmaSupabase()
+            const hace = previo ? Date.now() - Date.parse(previo) : Infinity
+            if (!(hace > 60 * 60 * 1000)) return
+            await setMarcaAvisoFirmaSupabase(new Date().toISOString())
+            // ⚠️ Se registra el RESULTADO del envío. Un aviso que no se sabe si
+            // llegó no es un aviso: el `TELEGRAM_BOT_TOKEN` de IND ya estuvo
+            // vacío una vez y se dio por bueno solo porque la variable existía.
+            const envio = await enviarTelegram(
+              `🔐 <b>IND · webhook sospechoso</b>
+
+` +
+              `Veredicto: <b>${veredicto}</b>
+` +
+              `Meta SIEMPRE firma sus llamadas, así que esto probablemente NO vino de Meta.
+
+` +
+              `No se rechazó nada: el inbox sigue recibiendo normal.
+` +
+              `Aviso único por hora — puede estar repitiéndose.`
+            )
+            console.log('[firma] aviso telegram:', envio?.ok ? 'entregado' : `FALLO ${envio?.motivo || '?'}`)
+          } catch { /* el aviso jamás puede tumbar la recepción */ }
+        })())
+      }
+    } catch { /* idem */ }
 
     const entries = body?.entry || []
     const _host  = req.headers.get('x-forwarded-host') || req.headers.get('host')
