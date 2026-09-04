@@ -481,6 +481,83 @@ function ReferralCard({ referral }) {
 // `onResponder` (opcional): al tocar la burbuja aparece "↩ Responder" SOLO en ese
 // mensaje. Nada visible hasta que el usuario toca — a propósito: una flecha fija en
 // cada burbuja ensucia el hilo entero.
+// ── TARJETA DE PEDIDO DEL CATÁLOGO ────────────────────────
+//
+// Meta manda SOLO el `product_retailer_id` de cada línea: ni nombre ni foto. El
+// chat mostraba "1 × $35.00 (44500256129117)" y no había forma de saber qué se
+// había vendido — 20 pedidos ($760) así. El nombre y la foto los resuelve
+// lib/catalogo.js y llegan en msg.pedido.
+//
+// ☠️ Una línea que NO se pudo resolver muestra su id, NO se esconde. Siete ids de
+// IND no tienen cómo resolverse todavía (sus catálogos no pertenecen a "Mandarina
+// Lab"): si se filtraran, un pedido de 2 artículos se vería como de 1.
+function PedidoCard({ pedido }) {
+  const money = (n) => `$${Number(n || 0).toFixed(2)}`
+  return (
+    <div style={{
+      background: C.surface2, border: `1px solid ${C.border2}`,
+      borderRadius: 12, padding: '9px 11px', minWidth: 210,
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: C.cream, marginBottom: 7 }}>
+        📦 Pedido del catálogo
+      </div>
+
+      {pedido.items.map((it, i) => (
+        <div key={i} style={{
+          display: 'flex', gap: 8, alignItems: 'center',
+          paddingTop: i ? 7 : 0, marginTop: i ? 7 : 0,
+          borderTop: i ? `1px solid ${C.border}` : 'none',
+        }}>
+          {it.imagen ? (
+            <img src={it.imagen} alt="" loading="lazy" style={{
+              width: 46, height: 46, borderRadius: 8, objectFit: 'cover',
+              flexShrink: 0, background: C.bg,
+            }} />
+          ) : (
+            <div style={{
+              width: 46, height: 46, borderRadius: 8, flexShrink: 0,
+              background: C.bg, border: `1px solid ${C.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+            }}>🛍️</div>
+          )}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 13, color: C.cream, fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-word' }}>
+              {it.nombre || 'Producto no identificado'}
+            </div>
+            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 2 }}>
+              {it.cant} × {money(it.precio)}
+              {it.color ? ` · ${it.color}` : ''}
+              {it.cant > 1 ? ` · ${money(it.total)}` : ''}
+            </div>
+            {/* Sin nombre, el id es lo ÚNICO que identifica el producto: se
+                muestra para que se pueda buscar a mano en el catálogo. */}
+            {!it.nombre && (
+              <div style={{ fontSize: 10, color: C.creamFaint, marginTop: 1, fontFamily: 'monospace' }}>
+                {it.retailerId}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      <div style={{
+        marginTop: 8, paddingTop: 6, borderTop: `1px solid ${C.border2}`,
+        display: 'flex', justifyContent: 'space-between', fontSize: 12,
+      }}>
+        <span style={{ color: C.creamDim }}>
+          {pedido.items.length} {pedido.items.length === 1 ? 'artículo' : 'artículos'}
+        </span>
+        <span style={{ color: C.cream, fontWeight: 700 }}>{money(pedido.total)}</span>
+      </div>
+      {/* ⚠️ La talla NO viene en el pedido: Meta no la manda y el catálogo la
+          trae vacía. Hay que preguntársela al cliente SIEMPRE. */}
+      <div style={{ fontSize: 10, color: C.creamFaint, marginTop: 5 }}>
+        ⚠️ El pedido no trae la talla — hay que preguntarla
+      </div>
+    </div>
+  )
+}
+
 // ── TARJETA DE UBICACIÓN ──────────────────────────────────
 //
 // WhatsApp guarda la ubicación como texto ("📍 lat,lon nombre") y el chat mostraba
@@ -558,7 +635,9 @@ export function MessageBubble({ msg, allMsgs, onResponder }) {
         {/* La ubicación reemplaza al texto: el `mensaje` de esa fila SON las
             coordenadas, y la tarjeta ya las muestra. Nunca deja la burbuja
             vacía — si parseUbicacion no reconoce algo, cae al <p> de siempre. */}
-        {msg.ubicacion
+        {msg.pedido
+          ? <PedidoCard pedido={msg.pedido} />
+          : msg.ubicacion
           ? <UbicacionCard u={msg.ubicacion} />
           : hasText && <p style={{ margin: 0, fontSize: 14, color: C.cream, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.mensaje}</p>}
         {/* Botones interactivos enviados por nosotros */}
