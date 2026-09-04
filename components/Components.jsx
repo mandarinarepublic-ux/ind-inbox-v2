@@ -209,7 +209,13 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
               maxWidth: 175, fontWeight: conv.unread > 0 ? 600 : 400,
             }}>
               {conv.last?.direccion === 'SALIENTE' ? 'Tú: ' : ''}
-              {conv.last?.mensaje}
+              {/* Una ubicación acá se veía como "📍 -0.18640510737896,-78.4934…":
+                  ocupaba la fila entera sin decir nada. La vista de la lista no
+                  trae `raw`, pero parseUbicacion igual saca el nombre del texto
+                  cuando el cliente escogió un sitio guardado. */}
+              {conv.last?.ubicacion
+                ? `📍 ${conv.last.ubicacion.nombre || 'Ubicación'}`
+                : conv.last?.mensaje}
             </span>
             {conv.unread > 0 && (
               <span style={{
@@ -475,6 +481,50 @@ function ReferralCard({ referral }) {
 // `onResponder` (opcional): al tocar la burbuja aparece "↩ Responder" SOLO en ese
 // mensaje. Nada visible hasta que el usuario toca — a propósito: una flecha fija en
 // cada burbuja ensucia el hilo entero.
+// ── TARJETA DE UBICACIÓN ──────────────────────────────────
+//
+// WhatsApp guarda la ubicación como texto ("📍 lat,lon nombre") y el chat mostraba
+// esas coordenadas pelonas. Acá se pintan como tarjeta clicable que abre Google
+// Maps. El objeto lo arma parseUbicacion (lib/wa-mensaje.js) y viaja en
+// msg.ubicacion desde toMensaje.
+//
+// Meta manda `name`/`address` SOLO cuando el cliente escoge un sitio guardado;
+// cuando suelta el pin de "ubicación actual" llegan puras coordenadas (27 de 38
+// entrantes de IND). Por eso el título cae a "Ubicación compartida" y la segunda
+// línea a las coordenadas redondeadas: la tarjeta NUNCA queda vacía.
+function UbicacionCard({ u }) {
+  const titulo    = u.nombre || 'Ubicación compartida'
+  const coords    = `${Number(u.lat).toFixed(5)}, ${Number(u.lon).toFixed(5)}`
+  const subtitulo = u.direccion || coords
+
+  return (
+    <a href={u.url} target="_blank" rel="noreferrer"
+      onClick={e => e.stopPropagation()}
+      style={{
+        display: 'block', textDecoration: 'none',
+        background: C.surface2, border: `1px solid ${C.border2}`,
+        borderRadius: 12, padding: '9px 11px', minWidth: 190,
+      }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <span style={{ fontSize: 18, lineHeight: 1.2 }}>📍</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.cream, wordBreak: 'break-word', lineHeight: 1.35 }}>{titulo}</div>
+          <div style={{ fontSize: 12, color: C.creamDim, marginTop: 2, wordBreak: 'break-word', lineHeight: 1.35 }}>{subtitulo}</div>
+          {/* La dirección desplaza las coordenadas: se muestran igual, porque son
+              el dato con el que se busca el sitio si el nombre no alcanza. */}
+          {u.direccion && (
+            <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 1 }}>{coords}</div>
+          )}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6,
+            fontSize: 11, fontWeight: 700, color: C.accent, borderBottom: `1px solid ${C.border2}`,
+          }}>↗ Abrir en Google Maps</div>
+        </div>
+      </div>
+    </a>
+  )
+}
+
 export function MessageBubble({ msg, allMsgs, onResponder }) {
   const [accion, setAccion] = useState(false)
   const isMe     = msg.direccion === 'SALIENTE'
@@ -505,7 +555,12 @@ export function MessageBubble({ msg, allMsgs, onResponder }) {
         {msg.referral && <ReferralCard referral={msg.referral} />}
         {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} esReaccion={msg.tipo === 'reaction'} />}
         {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} />}
-        {hasText && <p style={{ margin: 0, fontSize: 14, color: C.cream, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.mensaje}</p>}
+        {/* La ubicación reemplaza al texto: el `mensaje` de esa fila SON las
+            coordenadas, y la tarjeta ya las muestra. Nunca deja la burbuja
+            vacía — si parseUbicacion no reconoce algo, cae al <p> de siempre. */}
+        {msg.ubicacion
+          ? <UbicacionCard u={msg.ubicacion} />
+          : hasText && <p style={{ margin: 0, fontSize: 14, color: C.cream, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.mensaje}</p>}
         {/* Botones interactivos enviados por nosotros */}
         {isMe && msg.botones && (() => {
           try {
