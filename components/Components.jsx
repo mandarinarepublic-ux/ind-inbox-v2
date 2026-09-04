@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { colorFor, initialsFor, fmtTime, parseDate, hashWamid } from '@/lib/utils'
+import { partirEnlaces } from '@/lib/enlaces'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -481,6 +482,30 @@ function ReferralCard({ referral }) {
 // `onResponder` (opcional): al tocar la burbuja aparece "↩ Responder" SOLO en ese
 // mensaje. Nada visible hasta que el usuario toca — a propósito: una flecha fija en
 // cada burbuja ensucia el hilo entero.
+// ── TEXTO CON ENLACES ─────────────────────────────────────
+//
+// El chat pintaba el texto plano y una URL llegaba MUERTA: había que copiarla y
+// pegarla a mano. Importa porque la web manda clientes por
+// `api.whatsapp.com/send?text=…` y ahí va a viajar el link del producto.
+//
+// ☠️ Solo se enlazan http y https, por lista BLANCA (ver lib/enlaces.js): el
+// texto lo escribe el cliente, y un `javascript:` en un href se ejecutaría en la
+// sesión de quien atiende, que tiene la cookie del CRM.
+//
+// El `stopPropagation` es para que tocar un enlace ABRA el enlace y no despliegue
+// el "Responder" de la burbuja.
+function TextoConEnlaces({ texto }) {
+  return partirEnlaces(texto).map((p, i) => (
+    p.tipo === 'enlace' ? (
+      <a key={i} href={p.href} target="_blank" rel="noreferrer noopener"
+        onClick={(e) => e.stopPropagation()}
+        style={{ color: C.cream, textDecoration: 'underline', wordBreak: 'break-all' }}>
+        {p.valor}
+      </a>
+    ) : p.valor
+  ))
+}
+
 // ── TARJETA DE PEDIDO DEL CATÁLOGO ────────────────────────
 //
 // Meta manda SOLO el `product_retailer_id` de cada línea: ni nombre ni foto. El
@@ -639,7 +664,7 @@ export function MessageBubble({ msg, allMsgs, onResponder }) {
           ? <PedidoCard pedido={msg.pedido} />
           : msg.ubicacion
           ? <UbicacionCard u={msg.ubicacion} />
-          : hasText && <p style={{ margin: 0, fontSize: 14, color: C.cream, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.mensaje}</p>}
+          : hasText && <p style={{ margin: 0, fontSize: 14, color: C.cream, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}><TextoConEnlaces texto={msg.mensaje} /></p>}
         {/* Botones interactivos enviados por nosotros */}
         {isMe && msg.botones && (() => {
           try {
