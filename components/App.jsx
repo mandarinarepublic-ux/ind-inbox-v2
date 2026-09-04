@@ -250,6 +250,7 @@ export default function App() {
   const [tope, setTope] = useState(100)
 
   const [refreshKey, setRefreshKey] = useState(0)
+  const [refrescando, setRefrescando] = useState(false)
   const localStatusRef = useRef({})
   const localTempRef   = useRef({}) // override optimista de temperatura (Eje 2), hasta que el poll confirme
   const alertadosRef   = useRef(new Set()) // leads calientes ya notificados (1 aviso por ventana)
@@ -558,6 +559,20 @@ export default function App() {
     setLastSync(new Date())
     setLoading(false)
   }, [])
+
+  // Refresco SUAVE: vuelve a pedir el sync sin recargar la pagina, asi el chat
+  // abierto no se pierde ni se vuelve a descargar el bundle.
+  //
+  // El unico boton de refrescar (el simbolo del pie del sidebar) hace
+  // `window.location.reload()` y vive al fondo del SIDEBAR, que en movil es un
+  // cajon oculto: estando dentro de un chat no se ve, y la unica salida era
+  // cerrar y reabrir la app. De ahi el boton `mob-refresh` de la cabecera.
+  const manualRefresh = async () => {
+    if (refrescando) return          // dos toques seguidos no disparan dos cargas
+    setRefrescando(true)
+    setRefreshKey(k => k + 1)
+    try { await load() } finally { setRefrescando(false) }
+  }
 
   useEffect(() => {
     // Polling de DOS velocidades para no castigar al vendedor:
@@ -1836,6 +1851,7 @@ export default function App() {
         .msgs-scroll{ flex:1; overflow-y:auto; padding:16px 20px; }
         .input-bar  { flex-shrink:0; padding:10px 16px 14px; background:${C.surface}; border-top:1px solid ${C.border}; }
         .mob-ham    { display:none !important; }
+        .mob-refresh{ display:none !important; }
         .hide-mobile{ display:inline !important; }
         .show-mobile{ display:none !important; }
         .overlay    { display:none; }
@@ -1845,6 +1861,7 @@ export default function App() {
           .right-col{ position:fixed !important; right:0; top:0; bottom:0; z-index:100; width:88% !important; max-width:300px; box-shadow:-4px 0 32px rgba(0,0,0,.8); animation:slideR .25s ease; }
           .desktop-right{ display:none !important; }
           .mob-ham{ display:flex !important; }
+          .mob-refresh{ display:flex !important; }
           .hide-mobile{ display:none !important; }
           .show-mobile{ display:inline !important; }
           .overlay{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:90; }
@@ -2118,6 +2135,19 @@ export default function App() {
                   </div>
                 </div>
                 <div className="chat-actions" style={{ display:'flex', alignItems:'center', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
+                  {/* Refrescar, SOLO en movil. El boton de siempre vive al fondo
+                      del sidebar, que aca es un cajon oculto: dentro de un chat
+                      no se veia y tocaba cerrar y reabrir la app. Va PRIMERO
+                      porque esta tira scrollea en horizontal. */}
+                  <button className="mob-refresh" onClick={manualRefresh} disabled={refrescando}
+                    title="Refrescar" aria-label="Refrescar" style={{
+                      padding:'4px 8px', flexShrink:0, borderRadius:7,
+                      background: C.surface2, border: `1px solid ${C.border2}`,
+                      color: C.cream, fontSize:14, cursor: refrescando ? 'default' : 'pointer',
+                      fontFamily:'inherit', alignItems:'center', justifyContent:'center',
+                      opacity: refrescando ? .5 : 1,
+                      animation: refrescando ? 'spin .8s linear infinite' : 'none',
+                    }}>&#8635;</button>
                   {/* ── Eje 1: BANDEJA (estado de conversación) ── */}
                   {[
                     { s:'pendiente',    icon:'🔴', label:'Pendiente',  activeColor:'#f87171' },
