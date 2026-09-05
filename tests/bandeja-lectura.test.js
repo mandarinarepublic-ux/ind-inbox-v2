@@ -90,3 +90,35 @@ test('sin nada, pendiente', () => {
   // Ante la duda, que se vea. Un chat de más en Pendientes cuesta una mirada.
   assert.equal(estadoVisible({ ahoraMs: AHORA }), 'pendiente')
 })
+
+// ── DE QUE ANUNCIO VINO LA CONVERSACION ──────────────────────────
+// Mismo patron y misma trampa que el estado de bandeja: el origen solo lo trae
+// `lista_bandeja`, y `rows` (la ventana de mensajes recientes) va PRIMERO y no lo
+// trae. Si viviera en el ultimo mensaje se perderia justo en los chats recientes
+// —los pendientes, los que importan— y habria funcionado solo en los viejos:
+// invisible al probar.
+
+test('el origen del anuncio sobrevive aunque el ultimo mensaje no lo traiga', () => {
+  const [conv] = buildConvs([
+    fila({ id: 'wamid.1', mensaje: '¡Hola! Quiero más información.' }),
+    fila({ id: 'wamid.1', mensaje: '¡Hola! Quiero más información.', origenAnuncio: '🕷️ Crewneck Oversize' }),
+  ])
+  assert.equal(conv.origenAnuncio, '🕷️ Crewneck Oversize')
+})
+
+test('un seguimiento posterior no borra el origen de la conversacion', () => {
+  // El caso real: llega por el anuncio y despues escribe "y en talla M?". Ese
+  // seguimiento pasa a ser el ultimo mensaje y NO trae el origen.
+  const [conv] = buildConvs([
+    fila({ id: 'wamid.1', mensaje: '¡Hola! Quiero más información.', origenAnuncio: '🕷️ Crewneck Oversize' }),
+    fila({ id: 'wamid.2', mensaje: 'y en talla M tienen?', timestamp: '2026-08-27T05:02:00.000Z' }),
+  ])
+  assert.equal(conv.origenAnuncio, '🕷️ Crewneck Oversize')
+  assert.equal(conv.last.mensaje, 'y en talla M tienen?')
+})
+
+// Un cliente sin rastro tiene que NOTARSE, no disfrazarse con el origen de otro.
+test('una conversacion sin anuncio se queda sin origen', () => {
+  const [conv] = buildConvs([fila()])
+  assert.equal(conv.origenAnuncio, '')
+})

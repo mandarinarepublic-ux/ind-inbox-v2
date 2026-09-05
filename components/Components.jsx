@@ -160,6 +160,31 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
   const [hovered, setHovered] = useState(false)
   const searching = String(search || '').trim().length > 0
   const info = ESTADO_INFO[estado] || null
+  // ── DE QUE ANUNCIO VINO ────────────────────────────────────────
+  // 816 conversaciones al mes arrancan con el mismo texto y en la bandeja se ven
+  // todas iguales. Esta linea dice de que vino la persona; la de abajo, que acaba
+  // de decir. Las dos hacen falta: una para saber de que te habla, otra para
+  // saber que contestar.
+  //
+  // Sale de la CONVERSACION (conv.origenAnuncio), no del ultimo mensaje: cuando
+  // un chat espera respuesta el ultimo suele ser un seguimiento y el anuncio
+  // quedo en el primero.
+  //
+  // La fila tiene TRES ramas y el origen sale en las tres. En la lista normal se
+  // pide ademas que el chat ESPERE respuesta, para no subirle el alto a toda la
+  // bandeja; buscando eso no aplica: son pocas filas y lo que se quiere es
+  // justamente saber de donde salio esa persona.
+  //
+  // Sin origen NO se pinta nada: un cliente del que no sabemos de donde vino
+  // tiene que NOTARSE, no disfrazarse con una suposicion.
+  const mostrarOrigen = !!conv.origenAnuncio &&
+    (searching || msgSnippet != null || conv.last?.direccion === 'ENTRANTE')
+  const LineaOrigen = () => (
+    <div style={{
+      fontSize: 11, color: C.cream, marginTop: 3,
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190,
+    }} title={conv.origenAnuncio}>🎯 {conv.origenAnuncio}</div>
+  )
   return (
     <div
       onClick={onClick}
@@ -192,17 +217,23 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
               {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
               <CanalBadge label={canalLabel} distinto={canalDistinto} />
             </div>
+            {mostrarOrigen && <LineaOrigen />}
             <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.4 }}>
               💬 {highlight(msgSnippet, search)}
             </div>
           </div>
         ) : searching ? (
+          <>
+          {mostrarOrigen && <LineaOrigen />}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: C.creamDim, whiteSpace: 'nowrap' }}>📱 {highlight('+' + conv.telefono, search)}</span>
             {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
             <CanalBadge label={canalLabel} distinto={canalDistinto} />
           </div>
+          </>
         ) : (
+          <>
+          {mostrarOrigen && <LineaOrigen />}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
             <span style={{
               fontSize: 12,
@@ -235,6 +266,7 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
               }}>{conv.unread}</span>
             )}
           </div>
+          </>
         )}
       </div>
     </div>
