@@ -2228,7 +2228,7 @@ export default function App() {
                           <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:11, color:C.creamFaint }}>{fmtDate(msg.timestamp)}</span>
                         </div>
                       )}
-                      <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={responderA} />
+                      <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={responderA} onAbrirChat={openConv} />
                     </div>
                   )
                 })}
