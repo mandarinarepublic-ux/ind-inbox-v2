@@ -70,12 +70,18 @@ for (const ruta of PROTEGIDAS) {
   })
 }
 
-test('las públicas son EXACTAMENTE cinco', () => {
+test('las públicas son EXACTAMENTE seis', () => {
   // Cada entrada de más es una puerta al internet entero. Que agregar una rompa
   // una prueba es justamente lo que se busca.
+  //
+  // La sexta se sumó el 4-sep-2026: `/api/cron/pagos`, el aviso diario de
+  // posibles pagos sin pedido. Va abierta por lo MISMO que los otros crons —
+  // detrás del candado devolvería 401 y se vería igual que uno sano, o sea que
+  // no correría nunca y nadie se enteraría. Se defiende con CRON_SECRET, no con
+  // la cookie de sesión.
   assert.deepStrictEqual(RUTAS_PUBLICAS, [
     '/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes',
-    '/api/cron/entregas', '/api/pago-dlocal',
+    '/api/cron/entregas', '/api/cron/pagos', '/api/pago-dlocal',
   ])
 })
 
