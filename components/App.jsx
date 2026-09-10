@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
@@ -774,6 +774,9 @@ export default function App() {
     if (!actuales.length) return
     const masViejo = actuales[0]?.timestamp
     if (!masViejo) return
+    // Misma guardia que en `cargarHilo`: subir por el historial también escribe
+    // el caché después de un `await`, y el canal puede haberse movido.
+    const canalPedido = getCanalActivo()
 
     cargandoMasRef.current = true
     setCargandoMas(true)
@@ -789,6 +792,7 @@ export default function App() {
       // PARA SIEMPRE, hasta que alguien recargue la página. Y nadie recarga
       // porque nada se ve roto: simplemente el historial se acaba antes.
       if (previos === null) return
+      if (getCanalActivo() !== canalPedido) return
       const fusion = fusionarHilo(previos, actuales)
       // Si no creció, no queda historial: se deja de preguntar. Sin esto, cada
       // scroll hasta arriba dispararía una llamada que nunca trae nada.
@@ -895,8 +899,21 @@ export default function App() {
   // con una sola burbuja (el síntoma de "se borraron los mensajes").
   const cargarHilo = useCallback(async (telefono) => {
     if (!telefono) return
+    // ☠️ El canal puede cambiar DURANTE el `await`, y el caché de hilos se
+    // escribe después. `cambiarCanal` limpia `hilosRef` al saltar de número,
+    // pero esa limpieza corre ANTES de que llegue esta respuesta: el hilo del
+    // número viejo repuebla el caché ya estando en la otra pestaña, y el poll
+    // siguiente lo mezcla en la bandeja (`hilos` es la única de las tres
+    // fuentes que no pasa por el filtro `phone_id` del backend). Resultado: una
+    // conversación del OTRO número aparece en la pestaña, con fila y todo,
+    // porque el pintado no filtra por canal — confía en el backend.
+    //
+    // Pasó en MANDI el 9-sep. Acá la puerta es más angosta (`cambiarCanal` es
+    // una sola rama y siempre limpia), pero la carrera es la misma.
+    const canalPedido = getCanalActivo()
     const msgs = await fetchHilo(telefono)
     if (!Array.isArray(msgs) || !msgs.length) return
+    if (getCanalActivo() !== canalPedido) return
     hilosRef.current[telefono] = msgs
     // Solo conservamos los últimos 5 hilos abiertos: se re-inyectan en cada poll
     // (cada 8s) y guardar decenas de historiales completos costaría memoria y CPU.
