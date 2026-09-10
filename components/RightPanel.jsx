@@ -4,7 +4,7 @@ import { Avatar } from '@/components/Components'
 import { fetchRepliesFromSheet, writeReply, reorderReplies, addNota, setIdVenta, fetchProductos, generarLinkPago , subirAudioNota, subirDocumento } from '@/lib/api-client'
 import { esAudio as esAudioArchivo } from '@/lib/audio-nota-voz'
 import { esDocumento as esDocumentoArchivo } from '@/lib/adjuntos'
-import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
+import { adjuntosDeRespuesta, moverAdjunto } from '@/lib/adjuntos-respuesta'
 import Notas from './Notas'
 import PedidoManual from './PedidoManual'
 import VerPedido from './VerPedido'
@@ -124,6 +124,10 @@ function urlsToReply(adjuntos) {
   return obj
 }
 
+// Las flechitas de mover. Chicas a proposito: comparten los 44px de la
+// miniatura y no pueden competir con ella.
+const FLECHA = { flex:1, height:13, padding:0, background:'transparent', border:`1px solid ${C.border2}`, borderRadius:3, color:C.creamFaint, fontSize:7, lineHeight:1, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center' }
+
 // ── MultiImgEditor — editor de hasta 10 fotos ────────────────────
 // ⚠️ EL ORDEN ES DEL VENDEDOR: cada adjunto nuevo se AGREGA donde se cargó y nunca
 // se reordena por tipo. WhatsApp entrega cada uno como un mensaje aparte, así que
@@ -187,13 +191,20 @@ function MultiImgEditor({ urls, onChange }) {
   // ido, o borraría el recién llegado.
   const removeImg = (idx) => onChange(prev => (Array.isArray(prev) ? prev : []).filter((_, i) => i !== idx))
 
+  // Mover de lugar. Con updater por el MISMO motivo que los otros dos: `urls` es el
+  // valor del render en que se hizo clic, y si mientras tanto termino de subir otro
+  // adjunto, mover partiendo de la lista vieja lo borraria sin dar ningun error.
+  // La guardia de rango vive en `moverAdjunto`, probada aparte.
+  const mover = (idx, delta) => onChange(prev => moverAdjunto(prev, idx, delta))
+
   // Slots a mostrar: fotos existentes + 1 vacío (si hay espacio)
   const slots = urls.length < MAX_IMGS ? [...urls, null] : urls
 
   return (
     <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:4 }}>
       {slots.map((url, idx) => (
-        <div key={idx} style={{ position:'relative', width:44, height:44 }}>
+        <div key={idx} style={{ width:44 }}>
+        <div style={{ position:'relative', width:44, height:44 }}>
           {url ? (
             <>
               {url.tipo === 'audio' ? (
@@ -213,8 +224,15 @@ function MultiImgEditor({ urls, onChange }) {
                   <span style={{ fontSize:8, color:'#64748b' }}>{idx + 1}º</span>
                 </div>
               ) : (
-              <img src={url.url} style={{ width:44, height:44, borderRadius:6, objectFit:'cover', display:'block' }} alt=""
+              <>
+              <img src={url.url} title={`Foto — sale en el lugar ${idx + 1}`} style={{ width:44, height:44, borderRadius:6, objectFit:'cover', display:'block' }} alt=""
                 onError={e => e.currentTarget.style.display='none'} />
+              {/* El puesto, tambien en la foto. El audio y el documento ya lo
+                  mostraban porque no tienen miniatura; desde que se puede
+                  reordenar hace falta en las tres: no se puede ordenar lo que
+                  no se sabe en que lugar esta. */}
+              <span style={{ position:'absolute', bottom:0, left:0, padding:'0 3px', borderRadius:'0 6px 0 6px', background:'rgba(0,0,0,.6)', color:C.cream, fontSize:8, lineHeight:'11px', pointerEvents:'none' }}>{idx + 1}º</span>
+              </>
               )}
               {uploading[idx] && (
                 <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.55)', borderRadius:6,
@@ -240,10 +258,26 @@ function MultiImgEditor({ urls, onChange }) {
             </>
           )}
         </div>
+        {/* Mover de lugar. Hasta ahora el orden solo se podia FIJAR al cargar: para
+            corregirlo habia que borrar el adjunto y volver a subirlo. Con uno solo
+            no hay nada que mover, y el slot vacio del "+" tampoco. El hueco de la
+            punta se deja vacio para que las flechas de todas las miniaturas queden
+            a la misma altura. */}
+        {url && urls.length > 1 && (
+          <div style={{ display:'flex', gap:2, marginTop:2 }}>
+            {idx > 0
+              ? <button onClick={() => mover(idx, -1)} title="Mover un lugar antes" style={FLECHA}>◀</button>
+              : <span style={{ flex:1 }} />}
+            {idx < urls.length - 1
+              ? <button onClick={() => mover(idx, +1)} title="Mover un lugar despues" style={FLECHA}>▶</button>
+              : <span style={{ flex:1 }} />}
+          </div>
+        )}
+        </div>
       ))}
       {urls.length > 0 && (
         <div style={{ width:'100%', fontSize:9, color:C.creamFaint, marginTop:2 }}>
-          {urls.length}/{MAX_IMGS} adjuntos · salen en este orden
+          {urls.length}/{MAX_IMGS} adjuntos · salen en este orden{urls.length > 1 ? ' · ◀ ▶ para mover' : ''}
         </div>
       )}
     </div>
