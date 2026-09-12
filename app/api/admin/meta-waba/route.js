@@ -44,6 +44,23 @@ async function graph(ruta, metodo = 'GET') {
  * escribiendo una dirección en el navegador, porque es el único sitio donde
  * existe la sesión que el candado exige. Es temporal.
  */
+/**
+ * ?accion=listar → TODAS las WABAs del negocio dueño de la WABA del canal, con sus
+ * números. Descubre si un reenganche de coexistencia creó el número con OTRO
+ * phone_id o en OTRA WABA (el inbox seguiría apuntando al viejo).
+ */
+async function listar(canal) {
+  const dueno = await graph(`/${canal.wabaId}?fields=owner_business_info`)
+  const businessId = dueno?.cuerpo?.owner_business_info?.id
+  if (!businessId) return { error: 'No se pudo leer el negocio dueño', dueno: dueno.cuerpo }
+  const campos = 'id,name,status,phone_numbers{id,display_phone_number,platform_type,status,is_on_biz_app,throughput,last_onboarded_time}'
+  const [propias, clientes] = await Promise.all([
+    graph(`/${businessId}/owned_whatsapp_business_accounts?fields=${campos}&limit=50`),
+    graph(`/${businessId}/client_whatsapp_business_accounts?fields=${campos}&limit=50`),
+  ])
+  return { businessId, propias: propias.cuerpo?.data || propias.cuerpo, clientes: clientes.cuerpo?.data || clientes.cuerpo }
+}
+
 export async function GET(req) {
   const url = new URL(req.url)
   const accion = url.searchParams.get('accion') || ''
@@ -55,6 +72,9 @@ export async function GET(req) {
   }
   if (!token()) {
     return Response.json({ error: 'META_TOKEN no está configurado en este entorno' }, { status: 500 })
+  }
+  if (accion === 'listar') {
+    return Response.json({ canal: canal.id, ...(await listar(canal)) })
   }
 
   const salida = {
