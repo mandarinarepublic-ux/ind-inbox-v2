@@ -1178,6 +1178,9 @@ export default function App() {
     archivado:  searched.filter(c => getStatus(c.telefono) === 'archivado').length,
     venta:      searched.filter(c => esVentaActiva(c.telefono)).length,
     soporte:    searched.filter(c => getStatus(c.telefono) === 'soporte').length,
+    // 📋 Encuesta de reactivación: la puso el cron; la respuesta del cliente lo
+    // devuelve a Pendientes sola.
+    encuesta:   searched.filter(c => getStatus(c.telefono) === 'encuesta').length,
     // Temperaturas (Eje 2)
     caliente:   searched.filter(c => getTemp(c.telefono) === 'caliente').length,
     tibio:      searched.filter(c => getTemp(c.telefono) === 'tibio').length,
@@ -2025,6 +2028,17 @@ export default function App() {
                   🎧 Soporte
                   {counts['soporte']>0 && <span style={{ background:filter==='soporte'?'#a78bfa':C.border2, color:filter==='soporte'?C.bg:C.creamDim, borderRadius:10, padding:'0 5px', fontSize:8, fontWeight:800 }}>{counts['soporte']}</span>}
                 </button>
+                <button onClick={() => cambiarFiltro('encuesta')} style={{
+                  flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
+                  background:filter==='encuesta'?`rgba(244,114,182,.18)`:'transparent',
+                  border:`1px solid ${filter==='encuesta'?'rgba(244,114,182,.4)':C.border}`,
+                  color:filter==='encuesta'?'#f472b6':C.creamFaint,
+                  borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
+                  display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                }}>
+                  📋 Encuesta
+                  {counts['encuesta']>0 && <span style={{ background:filter==='encuesta'?'#f472b6':C.border2, color:filter==='encuesta'?C.bg:C.creamDim, borderRadius:10, padding:'0 5px', fontSize:8, fontWeight:800 }}>{counts['encuesta']}</span>}
+                </button>
                 <button onClick={() => cambiarFiltro('archivado')} style={{
                   flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
                   background:filter==='archivado'?`rgba(160,154,144,.18)`:'transparent',
@@ -2175,6 +2189,10 @@ export default function App() {
                     // nada (medido: 0 chats en VENTA en IND, contra 8 en MANDI).
                     { s:'venta',        icon:'💰', label:'Venta en proceso', activeColor:'#10b981' },
                     { s:'soporte',      icon:'🎧', label:'Soporte',    activeColor:'#a78bfa' },
+                    // 📋 Encuesta de reactivación (13-sep-2026): normalmente la pone el
+                    // cron de seguimientos al mandar la encuesta; acá se puede poner o
+                    // quitar a mano.
+                    { s:'encuesta',     icon:'📋', label:'Encuesta',   activeColor:'#f472b6' },
                     { s:'archivado',    icon:'⚫', label:'Archivar',   activeColor:C.creamDim },
                   ].map(({ s, icon, label, activeColor }) => (
                     <button key={s} onClick={() => changeStatus(activeConv.telefono, s)} title={label} style={{

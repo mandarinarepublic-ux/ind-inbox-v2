@@ -19,3 +19,26 @@ test('tocar la IA no pisa los saludos ni las reactivaciones', () => {
   assert.equal(nueva.saludo_nuevo.texto.length > 0, true)
   assert.equal(nueva.saludo_reactivacion.horas, 12)
 })
+
+test('el seguimiento por temperatura arranca APAGADO y con las tres temperaturas', () => {
+  assert.equal(DEFAULTS.seguimientos.activo, false)
+  assert.equal(DEFAULTS.seguimientos.caliente.horas, 23)
+  assert.equal(DEFAULTS.seguimientos.tibio.horas, 12)
+  assert.equal(DEFAULTS.seguimientos.frio.horas, 22)
+  for (const t of ['caliente', 'tibio', 'frio']) {
+    assert.equal(DEFAULTS.seguimientos[t].activo, false)
+    assert.deepEqual(DEFAULTS.seguimientos[t].botones, [])
+  }
+})
+
+test('tocar la IA no pisa los seguimientos', () => {
+  const nueva = merge(DEFAULTS, { ia: { principal: false } })
+  assert.equal(nueva.seguimientos.caliente.horas, 23)
+})
+
+test('la ENCUESTA DE REACTIVACIÓN arranca apagada, con sus tres botones de ejemplo', () => {
+  const e = DEFAULTS.seguimientos.encuesta
+  assert.equal(e.activo, false)
+  assert.equal(e.horas, 6)
+  assert.deepEqual(e.botones.map(b => b.title), ['Es el precio', 'Sigo pensándolo', 'Otro motivo'])
+})

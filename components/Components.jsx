@@ -110,6 +110,7 @@ const ESTADO_INFO = {
   ventaproceso: { label:'En proceso', color:'#f59e0b' },
   venta:        { label:'Venta',      color:'#10b981' },
   soporte:      { label:'Soporte',    color:'#a78bfa' },
+  encuesta:     { label:'Encuesta',   color:'#f472b6' },
   archivado:    { label:'Archivado',  color:'#64748b' },
 }
 

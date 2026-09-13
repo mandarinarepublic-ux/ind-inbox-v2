@@ -5,7 +5,7 @@ import { CANALES } from '@/lib/canales'
 
 // ── Pestaña AUTOMATIZACIONES (tema IND: cream sobre negro) ─────────────────────
 // Reglas del inbox que se prenden/apagan. Hoy: cortafuegos del bot por número +
-// dos saludos automáticos.
+// dos saludos automáticos + seguimiento por temperatura (con botones).
 
 const C = {
   bg:'#0A0A0A', surface:'#0D0D0D', surface2:'#111111',
@@ -52,7 +52,16 @@ export default function Automatizaciones({ active }) {
     setConfig(c); setOrig(JSON.stringify(c)); setLoading(false)
   }, [])
 
-  useEffect(() => { if (active && !config) cargar() }, [active, config, cargar])
+  // Recarga CADA VEZ que se entra a la pestaña (no solo la primera): si el
+  // dueño apaga el cortafuegos desde el celular, un escritorio con esta
+  // pestaña abierta debe dejar de mostrar lo viejo al volver a mirarla. Sin
+  // esto, además, "Guardar cambios" reenviaría ese `config` viejo completo y
+  // desarmaría en la base lo que se apagó desde el otro lado.
+  //
+  // OJO con las dependencias: `config` NO va en el arreglo. `cargar()` hace
+  // setConfig(...), así que si `config` estuviera aquí cada carga dispararía
+  // el efecto de nuevo → bucle infinito.
+  useEffect(() => { if (active) cargar() }, [active, cargar])
 
   const dirty = config && orig !== JSON.stringify(config)
 
@@ -95,6 +104,32 @@ export default function Automatizaciones({ active }) {
     { ia: { [canalId]: valor } },
     prev => ({ ...prev, ia: { ...(prev?.ia || {}), [canalId]: valor } }))
 
+  // Seguimientos: config anidada (global + por temperatura). Ojo: el merge del
+  // servidor es de UN nivel, por eso los interruptores por temperatura mandan
+  // el bloque de esa temperatura COMPLETO — un patch con solo {activo} borraría
+  // las horas, el texto y los botones.
+  const setSegT = (sub, campo, valor) =>
+    setConfig(prev => ({ ...prev, seguimientos: {
+      ...(prev?.seguimientos || {}),
+      [sub]: { ...((prev?.seguimientos || {})[sub] || {}), [campo]: valor },
+    } }))
+  const togSegG = (valor) => guardarInterruptor(
+    { seguimientos: { activo: valor } },
+    prev => ({ ...prev, seguimientos: { ...(prev?.seguimientos || {}), activo: valor } }))
+  const togSegT = (key, valor, actual) => guardarInterruptor(
+    { seguimientos: { [key]: { ...actual, activo: valor } } },
+    prev => ({ ...prev, seguimientos: { ...(prev?.seguimientos || {}),
+      [key]: { ...((prev?.seguimientos || {})[key] || {}), activo: valor } } }))
+  // Botones de respuesta rápida por temperatura: hasta 3, 20 letras (límite de
+  // WhatsApp). Se editan como texto; el que quede vacío no se manda.
+  const botonesDe = (t) => (Array.isArray(t.botones) ? t.botones : []).map(b => (b && typeof b === 'object') ? String(b.title || '') : String(b || ''))
+  const setBoton = (key, t, i, title) => {
+    const bs = botonesDe(t); bs[i] = title.slice(0, 20)
+    setSegT(key, 'botones', bs.map(title => ({ title })))
+  }
+  const addBoton = (key, t) => { const bs = botonesDe(t); if (bs.length < 3) setSegT(key, 'botones', [...bs, ''].map(title => ({ title }))) }
+  const delBoton = (key, t, i) => { const bs = botonesDe(t); bs.splice(i, 1); setSegT(key, 'botones', bs.map(title => ({ title }))) }
+
   const guardar = async () => {
     setSaving(true)
     const r = await saveAutomatizaciones(config)
@@ -113,6 +148,19 @@ export default function Automatizaciones({ active }) {
 
   const sn = config?.saludo_nuevo || {}
   const sr = config?.saludo_reactivacion || {}
+  const sg = config?.seguimientos || {}
+
+  // Config visual de las 3 temperaturas para el bloque de seguimientos.
+  const TEMPS = [
+    { key: 'caliente', icon: '🔥', label: 'Caliente', color: '#f97316', ayuda: 'La lista te avisa con ⏰ a las 20 h; si no actúas, manda un "sujeta-ventana" antes de las 24 h.', horasDefault: 23, horasLabel: ['Envía a las', 'h de silencio del cliente'] },
+    { key: 'tibio',    icon: '🌤️', label: 'Tibio',    color: '#fbbf24', ayuda: 'Seguimiento suave a media ventana.', horasDefault: 12, horasLabel: ['Envía a las', 'h de silencio del cliente'] },
+    { key: 'frio',     icon: '❄️', label: 'Frío',     color: '#38bdf8', ayuda: 'Último toque opcional antes de cerrar la ventana.', horasDefault: 22, horasLabel: ['Envía a las', 'h de silencio del cliente'] },
+    // No es una temperatura: aplica a cualquier chat en ATENDIDO donde contesté yo
+    // y el cliente no volvió a escribir. Al enviarse, el chat pasa a la bandeja
+    // 📋 ENCUESTA; la respuesta del cliente lo devuelve a PENDIENTES.
+    { key: 'encuesta', icon: '📋', label: 'Encuesta de reactivación', color: '#f472b6', ayuda: 'Para chats en ATENDIDO que se quedaron callados después de tu respuesta. Al enviarse, el chat pasa a la bandeja 📋 Encuesta.', horasDefault: 6, horasLabel: ['Envía a las', 'h de mi último mensaje, si el cliente no respondió'] },
+  ]
+  const inputNum = { width: 60, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontSize: 14, fontWeight: 800, padding: '6px 8px', textAlign: 'center', fontFamily: 'Outfit,sans-serif', outline: 'none' }
 
   const inputBase = {
     width: '100%', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10,
@@ -224,8 +272,85 @@ export default function Automatizaciones({ active }) {
             </>)}
           </Card>
 
+          {/* ── SEGUIMIENTO por temperatura del lead (cron cada hora) ── */}
+          <Card>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: sg.activo ? 14 : 0 }}>
+              <div style={{ fontSize: 26 }}>🌡️</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.cream }}>Seguimiento por temperatura</div>
+                <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3 }}>
+                  Escribe solo, según qué tan caliente esté el lead y cuánto lleva callado — <b style={{ color: C.cream }}>siempre dentro de la ventana de 24h</b> de WhatsApp. Máx 1 mensaje por ventana; se cancela si el cliente responde. Si el bot está contestando ese chat, no se mete.
+                </div>
+              </div>
+              <Switch on={!!sg.activo} onClick={() => togSegG(!sg.activo)} />
+            </div>
+
+            {sg.activo && (<>
+              {TEMPS.map(({ key, icon, label, color, ayuda, horasDefault, horasLabel }) => {
+                const t = sg[key] || {}
+                const bs = botonesDe(t)
+                return (
+                  <div key={key} style={{ border: `1px solid ${t.activo ? color + '55' : C.border}`, borderRadius: 12, padding: 12, marginBottom: 10, background: t.activo ? color + '0c' : 'transparent' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 18 }}>{icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: t.activo ? color : C.creamDim }}>{label}</div>
+                        <div style={{ fontSize: 11, color: C.creamDim, marginTop: 2 }}>{ayuda}</div>
+                      </div>
+                      <Switch on={!!t.activo} onClick={() => togSegT(key, !t.activo, t)} />
+                    </div>
+                    {t.activo && (<>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12, color: C.creamDim }}>{horasLabel[0]}</span>
+                        <input type="number" min={1} max={24} value={t.horas ?? horasDefault}
+                          onChange={e => setSegT(key, 'horas', Math.min(24, Math.max(1, Number(e.target.value) || 1)))}
+                          style={inputNum} />
+                        <span style={{ fontSize: 12, color: C.creamDim }}>{horasLabel[1]}</span>
+                      </div>
+                      <textarea value={t.texto || ''} onChange={e => setSegT(key, 'texto', e.target.value)}
+                        rows={key === 'encuesta' ? 5 : 3} placeholder={key === 'encuesta' ? 'Texto de la encuesta…' : `Mensaje de seguimiento para leads ${label.toLowerCase()}…`} style={inputBase} />
+
+                      {/* Botones de respuesta rápida (opcionales). Lo que el cliente
+                          toque entra al chat como texto y lo devuelve a PENDIENTES. */}
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.creamDim, marginBottom: 6 }}>
+                          🔘 Botones de respuesta (opcional, máx 3 · 20 letras c/u)
+                        </div>
+                        {bs.map((title, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                            <input value={title} maxLength={20} placeholder={`Botón ${i + 1}`}
+                              onChange={e => setBoton(key, t, i, e.target.value)}
+                              style={{ ...inputBase, padding: '8px 10px', resize: 'none' }} />
+                            <span style={{ fontSize: 10, color: C.creamFaint, width: 34, textAlign: 'right' }}>{title.length}/20</span>
+                            <button onClick={() => delBoton(key, t, i)} title="Quitar botón"
+                              style={{ background: 'transparent', border: `1px solid ${C.border2}`, color: C.creamDim, borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>✕</button>
+                          </div>
+                        ))}
+                        {bs.length < 3 && (
+                          <button onClick={() => addBoton(key, t)}
+                            style={{ background: 'transparent', border: `1px dashed ${C.border2}`, color: C.creamDim, borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontFamily: 'Outfit,sans-serif' }}>
+                            + Agregar botón
+                          </button>
+                        )}
+                        {bs.length > 0 && (
+                          <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 6 }}>
+                            Con botones el mensaje sale como interactivo de WhatsApp. La respuesta llega al chat como texto y lo pone en PENDIENTES; ningún botón hace nada solo.
+                          </div>
+                        )}
+                      </div>
+                    </>)}
+                  </div>
+                )
+              })}
+
+              <div style={{ fontSize: 11, color: C.creamDim, marginTop: 4, lineHeight: 1.5 }}>
+                ⚠️ Pasadas las 24h la ventana se cierra y ya no se envía gratis (reenganche por plantilla = próximamente). La temperatura la pones solo tú desde el chat. El cron corre cada hora en punto.
+              </div>
+            </>)}
+          </Card>
+
           <div style={{ border: `1px dashed ${C.border2}`, borderRadius: 14, padding: 16, textAlign: 'center', color: C.creamFaint, fontSize: 12 }}>
-            🚧 Aquí iremos sumando más automatizaciones (seguimiento, fuera de horario, etiquetas…).
+            🚧 Aquí iremos sumando más automatizaciones (fuera de horario, etiquetas…).
           </div>
         </>)}
       </div>
