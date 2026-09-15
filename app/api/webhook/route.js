@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
-import { registrarContactoEntrante, getModoIA, getContactos, marcarPush } from '@/lib/contactos'
+import { registrarContactoEntrante, getModoIA, getContactos, marcarPush, updateTemperatura, marcarReceta } from '@/lib/contactos'
 import { enviarPush, avisoDeEntrante } from '@/lib/push'
 import { enviarConMaquina } from '@/lib/auth-maquina'
-import { usaSupabaseLectura } from '@/lib/supabase'
-import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase, asegurarConversacionSalienteSupabase } from '@/lib/inbox-supabase'
+import { usaSupabaseLectura, CUENTA } from '@/lib/supabase'
+import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase, asegurarConversacionSalienteSupabase, getFlujosPublicadosSupabase } from '@/lib/inbox-supabase'
 import { archivarMedia } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirIA } from '@/lib/ia-canal'
@@ -14,11 +14,35 @@ import { enviarTelegram, telegramConfigurado } from '@/lib/telegram'
 import { getMarcaAvisoFirmaSupabase, setMarcaAvisoFirmaSupabase } from '@/lib/inbox-supabase'
 import { extraerEchoes } from '@/lib/echoes'
 import { capturarCtwaClid, revisarLeadAutomatico, revisarVentaEnProceso } from '@/lib/capi'
+import { elegirFlujo, caminoLineal, decidirEntranteEnFlujo } from '@/lib/flujo'
+import { correrTanda } from '@/lib/flujo-motor'
+import { getEstadoFlujo, guardarEstadoFlujo, borrarEstadoFlujo, registrarPasos } from '@/lib/flujos'
+import { getRespuestas } from '@/lib/respuestas'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
 
+// FLUJOS publicados, cacheados 30 s por instancia. IND es la ruta con más
+// invocaciones de los dos inbox: sin esto, cada mensaje de texto costaría una
+// lectura de inbox.flujos aunque no haya ningún flujo. Precio: publicar o
+// despublicar tarda hasta 30 s en notarse acá.
+let cacheFlujos = { t: 0, filas: null }
+async function flujosPublicadosCache() {
+  if (cacheFlujos.filas && Date.now() - cacheFlujos.t < 30 * 1000) return cacheFlujos.filas
+  try {
+    const filas = await getFlujosPublicadosSupabase()
+    cacheFlujos = { t: Date.now(), filas }
+    return filas
+  } catch (e) {
+    console.error('[/api/webhook] no pude leer los flujos publicados:', e.message)
+    return cacheFlujos.filas || []
+  }
+}
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+// FLUJOS: una tanda con fotos puede tardar (una llamada a /api/saliente por pieza,
+// dentro de waitUntil). Mismo margen que MANDI. Solo se cobra lo que de verdad dura.
+export const maxDuration = 60
 
 // ── Webhook de Meta/WhatsApp — RECEPCIÓN directa (reemplaza a Make) ────────────
 // Meta llama aquí con cada mensaje entrante. Escribimos la fila en MENSAJES y
@@ -150,6 +174,9 @@ async function procesarEchoes(echoes) {
         direccion: 'SALIENTE', mediaId: e.mediaId, contextoId: e.contextoId,
         raw: e.raw, phoneId: e.phoneId,
       })
+      // Escrito desde el CELULAR = una persona contestó → se retira el flujo. Solo si
+      // hay flujos publicados: IND manda muchos ecos y sin flujos no hay qué borrar.
+      if ((await flujosPublicadosCache()).length) await borrarEstadoFlujo(e.telefono).catch(() => {})
       if (e.mediaId) await archivarMedia({ mediaId: e.mediaId, wamid: e.wamid }).catch(() => {})
     } catch (err) {
       console.error('[/api/webhook echo]', e.wamid, err.message)
@@ -316,6 +343,147 @@ export async function POST(req) {
       const agenteResponde = (phone, phoneId) => IA_ON && decidirIA({ config: auto, phoneId, contacto: contactoDe(phone) })
       const saludados = new Set()
 
+      // ── FLUJOS (lienzo de nodos) — puerto desde MANDI, 15-sep-2026 ───────────
+      // Ver lib/flujo.js, lib/flujo-motor.js y docs/HANDOFF-2026-09-15-flujos-ind.md.
+      //
+      // ☠️ DIFERENCIA CON MANDI: acá el loop de abajo es el camino SÍNCRONO del 200 a
+      // Meta, así que todo lo de flujos corre en BACKGROUND. Y corre EN COLA (una
+      // promesa encadenada por lote), no en paralelo: si el cliente manda dos
+      // mensajes en el mismo lote (tocar un botón y escribir), el segundo tiene que
+      // encontrar el estado que dejó el primero. El saludo entra en la misma cola
+      // porque un flujo lo reemplaza.
+      const recetados = new Set()
+      let colaAutomaticos = Promise.resolve()
+      let respuestasCache = null
+      const respuestasRapidas = async () => {
+        if (!respuestasCache) respuestasCache = await getRespuestas().catch(() => [])
+        return respuestasCache
+      }
+      // ¿Hay una PERSONA atendiendo este chat? Si el último mensaje (del snapshot,
+      // de ANTES de este lote) fue NUESTRO y de hace menos de 24 h, sí. Solo calla
+      // los disparadores por PALABRA: un flujo no se mete a media conversación.
+      const humanoAtendiendo = (phone) => {
+        const c = contactoDe(phone)
+        const ultimo = c?.ultimoMensajeAt ? Date.parse(c.ultimoMensajeAt) : NaN
+        if (!Number.isFinite(ultimo)) return false
+        const entrante = c?.ultimoEntranteAt ? Date.parse(c.ultimoEntranteAt) : 0
+        // `>` y no `>=`: si las dos marcas coinciden, el que habló fue el CLIENTE.
+        if (!(ultimo > (Number.isFinite(entrante) ? entrante : 0))) return false
+        return Date.now() - ultimo < 24 * 3600 * 1000
+      }
+      // Lo que el motor (lib/flujo-motor.js) necesita del mundo. `enviarSaliente`
+      // ya manda auto:true: NO reinicia el push ni borra el estado del flujo.
+      const depsFlujo = {
+        enviar: (p) => enviarSaliente(origin, p),
+        guardarEstado: guardarEstadoFlujo,
+        borrarEstado: borrarEstadoFlujo,
+        registrarPasos,
+        setTemperatura: updateTemperatura,
+        avisar: (texto) => enviarTelegram(texto),
+        ahora: () => new Date(),
+        cuenta: CUENTA,
+        log: console.log,
+      }
+      const contactoParaFlujo = (m) => {
+        const c = contactoDe(m.telefono)
+        return {
+          telefono: m.telefono, nombre: m.nombre, alias: c?.alias || '', phoneId: m.phoneId,
+          temperatura: c?.temperatura || '', tieneVenta: Boolean(c?.idVenta), estado: c?.estado || 'pendiente',
+          // El snapshot es de ANTES de este mensaje: el último entrante es ESTE, ahora.
+          ultimoEntranteAt: new Date().toISOString(),
+        }
+      }
+
+      // El cliente YA está dentro de un flujo → avanzar. Va ANTES de los
+      // disparadores: el que está gana.
+      async function flujoEnCursoSiCorresponde(m) {
+        if (!auto?.flujos?.activo) return false
+        const flujos = await flujosPublicadosCache()
+        if (!flujos.length) return false
+        const estado = await getEstadoFlujo(m.telefono)
+          .catch(e => { console.error('[/api/webhook] estado de flujo:', e.message); return null })
+        if (!estado) return false
+        const flujo = flujos.find(f => String(f.flujo_id) === String(estado.flujo_id)) || null
+        // ☠️ Un botón tocado llega como tipo 'texto' con el TÍTULO; el id (rc_N ↔
+        // btn_N) está en el crudo. Una foto o un audio no traen texto (trampa 8).
+        const tipoCrudo = m.raw?.type
+        const entrante = {
+          botonId: m.raw?.interactive?.button_reply?.id || '',
+          texto: ['text', 'interactive', 'button'].includes(tipoCrudo) ? m.contenido : '',
+        }
+        const d = decidirEntranteEnFlujo({ estado, flujo, entrante, ahora: new Date() })
+        if (d.accion === 'borrar') {
+          console.log('[/api/webhook] flujo en curso se retira:', d.motivo, m.telefono)
+          await borrarEstadoFlujo(m.telefono).catch(() => {})
+          return false
+        }
+        if (d.accion === 'ignorar') {
+          // Esperando un reloj: su mensaje va a PENDIENTES y ningún OTRO flujo entra.
+          recetados.add(tail9(m.telefono))
+          return false
+        }
+        // Si el bot tomó el chat mientras tanto, el flujo no compite con él.
+        if (agenteResponde(m.telefono, m.phoneId)) {
+          await borrarEstadoFlujo(m.telefono).catch(() => {})
+          return false
+        }
+        await correrTanda(depsFlujo, {
+          flujo, desde: d.desde, esDisparo: false, contacto: contactoParaFlujo(m),
+          wamidEntrante: m.wamid, ultimoWamid: m.wamid, respuestas: await respuestasRapidas(),
+        })
+        return true
+      }
+
+      // ¿A este entrante le toca un flujo publicado (anuncio > palabra > orgánico)?
+      async function flujoSiCorresponde(m) {
+        if (!auto?.flujos?.activo) return false
+        const tieneReferral = Boolean(m.referral?.source_id)
+        const esNuevo = esNuevoDe(m.telefono)
+        if (!tieneReferral && !esNuevo && m.tipo !== 'texto') return false
+        const flujos = await flujosPublicadosCache()
+        if (!flujos.length) return false
+        const sourceId = String(m.referral?.source_id || '').trim()
+        // Solo la PALABRA usa el texto, y es la peligrosa: solo si ESCRIBIÓ
+        // (`raw.type === 'text'`, no un botón ni una ubicación) y nadie lo atiende.
+        const textoPalabra = (m.raw?.type === 'text' && !humanoAtendiendo(m.telefono)) ? m.contenido : ''
+        const flujo = elegirFlujo({ flujos, sourceId, esNuevo, texto: textoPalabra })
+        if (!flujo) return false
+        if (agenteResponde(m.telefono, m.phoneId)) return false
+        const t = tail9(m.telefono)
+        if (recetados.has(t)) return false
+        // Guardia de forma: un flujo roto antes del primer mensaje no marca al cliente.
+        const forma = caminoLineal(flujo.grafo_vivo)
+        if (forma.motivo === 'huerfano' && !forma.mensajes.length) {
+          console.warn('[/api/webhook] flujo', flujo.nombre, 'arranca roto, no se marca', m.telefono)
+          return false
+        }
+        // Un disparo por cliente cada 24 h, marcado ANTES de enviar (reentregas de Meta).
+        const { marcado } = await marcarReceta(m.telefono)
+          .catch(e => { console.error('[/api/webhook] marcar flujo:', e.message); return { marcado: false } })
+        if (!marcado) return false
+        recetados.add(t)
+        const disparador = flujo.grafo_vivo.nodos.filter(Boolean).find(n => n.tipo === 'disparador')
+        await correrTanda(depsFlujo, {
+          flujo, desde: { nodoId: disparador.id, puerto: 'siguiente' }, esDisparo: true,
+          contacto: contactoParaFlujo(m), wamidEntrante: m.wamid, ultimoWamid: m.wamid,
+          respuestas: await respuestasRapidas(),
+        })
+        return true
+      }
+
+      // Flujo en curso → flujo nuevo → saludo. Nunca lanza.
+      async function automaticosDe(m) {
+        let conFlujo = await flujoEnCursoSiCorresponde(m)
+          .catch(e => { console.error('[/api/webhook] flujo en curso:', e.message); return false })
+        if (!conFlujo) {
+          conFlujo = await flujoSiCorresponde(m)
+            .catch(e => { console.error('[/api/webhook] flujo:', e.message); return false })
+        }
+        if (conFlujo) { saludados.add(tail9(m.telefono)); return }
+        await saludarSiCorresponde(m.telefono, m.nombre, m.phoneId)
+          .catch(e => console.error('[/api/webhook] saludo:', e.message))
+      }
+
       // ── Aviso push de mensaje nuevo ──────────────────────────────────────────
       // Último aviso enviado por conversación (del snapshot de este ciclo).
       const ultimoPushAtDe = (phone) => {
@@ -423,9 +591,10 @@ export async function POST(req) {
         // dos líneas más abajo.
         waitUntil(avisarSiCorresponde(m).catch(e => console.error('[/api/webhook] aviso push:', e.message)))
 
-        // Saludo automático (bienvenida a nuevo / "hola de vuelta" al reactivarse).
-        // En background: no frena el 200 a Meta. Solo dispara si el bot NO va a responder.
-        waitUntil(saludarSiCorresponde(m.telefono, m.nombre, m.phoneId).catch(e => console.error('[/api/webhook] saludo:', e.message)))
+        // FLUJOS (el que está en curso o uno que le toque) y, si no salió ninguno,
+        // el saludo automático. En background y EN COLA: ver el bloque FLUJOS arriba.
+        colaAutomaticos = colaAutomaticos.then(() => automaticosDe(m))
+        waitUntil(colaAutomaticos)
 
         // ── Auto-respuesta IA — solo TEXTO; media la ve un humano ──
         // `agenteResponde` ya aplica master switch + cortafuegos por canal + chat

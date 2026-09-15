@@ -42,3 +42,14 @@ test('la ENCUESTA DE REACTIVACIÓN arranca apagada, con sus tres botones de ejem
   assert.equal(e.horas, 6)
   assert.deepEqual(e.botones.map(b => b.title), ['Es el precio', 'Sigo pensándolo', 'Otro motivo'])
 })
+
+test('los FLUJOS arrancan PRENDIDOS (el interruptor general es el de pánico, no el de encendido)', () => {
+  assert.equal(DEFAULTS.flujos.activo, true)
+})
+
+test('apagar los flujos no toca la IA ni los seguimientos', () => {
+  const nueva = merge(DEFAULTS, { flujos: { activo: false } })
+  assert.equal(nueva.flujos.activo, false)
+  assert.deepEqual(nueva.ia, DEFAULTS.ia)
+  assert.deepEqual(nueva.seguimientos, DEFAULTS.seguimientos)
+})

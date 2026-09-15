@@ -20,6 +20,12 @@ import { actualizarNoLeidos, notificar } from '@/lib/notif'
 import { hayQueConfirmarDescarte, AVISO_DESCARTAR_PEDIDO, anchoPanelPedido, anchoPanelMinimo, bytesDeDataUrl, MAX_HOJA_BYTES } from '@/lib/pedido-manual'
 import { decidirArrastre } from '@/lib/arrastre'
 import { decidirPegado, decidirAdjuntos, TOPE_FOTOS } from '@/lib/adjuntos'
+import nextDynamic from 'next/dynamic'
+
+// ☠️ FLUJOS SE CARGA APARTE Y SOLO AL ENTRAR. React Flow pesa ~150 kB gz: metido
+// en el bundle principal, lo pagaría cada vendedor en cada carga del inbox aunque
+// nunca abra la pestaña. (Puerto desde MANDI, 15-sep-2026.)
+const Flujos = nextDynamic(() => import('@/components/flujos/Flujos'), { ssr: false })
 
 // ── Ancho del panel derecho: UNA sola fuente ──────────────────────
 // Lo usan el asa de arrastre, la restauración de localStorage y el ensanchado
@@ -159,7 +165,11 @@ const loadSeen  = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)
 const saveSeen  = (m) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify(m)) } catch {} }
 
 export default function App() {
-  const [vista,        setVista]        = useState('CHAT') // 'CHAT' | 'CONTACTOS' | 'AUTO'
+  const [vista,        setVista]        = useState('CHAT') // 'CHAT' | 'CONTACTOS' | 'AUTO' | 'FLUJOS'
+  // ☠️ FLUJOS NO SE MONTA HASTA QUE ALGUIEN ENTRA, y una vez montado queda vivo
+  // (oculto) al cambiar de pestaña: desmontarlo tiraría un flujo a medio dibujar.
+  const [flujosVisitado, setFlujosVisitado] = useState(false)
+  useEffect(() => { if (vista === 'FLUJOS') setFlujosVisitado(true) }, [vista])
   // Canal = qué número se está atendiendo. La vista de chat es UNA sola y se
   // reutiliza; lo único que cambia es de dónde salen los datos y por dónde sale
   // la respuesta. Ver lib/canales.js.
@@ -1946,6 +1956,7 @@ export default function App() {
           {[
             { id:'CONTACTOS', label:'👥 CONTACTOS' },
             { id:'AUTO',      label:'⚙️ AUTOS' },
+            { id:'FLUJOS',    label:'🧭 FLUJOS' },
           ].map(({ id, label }) => (
             <button key={id} onClick={() => setVista(id)} style={{
               padding:'4px 14px', border:'none', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, height:'100%',
@@ -2501,6 +2512,10 @@ export default function App() {
             <Automatizaciones active={vista==='AUTO'} />
           </div>
         )}
+        {/* ══════ FLUJOS ══════ — el lienzo de nodos (ver flujosVisitado) */}
+        <div style={{ flex:1, minHeight:0, display: vista === 'FLUJOS' ? 'flex' : 'none', overflow:'hidden' }}>
+          {flujosVisitado && <Flujos active={vista === 'FLUJOS'} />}
+        </div>
       </div>
 
       {/* Modal de plantilla desde el chat (ventana de 24h cerrada) */}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { guardarMensajeSupabase } from '@/lib/inbox-supabase'
 import { limpiarPush } from '@/lib/contactos'
+import { borrarEstadoFlujo } from '@/lib/flujos'
 import { resolverMediaId, invalidarMediaId, esErrorDeMediaId, urlLiviana, META_PHONE_ID } from '@/lib/media-id'
 import { CANALES } from '@/lib/canales'
 
@@ -384,6 +385,12 @@ export async function POST(req) {
       waitUntil(
         limpiarPush(soloDigitos(body.Telefono))
           .catch(e => console.error('[/api/saliente] limpiar enfriamiento push:', e.message))
+      )
+      // Una persona contestó: el flujo automático de ese cliente se retira ("cualquier
+      // mensaje humano cancela el flujo"). Las piezas del flujo salen con auto:true.
+      waitUntil(
+        borrarEstadoFlujo(soloDigitos(body.Telefono))
+          .catch(e => console.error('[/api/saliente] borrar estado de flujo:', e.message))
       )
     }
 

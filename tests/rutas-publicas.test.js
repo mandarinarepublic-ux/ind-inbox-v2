@@ -36,10 +36,11 @@ const PUBLICAS = [
   '/api/cron/seguimientos',  // cron de Vercel — 3 llamadas en 3 días
   '/api/cron/pendientes',    // cron de Vercel, cada 5 min — recordatorio Telegram
   '/api/cron/entregas',      // cron de Vercel, cada 30 min — aviso de entregas fallidas
+  '/api/cron/flujos',        // cron de Vercel, cada 5 min — esperas de los FLUJOS
   '/api/pago-dlocal',        // dLocal Go, notification_url — secreto en la URL
 ]
 
-// Las otras 28 rutas del repo: todas son del navegador y van protegidas.
+// Las otras 32 rutas del repo: todas son del navegador y van protegidas.
 const PROTEGIDAS = [
   '/api/admin/meta-waba', '/api/automatizaciones', '/api/buscar', '/api/capi/diag',
   '/api/cliente-pedidos', '/api/contactos', '/api/contactos/estado', '/api/conversacion',
@@ -48,14 +49,16 @@ const PROTEGIDAS = [
   '/api/notas', '/api/plantillas', '/api/push/subscribe', '/api/push/test',
   '/api/respuestas', '/api/saliente', '/api/tienda', '/api/upload-foto',
   '/api/upload-media', '/api/upload-url',
+  // FLUJOS (15-sep-2026): el lienzo y la lista de anuncios, detrás del login.
+  '/api/anuncios', '/api/flujos', '/api/flujos/publicar', '/api/flujos/pasos',
   // Las páginas
   '/', '/inbox', '/dashboard',
 ]
 
-test('las 33 rutas del repo están cubiertas por esta prueba', () => {
-  // 5 públicas + 28 protegidas = las 33 que devuelve `find app/api -name route.js`.
+test('las 38 rutas del repo están cubiertas por esta prueba', () => {
+  // 6 públicas + 32 protegidas = las 38 que devuelve `find app/api -name route.js`.
   // Si mañana alguien agrega una ruta nueva y no la suma acá, este número canta.
-  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 33)
+  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 38)
 })
 
 for (const ruta of PUBLICAS) {
@@ -70,7 +73,7 @@ for (const ruta of PROTEGIDAS) {
   })
 }
 
-test('las públicas son EXACTAMENTE seis', () => {
+test('las públicas son EXACTAMENTE siete', () => {
   // Cada entrada de más es una puerta al internet entero. Que agregar una rompa
   // una prueba es justamente lo que se busca.
   //
@@ -79,9 +82,12 @@ test('las públicas son EXACTAMENTE seis', () => {
   // detrás del candado devolvería 401 y se vería igual que uno sano, o sea que
   // no correría nunca y nadie se enteraría. Se defiende con CRON_SECRET, no con
   // la cookie de sesión.
+  //
+  // La séptima, el 15-sep-2026: `/api/cron/flujos` (esperas de FLUJOS, cada 5
+  // min). Mismo motivo y misma defensa (CRON_SECRET).
   assert.deepStrictEqual(RUTAS_PUBLICAS, [
     '/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes',
-    '/api/cron/entregas', '/api/cron/pagos', '/api/pago-dlocal',
+    '/api/cron/entregas', '/api/cron/pagos', '/api/cron/flujos', '/api/pago-dlocal',
   ])
 })
 

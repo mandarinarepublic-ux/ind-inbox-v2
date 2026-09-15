@@ -93,6 +93,14 @@ export default function Automatizaciones({ active }) {
     setTimeout(() => setToast(null), 2500)
   }
 
+  // INTERRUPTOR GENERAL de los flujos publicados (el botón de pánico de FLUJOS).
+  // `!== false` y no `!!`: el default es PRENDIDO, así que una config vieja sin
+  // el bloque `flujos` tiene que verse prendida.
+  const flujosOn = config?.flujos?.activo !== false
+  const togFlujos = (valor) => guardarInterruptor(
+    { flujos: { activo: valor } },
+    prev => ({ ...prev, flujos: { ...(prev?.flujos || {}), activo: valor } }))
+
   const togBloque = (bloque, valor) => guardarInterruptor(
     { [bloque]: { activo: valor } },
     prev => ({ ...prev, [bloque]: { ...(prev?.[bloque] || {}), activo: valor } }))
@@ -182,6 +190,23 @@ export default function Automatizaciones({ active }) {
         {loading && <div style={{ color: C.creamFaint, fontSize: 13, padding: 20 }}>Cargando…</div>}
 
         {!loading && config && (<>
+
+          {/* FLUJOS: interruptor general. Arriba, junto al otro botón de pánico. */}
+          <div style={{ background: C.surface, border: `1px solid ${flujosOn ? C.border : 'rgba(239,68,68,.40)'}`, borderRadius: 16, padding: 18, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.cream, marginBottom: 4 }}>🧭 FLUJOS</div>
+                <div style={{ fontSize: 12, color: C.creamDim }}>
+                  Interruptor general de los flujos publicados (pestaña FLUJOS). Apagado,
+                  ningún flujo manda nada, sin tener que despublicarlos uno por uno.
+                </div>
+                {!flujosOn && (
+                  <div style={{ fontSize: 11, fontWeight: 700, marginTop: 4, color: C.red }}>⛔ APAGADOS — ningún flujo está mandando nada</div>
+                )}
+              </div>
+              <Switch on={flujosOn} onClick={() => togFlujos(!flujosOn)} />
+            </div>
+          </div>
 
           {/* CORTAFUEGOS: apaga el bot de IND entero en un número. Va PRIMERO a
               propósito — es el botón de pánico, no puede estar enterrado abajo. */}
