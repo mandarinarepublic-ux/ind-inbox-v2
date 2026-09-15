@@ -20,7 +20,7 @@ motor: `wa-inbox-next/docs/HANDOFF-2026-09-15-flujos-fase-b.md`.
   `/api/flujos/importar-recetas` ni el botón "Importar". `lib/recetas.js` sí se copió
   entero, porque el motor usa sus botones, piezas y `esc`.
 - **Webhook síncrono.** En IND el loop del webhook es el camino del 200 a Meta, así que los flujos corren
-  **en background y EN COLA por lote** (`colaAutomaticos`). Así un segundo mensaje del mismo cliente
+  **en background y EN COLA POR CLIENTE** (`colasAutomaticos`). Así un segundo mensaje del mismo cliente
   encuentra el estado que dejó el primero. El saludo automático entra en la misma cola, porque un flujo
   lo reemplaza.
 - **Caché de 30 s** de flujos publicados por instancia (`flujosPublicadosCache`). IND es la ruta con más
@@ -34,7 +34,13 @@ motor: `wa-inbox-next/docs/HANDOFF-2026-09-15-flujos-fase-b.md`.
 - **`/api/anuncios` solo GET.** Lee `inbox.anuncios_resumen('IND')`, que devolvió 39 anuncios al portar.
 - **El webhook ahora declara `maxDuration = 60`**, igual que MANDI: una tanda con fotos tarda.
 
-## Dónde vive cada cosa
+## Pausas en segundos en las líneas (15-sep, tarde)
+
+Mismo cambio que MANDI (ver su `docs/HANDOFF-2026-09-15-flujos-fase-b.md`): la cajita de la línea acepta
+**segundos** (`esperaSeg`, tope 20 s por línea y 30 s por tanda) que se esperan entre piezas sin detener el
+flujo. Por eso la cola del webhook pasó de **una por lote a una por cliente**: con pausas, la tanda de un
+cliente atrasaba el saludo o el flujo de otro. El cron procesa los vencidos en paralelo, de a 20.
+
 
 | pieza | archivo |
 |---|---|

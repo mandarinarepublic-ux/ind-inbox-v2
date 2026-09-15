@@ -347,13 +347,16 @@ export async function POST(req) {
       // Ver lib/flujo.js, lib/flujo-motor.js y docs/HANDOFF-2026-09-15-flujos-ind.md.
       //
       // ☠️ DIFERENCIA CON MANDI: acá el loop de abajo es el camino SÍNCRONO del 200 a
-      // Meta, así que todo lo de flujos corre en BACKGROUND. Y corre EN COLA (una
-      // promesa encadenada por lote), no en paralelo: si el cliente manda dos
+      // Meta, así que todo lo de flujos corre en BACKGROUND. Y corre EN COLA POR
+      // CLIENTE (una promesa encadenada por teléfono), no en paralelo: si el cliente manda dos
       // mensajes en el mismo lote (tocar un botón y escribir), el segundo tiene que
       // encontrar el estado que dejó el primero. El saludo entra en la misma cola
       // porque un flujo lo reemplaza.
       const recetados = new Set()
-      let colaAutomaticos = Promise.resolve()
+      // Una cola por cliente (tail9): ordena los mensajes de UN cliente sin hacer
+      // esperar a los demás. Con las pausas en segundos, una cola por lote haría que
+      // la tanda de un cliente atrasara el saludo o el flujo de otro.
+      const colasAutomaticos = new Map()
       let respuestasCache = null
       const respuestasRapidas = async () => {
         if (!respuestasCache) respuestasCache = await getRespuestas().catch(() => [])
@@ -593,8 +596,12 @@ export async function POST(req) {
 
         // FLUJOS (el que está en curso o uno que le toque) y, si no salió ninguno,
         // el saludo automático. En background y EN COLA: ver el bloque FLUJOS arriba.
-        colaAutomaticos = colaAutomaticos.then(() => automaticosDe(m))
-        waitUntil(colaAutomaticos)
+        {
+          const t = tail9(m.telefono)
+          const cola = (colasAutomaticos.get(t) || Promise.resolve()).then(() => automaticosDe(m))
+          colasAutomaticos.set(t, cola)
+          waitUntil(cola)
+        }
 
         // ── Auto-respuesta IA — solo TEXTO; media la ve un humano ──
         // `agenteResponde` ya aplica master switch + cortafuegos por canal + chat
