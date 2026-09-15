@@ -10,7 +10,7 @@ motor: `wa-inbox-next/docs/HANDOFF-2026-09-15-flujos-fase-b.md`.
 | pieza | estado |
 |---|---|
 | Tablas `inbox.flujos`, `flujo_estado`, `flujo_pasos` | ya existían (la base es una sola, separada por `cuenta`). **Sin migración** |
-| Pruebas (600) + lint + `next build` | ✅ verde |
+| Pruebas (610 con las pausas) + lint + `next build` | ✅ verde |
 | Flujos publicados en IND | 0. Con 0 flujos, nada nuevo corre en producción |
 | Prueba real con un número | ⏳ pendiente |
 
@@ -41,6 +41,7 @@ Mismo cambio que MANDI (ver su `docs/HANDOFF-2026-09-15-flujos-fase-b.md`): la c
 flujo. Por eso la cola del webhook pasó de **una por lote a una por cliente**: con pausas, la tanda de un
 cliente atrasaba el saludo o el flujo de otro. El cron procesa los vencidos en paralelo, de a 20.
 
+## Dónde vive cada cosa
 
 | pieza | archivo |
 |---|---|
