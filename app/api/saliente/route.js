@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { guardarMensajeSupabase } from '@/lib/inbox-supabase'
-import { limpiarPush } from '@/lib/contactos'
+import { limpiarPush, revisarPromesa, marcarReactivacion } from '@/lib/contactos'
 import { borrarEstadoFlujo } from '@/lib/flujos'
 import { resolverMediaId, invalidarMediaId, esErrorDeMediaId, urlLiviana, META_PHONE_ID } from '@/lib/media-id'
 import { CANALES } from '@/lib/canales'
@@ -391,6 +391,20 @@ export async function POST(req) {
       waitUntil(
         borrarEstadoFlujo(soloDigitos(body.Telefono))
           .catch(e => console.error('[/api/saliente] borrar estado de flujo:', e.message))
+      )
+      // 📌 🤖 (diseño 2026-09-22): una promesa escrita por una persona prende 📌;
+      // una foto/video/documento ≤15 min después apaga el 📌 automático. Las
+      // plantillas no cuentan: son texto fijo aprobado por Meta.
+      if (body.TipoMensaje !== 'template') {
+        waitUntil(
+          revisarPromesa(soloDigitos(body.Telefono), { tipo, texto: contenido })
+            .catch(e => console.error('[/api/saliente] 📌 promesa:', e.message))
+        )
+      }
+      // Escribió una persona: la reactivación vuelve a empezar de cero.
+      waitUntil(
+        marcarReactivacion(soloDigitos(body.Telefono), 0)
+          .catch(e => console.error('[/api/saliente] reiniciar reactivación:', e.message))
       )
     }
 

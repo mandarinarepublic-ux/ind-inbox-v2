@@ -1,11 +1,12 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { ETAPAS, chipsDeChat, alertaVentanaCierra, necesitaConfirmarAtendido } from '@/lib/gestion'
 import { FILTRO_INICIAL, prepararVista, alternar, pasaFiltro, conteos, compararEspera } from '@/lib/filtro-chats'
 import { sumarOverride, aplicarOverrides } from '@/lib/overrides'
 import FiltrosLista from '@/components/FiltrosLista'
+import { etiquetaPedido, etapaVigente, tail9 } from '@/lib/etiqueta-crm'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
 import { citaUnaVez } from '@/lib/cita'
@@ -1070,12 +1071,25 @@ export default function App() {
     const id = setInterval(() => setAhora(Date.now()), 60000)
     return () => clearInterval(id)
   }, [])
+  // Etiqueta CRM (🏭 📦 🚚 💳): se pide al cargar y cada 5 min, fuera de la ruta caliente.
+  const [pedidosChat, setPedidosChat] = useState({})
+  useEffect(() => {
+    let vivo = true
+    const traer = () => fetchPedidosChat().then(p => { if (vivo && p) setPedidosChat(p) })
+    traer()
+    const id = setInterval(traer, 5 * 60 * 1000)
+    return () => { vivo = false; clearInterval(id) }
+  }, [])
   const datosGestion = (tel) => {
     const ct = contacts[tel] || {}
+    const pedido = pedidosChat[tail9(tel)] || null
     return {
       telefono: tel, estado: getStatus(tel), ultimoEntranteAt: ct.ultimoEntranteAt,
-      etapa: ct.etapa, etapaPor: ct.etapaPor, deudaAt: ct.deudaAt, deudaNota: ct.deudaNota, deudaPor: ct.deudaPor,
+      // 💬 💳 🛒 se dan por cumplidas si el cliente ya tiene un pedido posterior.
+      etapa: etapaVigente(ct.etapa, ct.etapaAt, pedido), etapaPor: ct.etapaPor,
+      deudaAt: ct.deudaAt, deudaNota: ct.deudaNota, deudaPor: ct.deudaPor,
       sinAutomaticos: ct.sinAutomaticos, tipoContacto: ct.tipoContacto,
+      pedido: etiquetaPedido(pedido, ahora),
     }
   }
 
@@ -1244,7 +1258,7 @@ export default function App() {
   }
   // Clic en la etapa activa la QUITA.
   const cambiarEtapa = (telefono, etapa) => {
-    const nueva = contacts[telefono]?.etapa === etapa ? '' : etapa
+    const nueva = datosGestion(telefono).etapa === etapa ? '' : etapa
     cambiarCampos(telefono,
       { etapa: nueva, etapaPor: nueva ? 'humano' : '', etapaAt: nueva ? new Date().toISOString() : null },
       () => updateEtapa(telefono, nueva), 'No se pudo cambiar la etapa')
@@ -2204,7 +2218,7 @@ export default function App() {
 
                   {/* ── Etapa de la venta (clic de nuevo = quitar) ── */}
                   {Object.entries(ETAPAS).map(([key, e]) => {
-                    const on = contacts[activeConv.telefono]?.etapa === key
+                    const on = datosGestion(activeConv.telefono).etapa === key
                     return (
                       <BotonEje key={key} on={on} color={e.color} icon={e.icon} label={e.label}
                         title={on ? `${e.label} — clic para quitar` : `Marcar ${e.label}`}
