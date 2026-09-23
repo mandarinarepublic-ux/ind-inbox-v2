@@ -38,3 +38,15 @@ Datos: 3 chats SOPORTE → 🔴 + 📌 🎧; 3 💰 → 🛒; flujos NEURO 🔥 
 - `/api/inbox-sync` tiene `statement timeout` desde antes de estos cambios (159 en el despliegue previo, ~20 por despliegue). No es de esta obra; merece su propia revisión.
 - MANDI: tiene el mismo bug de `req.url` en sus crons (también 0 seguimientos). No se tocó.
 - Retirar `conversaciones.venta_en_proceso_at` y `conversaciones.temperatura` cuando se confirme que nadie las lee (la vista de dashboard todavía cuenta temperatura).
+
+## Actualización 23-sep (revisión independiente + flujos)
+
+| Commit | Qué |
+|---|---|
+| `c193686` | Arreglos de la 1.ª revisión (C1, C2, I1–I9) + horarios de la reactivación editables en AUTOS. Columna nueva `ultimo_humano_at`. |
+| `711d243` | Arreglos de la 2.ª revisión: una persona ya no reinicia el contador (I-A); la reserva exige en la base ATENDIDO, sin 📌/🤫 y sin mensajes nuevos (I-B); horas en desorden. |
+| `5992338` | Flujos: salida "📸 Manda foto" en nodos con botones (sin línea = 'otra', como antes) y "📌 le debemos al llegar acá". |
+
+Datos: los 3 NEURO tienen `pregunta —foto→ m_gracias` y `m_gracias.deuda` ("enviar boceto" / "confirmar diseño (taller)"), en `grafo` y `grafo_vivo`.
+"IND - Cliente listo para pagar": etapa 💳 puesta, pero es un BORRADOR VACÍO (mensaje sin texto, sin líneas): no publicar así.
+Veredicto de la 2.ª revisión: fases 1 y 2 OK; reactivación se puede prender (empezar solo con 💳, textos de 💬 vacíos, mirar 48 h).
