@@ -75,3 +75,10 @@ test('dentro de 24 h va primero (más espera arriba); lo viejo al final, lo más
   ]
   assert.deepEqual(ordenarPorEspera(vs).map(x => x.telefono), ['h5', 'min40', 'dias2', 'viejo3sem'])
 })
+
+test('I6: un estado desconocido se trata como 🔴 (nunca desaparece de las bandejas)', () => {
+  for (const raro of ['soporte', 'VENTA', 'encuesta', 'descartado', '', null]) {
+    assert.equal(prepararVista({ telefono: 'z', estado: raro }, AHORA).estado, 'pendiente')
+  }
+  assert.equal(prepararVista({ telefono: 'z', estado: 'ATENDIDO' }, AHORA).estado, 'atendido')
+})

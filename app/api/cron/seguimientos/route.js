@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getContactos, marcarSeguimiento, marcarReactivacion, getPedidosPorTelefono } from '@/lib/contactos'
+import { getContactos, marcarSeguimiento, reclamarReactivacion, getPedidosPorTelefono } from '@/lib/contactos'
 import { decidirReactivacion } from '@/lib/reactivacion'
 import { tail9 } from '@/lib/etiqueta-crm'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
@@ -92,10 +92,15 @@ export async function GET(req) {
       const d = decidirReactivacion({ config: cfg, contacto: c, pedido: pedidos[tail9(c.telefono)] || null, ahoraMs: now })
       if (!d) continue
       evaluados++
+      // RESERVAR antes de enviar (I1): si otra corrida ya lo tomó o el cliente
+      // escribió entre medio, no se manda nada.
+      const reservado = await reclamarReactivacion(c.telefono, {
+        nEsperado: c.reactivacionN || 0, nNuevo: d.nNuevo, ultimoEntranteAt: c.ultimoEntranteAt,
+      }).catch(e => { console.error('[cron seguimientos] reservar reactivación:', c.telefono, e.message); return false })
+      if (!reservado) continue
+      yaEscritos.add(c.telefono)
       const cuerpo = { Telefono: c.telefono, Nombre: c.alias || c.nombre || '', Canal: c.phoneId, Mensaje: d.texto }
       if (await enviar(c, cuerpo, `reactivacion_${d.toque}`)) {
-        await marcarReactivacion(c.telefono, d.toque).catch(() => {})
-        yaEscritos.add(c.telefono)
         enviados.push({ telefono: c.telefono, motivo: `reactivacion_${d.toque}`, etapa: d.etapa })
       }
     }

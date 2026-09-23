@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { guardarMensajeSupabase } from '@/lib/inbox-supabase'
-import { limpiarPush, revisarPromesa, marcarReactivacion } from '@/lib/contactos'
+import { limpiarPush, revisarPromesa, marcarRespuestaHumana } from '@/lib/contactos'
 import { borrarEstadoFlujo } from '@/lib/flujos'
 import { resolverMediaId, invalidarMediaId, esErrorDeMediaId, urlLiviana, META_PHONE_ID } from '@/lib/media-id'
 import { CANALES } from '@/lib/canales'
@@ -401,10 +401,11 @@ export async function POST(req) {
             .catch(e => console.error('[/api/saliente] 📌 promesa:', e.message))
         )
       }
-      // Escribió una persona: la reactivación vuelve a empezar de cero.
+      // Escribió una PERSONA: se guarda cuándo (la reactivación exige que haya
+      // atendido una persona, no un flujo ni la IA) y el contador vuelve a cero.
       waitUntil(
-        marcarReactivacion(soloDigitos(body.Telefono), 0)
-          .catch(e => console.error('[/api/saliente] reiniciar reactivación:', e.message))
+        marcarRespuestaHumana(soloDigitos(body.Telefono))
+          .catch(e => console.error('[/api/saliente] marcar respuesta humana:', e.message))
       )
     }
 

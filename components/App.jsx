@@ -1202,18 +1202,28 @@ export default function App() {
   // lista empieza de cero y nadie hereda el "ver más" de otra.
   useEffect(() => { setTope(100) }, [filtro, search, canal])
 
-  const vistas = searched.map(c => prepararVista(datosGestion(c.telefono), ahora))
-  const vistaPorTel = Object.fromEntries(vistas.map(v => [v.telefono, v]))
-  const filtered = isSearching
-    ? searched
-    : (() => {
-        const pasan = searched.filter(c => pasaFiltro(vistaPorTel[c.telefono], filtro))
-        // En 🔴 el que más espera va arriba (dentro de las 24 h); ver lib/filtro-chats.js.
-        if (filtro.bandeja !== 'pendiente') return pasan
-        return [...pasan].sort((a, b) => compararEspera(vistaPorTel[a.telefono], vistaPorTel[b.telefono]))
-      })()
-  const counts = conteos(vistas, filtro)
-  const totalPendientes = vistas.filter(v => v.estado === 'pendiente').length
+  // Memorizado (revisión I5): con ~5.500 chats, recalcular vistas + 16 conteos en
+  // cada render —cada tecla del chat— costaba 15–37 ms en escritorio y más en celular.
+  // Solo se recalcula cuando cambian los datos, el filtro o el minuto (`ahora`).
+  /* eslint-disable react-hooks/exhaustive-deps -- datosGestion lee exactamente estas dependencias */
+  const { filtered, counts, totalPendientes } = useMemo(() => {
+    const vistas = searched.map(c => prepararVista(datosGestion(c.telefono), ahora))
+    const vistaPorTel = Object.fromEntries(vistas.map(v => [v.telefono, v]))
+    let lista = searched
+    if (!isSearching) {
+      lista = searched.filter(c => pasaFiltro(vistaPorTel[c.telefono], filtro))
+      // En 🔴 el que más espera va arriba (dentro de las 24 h); ver lib/filtro-chats.js.
+      if (filtro.bandeja === 'pendiente') {
+        lista = [...lista].sort((a, b) => compararEspera(vistaPorTel[a.telefono], vistaPorTel[b.telefono]))
+      }
+    }
+    return {
+      filtered: lista,
+      counts: conteos(vistas, filtro),
+      totalPendientes: vistas.filter(v => v.estado === 'pendiente').length,
+    }
+  }, [searched, isSearching, contacts, estadoDeBandeja, pedidosChat, ahora, filtro])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const lastIncoming = activeConv ? [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE') : null
   const windowOpen   = lastIncoming ? (Date.now() - _parseDate(lastIncoming.timestamp).getTime()) < 24 * 60 * 60 * 1000 : false
@@ -1249,7 +1259,14 @@ export default function App() {
     setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), ...campos } }))
     const res = await llamada()
     if (res && res.ok === false) {
-      delete localCamposRef.current[telefono]
+      // Se retiran SOLO los campos de este cambio: otros cambios del mismo chat que
+      // siguen en camino conservan su override.
+      const o = localCamposRef.current[telefono]
+      if (o) {
+        const restantes = Object.fromEntries(Object.entries(o.campos).filter(([k]) => !(k in campos)))
+        if (Object.keys(restantes).length) localCamposRef.current[telefono] = { ...o, campos: restantes }
+        else delete localCamposRef.current[telefono]
+      }
       const revertir = Object.fromEntries(Object.keys(campos).map(k => [k, antes[k]]))
       setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), ...revertir } }))
       setToast({ ok: false, msg: `✗ ${msgError} — reintenta` })

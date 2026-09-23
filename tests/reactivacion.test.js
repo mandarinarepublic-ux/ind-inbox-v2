@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { decidirReactivacion, horaEcuador, ponerNombre } from '../lib/reactivacion.js'
+import { decidirReactivacion, horaEcuador, ponerNombre, nombreDePila, parametrosReactivacion } from '../lib/reactivacion.js'
 
 const H = 3600 * 1000
 // 15:00 hora Ecuador = 20:00 UTC
@@ -9,27 +9,43 @@ const hace = (h) => new Date(AHORA - h * H).toISOString()
 const PRINCIPAL = '1153686904504422'
 const config = { ia: { principal: false, secundario: false }, reactivacion: { activo: true } }
 
-// Cotizando, el cliente habló hace 3,5 h, contestamos hace 3 h y se quedó callado.
+// Cotizando: el cliente habló hace 3,5 h, una PERSONA contestó hace 3,2 h y se quedó callado.
 const base = {
   telefono: '593999000111', nombre: 'Andrea López', alias: '', phoneId: PRINCIPAL, modoIA: true,
   estado: 'atendido', idVenta: '', etapa: 'cotizando', etapaAt: hace(4),
-  ultimoEntranteAt: hace(3.5), ultimoMensajeAt: hace(3), reactivacionN: 0, reactivacionAt: null,
+  ultimoEntranteAt: hace(3.5), ultimoMensajeAt: hace(3.2), ultimoHumanoAt: hace(3.2),
+  ultimoSeguimientoAt: null, reactivacionN: 0, reactivacionAt: null,
 }
 const decidir = (c, extra = {}) => decidirReactivacion({ config, contacto: { ...base, ...c }, ahoraMs: AHORA, ...extra })
 
 test('primer toque a las 3 h, con el nombre y el texto de la etapa', () => {
   const d = decidir({})
   assert.equal(d.toque, 1)
-  assert.equal(d.etapa, 'cotizando')
+  assert.equal(d.nNuevo, 1)
   assert.match(d.texto, /^¡Hola Andrea! 👋 ¿Pudiste ver la propuesta\?/)
   assert.match(decidir({ etapa: 'esperando_pago' }).texto, /transferencia/)
 })
 
-test('apagada por defecto: sin config.reactivacion.activo no sale nada', () => {
+test('apagada por defecto', () => {
   assert.equal(decidirReactivacion({ config: { ia: {} }, contacto: base, ahoraMs: AHORA }), null)
 })
 
-test('candados: 📌, 🤫, interno, archivado, con pedido, etapa que no es 💬/💳', () => {
+test('C1: chat 🔴 que solo recibió la respuesta del FLUJO (ninguna persona) → nunca', () => {
+  // el flujo contestó (ultimoMensajeAt posterior) pero ninguna persona escribió
+  assert.equal(decidir({ estado: 'pendiente', ultimoHumanoAt: null }), null)
+  assert.equal(decidir({ estado: 'atendido', ultimoHumanoAt: null }), null)
+  // una persona contestó ANTES del último mensaje del cliente → le toca a una persona
+  assert.equal(decidir({ ultimoHumanoAt: hace(5) }), null)
+  assert.equal(decidir({ estado: 'pendiente' }), null)
+})
+
+test('C2: el vendedor contestó hace minutos → no sale aunque el cliente lleve horas', () => {
+  assert.equal(decidir({ ultimoEntranteAt: hace(5), ultimoHumanoAt: hace(0.1) }), null)
+  assert.equal(decidir({ ultimoEntranteAt: hace(21), ultimoHumanoAt: hace(2.9) }), null)
+  assert.ok(decidir({ ultimoEntranteAt: hace(21), ultimoHumanoAt: hace(3) }))
+})
+
+test('candados: 📌, 🤫, interno, archivado, venta, pedido reciente, etapa que no es 💬/💳', () => {
   assert.equal(decidir({ deudaAt: hace(1) }), null)
   assert.equal(decidir({ sinAutomaticos: true }), null)
   assert.equal(decidir({ tipoContacto: 'interno' }), null)
@@ -38,47 +54,84 @@ test('candados: 📌, 🤫, interno, archivado, con pedido, etapa que no es 💬
   assert.equal(decidir({ etapa: 'falta_pedido' }), null)
   assert.equal(decidir({ etapa: 'postventa' }), null)
   assert.equal(decidir({ etapa: '' }), null)
-  // pedido en el CRM posterior a la etapa (en cualquier tienda) → ya compró
-  assert.equal(decidir({}, { pedido: { fecha_pedido: hace(1) } }), null)
+  // I4: cualquier pedido de los últimos 3 días = ya compró, aunque sea "anterior" a la etapa
+  assert.equal(decidir({ etapaAt: hace(1) }, { pedido: { fecha_pedido: hace(2) } }), null)
+  assert.ok(decidir({}, { pedido: { fecha_pedido: hace(24 * 10) } }))
 })
 
-test('si el cliente habló último, le toca a una persona: nunca reactivación', () => {
-  assert.equal(decidir({ ultimoMensajeAt: hace(3.5) }), null)
+test('ventana cerrada o ya se mandó el último toque', () => {
+  assert.equal(decidir({ ultimoEntranteAt: hace(24.1), ultimoHumanoAt: hace(23) }), null)
+  assert.equal(decidir({ ultimoEntranteAt: hace(21), ultimoHumanoAt: hace(20), reactivacionN: 3, reactivacionAt: hace(5) }), null)
 })
 
-test('todavía no toca, ventana cerrada, o ya se mandaron los 3 toques', () => {
-  assert.equal(decidir({ ultimoEntranteAt: hace(2), ultimoMensajeAt: hace(1.5) }), null)
-  assert.equal(decidir({ ultimoEntranteAt: hace(24.1), ultimoMensajeAt: hace(24) }), null)
-  assert.equal(decidir({ reactivacionN: 3, reactivacionAt: hace(4) }), null)
-})
-
-test('segundo toque a las 12 h y ≥2 h después del primero', () => {
-  const c = { ultimoEntranteAt: hace(12.5), ultimoMensajeAt: hace(4), reactivacionN: 1, reactivacionAt: hace(4) }
-  assert.equal(decidir(c).toque, 2)
-  assert.equal(decidir({ ...c, reactivacionAt: hace(1) }), null)
-})
-
-test('nunca de noche (22:00–08:00 Ecuador); a las 08:00 sí', () => {
-  const noche = Date.parse('2026-09-23T04:00:00Z') // 23:00 Ecuador
-  assert.equal(decidirReactivacion({ config, contacto: { ...base, ultimoEntranteAt: new Date(noche - 4 * H).toISOString(), ultimoMensajeAt: new Date(noche - 3 * H).toISOString() }, ahoraMs: noche }), null)
+test('I2: después de la noche sale SOLO el toque más avanzado, sin ráfaga', () => {
+  // el cliente escribió a las 20:00, contestamos 20:05; a las 08:00 (h=12) salta al toque 2
   const manana = Date.parse('2026-09-23T13:00:00Z') // 08:00 Ecuador
-  const d = decidirReactivacion({ config, contacto: { ...base, ultimoEntranteAt: new Date(manana - 13 * H).toISOString(), ultimoMensajeAt: new Date(manana - 12 * H).toISOString(), reactivacionN: 1, reactivacionAt: new Date(manana - 9 * H).toISOString() }, ahoraMs: manana })
-  assert.equal(d?.toque, 2)
+  const c = { ...base, ultimoEntranteAt: new Date(manana - 12 * H).toISOString(), ultimoHumanoAt: new Date(manana - 11.9 * H).toISOString() }
+  const d = decidirReactivacion({ config, contacto: c, ahoraMs: manana })
+  assert.equal(d.toque, 2)
+  assert.equal(d.nNuevo, 2)
+  // a las 10:00 no sale el 3 (h=14 < 20) y aunque llegara, ≥4 h entre toques
+  const diez = manana + 2 * H
+  const despues = { ...c, reactivacionN: 2, reactivacionAt: new Date(manana).toISOString(), ultimoSeguimientoAt: new Date(manana).toISOString() }
+  assert.equal(decidirReactivacion({ config, contacto: despues, ahoraMs: diez }), null)
+  // a las 16:00 (h=20) sí sale el 3
+  const d3 = decidirReactivacion({ config, contacto: despues, ahoraMs: manana + 8 * H })
+  assert.equal(d3.toque, 3)
+})
+
+test('≥4 h entre toques aunque el umbral ya se cumpla', () => {
+  const c = { ultimoEntranteAt: hace(12.5), ultimoHumanoAt: hace(12), reactivacionN: 1, reactivacionAt: hace(3), ultimoSeguimientoAt: hace(3) }
+  assert.equal(decidir(c), null)
+  assert.equal(decidir({ ...c, reactivacionAt: hace(4), ultimoSeguimientoAt: hace(4) }).toque, 2)
+})
+
+test('I3: si ya salió la encuesta en esta ventana, la reactivación no escribe', () => {
+  assert.equal(decidir({ ultimoSeguimientoAt: hace(1) }), null)
+})
+
+test('nunca de noche (22:00–08:00 Ecuador)', () => {
+  const noche = Date.parse('2026-09-23T04:00:00Z') // 23:00 Ecuador
+  const c = { ...base, ultimoEntranteAt: new Date(noche - 4 * H).toISOString(), ultimoHumanoAt: new Date(noche - 3.5 * H).toISOString() }
+  assert.equal(decidirReactivacion({ config, contacto: c, ahoraMs: noche }), null)
 })
 
 test('el bot está llevando ese chat: se lo deja en paz', () => {
-  const conBot = { ...config, ia: { principal: true } }
-  assert.equal(decidirReactivacion({ config: conBot, contacto: base, ahoraMs: AHORA }), null)
+  assert.equal(decidirReactivacion({ config: { ...config, ia: { principal: true } }, contacto: base, ahoraMs: AHORA }), null)
 })
 
-test('textos propios de la config mandan sobre los de defecto', () => {
-  const cfg = { ...config, reactivacion: { activo: true, textos: { cotizando: ['Hola {nombre}, ¿seguimos?'] } } }
-  assert.equal(decidirReactivacion({ config: cfg, contacto: base, ahoraMs: AHORA }).texto, 'Hola Andrea, ¿seguimos?')
+test('I9: textos propios mandan; un texto vaciado apaga ese toque', () => {
+  const propio = { ...config, reactivacion: { activo: true, textos: { cotizando: ['Hola {nombre}, ¿seguimos?'] } } }
+  assert.equal(decidirReactivacion({ config: propio, contacto: base, ahoraMs: AHORA }).texto, 'Hola Andrea, ¿seguimos?')
+  const vacio = { ...config, reactivacion: { activo: true, textos: { cotizando: ['', 'b', 'c'] } } }
+  assert.equal(decidirReactivacion({ config: vacio, contacto: base, ahoraMs: AHORA }), null)
 })
 
-test('horaEcuador y ponerNombre sin nombre', () => {
-  assert.equal(horaEcuador(Date.parse('2026-09-22T13:00:00Z')), 8)
+test('nombre de pila: alias primero; "Mamá", emojis o frases no se usan', () => {
+  assert.equal(nombreDePila('', 'Andrea López'), 'Andrea')
+  assert.equal(nombreDePila('Caro', 'Carolina Pérez'), 'Caro')
+  assert.equal(nombreDePila('', 'Mamá'), '')
+  assert.equal(nombreDePila('', 'Dios es amor'), '')
+  assert.equal(nombreDePila('', '🌸✨'), '')
+  assert.equal(nombreDePila('', 'JOSÉ'), 'José')
   assert.equal(ponerNombre('¡Hola {nombre}! 👋 ¿Pudiste?', ''), '¡Hola! 👋 ¿Pudiste?')
   assert.equal(ponerNombre('{nombre}, te escribo antes', ''), 'Te escribo antes')
-  assert.equal(ponerNombre('¡Buen día {nombre}!', 'maría josé'), '¡Buen día maría!')
+  assert.equal(horaEcuador(Date.parse('2026-09-22T13:00:00Z')), 8)
+})
+
+test('parámetros editables desde AUTOS, con límites seguros', () => {
+  assert.deepEqual(parametrosReactivacion({}), { horas: [3, 12, 20], silencioMinH: 3, entreToquesH: 4, horaDesde: 8, horaHasta: 22 })
+  const p = parametrosReactivacion({ horas: [20, '5', 5, 0, 30, 'x'], silencio_min_h: 0, entre_toques_h: 99, hora_desde: 2, hora_hasta: 23 })
+  assert.deepEqual(p.horas, [5, 20])          // sin repetidos, sin 0 ni 30, ordenadas
+  assert.equal(p.silencioMinH, 1)
+  assert.equal(p.entreToquesH, 12)
+  assert.equal(p.horaDesde, 6)                // nunca antes de las 06:00
+  assert.equal(p.horaHasta, 22)               // nunca después de las 22:00
+})
+
+test('las horas editadas se respetan', () => {
+  const cfg = { ...config, reactivacion: { activo: true, horas: [5, 12, 20] } }
+  assert.equal(decidirReactivacion({ config: cfg, contacto: base, ahoraMs: AHORA }), null)   // h=3.5 < 5
+  const c = { ...base, ultimoEntranteAt: hace(5.5), ultimoHumanoAt: hace(5) }
+  assert.equal(decidirReactivacion({ config: cfg, contacto: c, ahoraMs: AHORA }).toque, 1)
 })

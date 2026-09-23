@@ -54,3 +54,15 @@ test('📌 🤖 se apaga solo si sale foto/video/documento en ≤15 min', () => 
   assert.equal(cumplePromesaAlToque({ deudaPor: 'humano', deudaAt, tipoEnviado: 'imagen', ahoraMs: t0 + 60000 }), false)
   assert.equal(cumplePromesaAlToque({ deudaPor: 'ia', deudaAt, tipoEnviado: 'imagen', ahoraMs: t0 + 60000 }), false)
 })
+
+test('I7: formas ecuatorianas (ahorita, ya mismo, en un ratito) y "lo reviso y le aviso"', () => {
+  for (const t of ['ahorita le envío', 'ya mismo le envío la foto', 'en un ratito le mando', 'ya lo reviso y le aviso', 'te comparto el boceto en un momento']) {
+    assert.ok(detectarPromesa(t), t)
+  }
+})
+
+test('I7: si los datos van en el mismo mensaje, no es promesa', () => {
+  for (const t of ['Ya te paso la cuenta: Banco Pichincha 2200…', 'ya te envío la ubicación: Av. 6 de Diciembre y Mercurio']) {
+    assert.equal(detectarPromesa(t), null, t)
+  }
+})

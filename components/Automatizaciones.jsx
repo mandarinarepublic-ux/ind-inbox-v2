@@ -143,6 +143,14 @@ export default function Automatizaciones({ active }) {
   const togReactivacion = (valor) => guardarInterruptor(
     { reactivacion: { ...rc, activo: valor } },
     prev => ({ ...prev, reactivacion: { ...(prev?.reactivacion || {}), activo: valor } }))
+  // Horarios editables (se acotan en el servidor: lib/reactivacion.js parametrosReactivacion).
+  const setCampoReact = (campo, valor) => setConfig(prev => ({ ...prev, reactivacion: { ...(prev?.reactivacion || {}), [campo]: valor } }))
+  const setHoraToque = (i, valor) => setConfig(prev => {
+    const r = prev?.reactivacion || {}
+    const horas = [...(Array.isArray(r.horas) ? r.horas : [3, 12, 20])]
+    horas[i] = valor === '' ? '' : Number(valor)
+    return { ...prev, reactivacion: { ...r, horas } }
+  })
   const setTextoReact = (etapa, i, texto) => setConfig(prev => {
     const r = prev?.reactivacion || {}
     const lista = [...((r.textos || {})[etapa] || ['', '', ''])]
@@ -315,12 +323,40 @@ export default function Automatizaciones({ active }) {
                 <div style={{ fontSize: 15, fontWeight: 800, color: C.cream }}>Reactivación de clientes callados</div>
                 <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3 }}>
                   Le escribe solo a un cliente en <b style={{ color: C.cream }}>💬 Cotizando o 💳 Esperando pago</b> que no contestó después de nuestro mensaje:
-                  a las {(rc.horas || [3, 12, 20]).join(', ')} h de su último mensaje. <b style={{ color: C.cream }}>Nunca</b> entre 22:00 y 08:00, ni con 📌, 🤫, pedido creado o contacto interno.
-                  Se corta apenas el cliente o una persona escribe. Usa <code>{'{nombre}'}</code> para el nombre.
+                  solo si ya lo atendió una <b style={{ color: C.cream }}>persona</b> (no un flujo ni la IA). <b style={{ color: C.cream }}>Nunca</b> de noche, ni con 📌, 🤫, pedido creado o contacto interno.
+                  Se corta apenas el cliente o una persona escribe. Usa <code>{'{nombre}'}</code> para el nombre de pila.
                 </div>
               </div>
               <Switch on={!!rc.activo} onClick={() => togReactivacion(!rc.activo)} />
             </div>
+            {/* Horarios editables */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 4 }}>
+              {[0, 1, 2].map(i => (
+                <label key={i} style={{ fontSize: 11, color: C.creamDim }}>
+                  Toque {i + 1}: a las
+                  <input type="number" min={1} max={23} value={(rc.horas || [3, 12, 20])[i] ?? ''} onChange={e => setHoraToque(i, e.target.value)} style={{ ...inputNum, margin: '0 6px' }} />
+                  h de su último mensaje
+                </label>
+              ))}
+              <label style={{ fontSize: 11, color: C.creamDim }}>
+                Esperar al menos
+                <input type="number" min={1} max={12} value={rc.silencio_min_h ?? 3} onChange={e => setCampoReact('silencio_min_h', Number(e.target.value))} style={{ ...inputNum, margin: '0 6px' }} />
+                h desde que escribió el vendedor
+              </label>
+              <label style={{ fontSize: 11, color: C.creamDim }}>
+                Separar los toques
+                <input type="number" min={2} max={12} value={rc.entre_toques_h ?? 4} onChange={e => setCampoReact('entre_toques_h', Number(e.target.value))} style={{ ...inputNum, margin: '0 6px' }} />
+                h como mínimo
+              </label>
+              <label style={{ fontSize: 11, color: C.creamDim }}>
+                Solo entre las
+                <input type="number" min={6} max={12} value={rc.hora_desde ?? 8} onChange={e => setCampoReact('hora_desde', Number(e.target.value))} style={{ ...inputNum, margin: '0 6px' }} />
+                y las
+                <input type="number" min={14} max={22} value={rc.hora_hasta ?? 22} onChange={e => setCampoReact('hora_hasta', Number(e.target.value))} style={{ ...inputNum, margin: '0 6px' }} />
+                h (Ecuador)
+              </label>
+            </div>
+            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 6 }}>Límites de seguridad: nunca antes de las 06:00 ni después de las 22:00, y nunca más de 3 toques por ventana. Deja un texto vacío para no mandar ese toque.</div>
             {[['cotizando', '💬 Cotizando'], ['esperando_pago', '💳 Esperando pago']].map(([etapa, titulo]) => (
               <div key={etapa} style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: C.cream, marginBottom: 6 }}>{titulo}</div>
