@@ -138,6 +138,18 @@ export default function Automatizaciones({ active }) {
   const addBoton = (key, t) => { const bs = botonesDe(t); if (bs.length < 3) setSegT(key, 'botones', [...bs, ''].map(title => ({ title }))) }
   const delBoton = (key, t, i) => { const bs = botonesDe(t); bs.splice(i, 1); setSegT(key, 'botones', bs.map(title => ({ title }))) }
 
+  // 🔄 Reactivación (fase 3). El interruptor manda el bloque COMPLETO: el merge del
+  // servidor es de un nivel y un patch con solo {activo} borraría horas y textos.
+  const togReactivacion = (valor) => guardarInterruptor(
+    { reactivacion: { ...rc, activo: valor } },
+    prev => ({ ...prev, reactivacion: { ...(prev?.reactivacion || {}), activo: valor } }))
+  const setTextoReact = (etapa, i, texto) => setConfig(prev => {
+    const r = prev?.reactivacion || {}
+    const lista = [...((r.textos || {})[etapa] || ['', '', ''])]
+    lista[i] = texto
+    return { ...prev, reactivacion: { ...r, textos: { ...(r.textos || {}), [etapa]: lista } } }
+  })
+
   const guardar = async () => {
     setSaving(true)
     const r = await saveAutomatizaciones(config)
@@ -157,6 +169,7 @@ export default function Automatizaciones({ active }) {
   const sn = config?.saludo_nuevo || {}
   const sr = config?.saludo_reactivacion || {}
   const sg = config?.seguimientos || {}
+  const rc = config?.reactivacion || {}
 
   // Las reglas por temperatura (🔥 🌤️ ❄️) se quitaron el 22-sep-2026: la temperatura
   // ahora es automática y los flujos marcaban 🌤️ a toda la pauta. Queda la encuesta.
@@ -292,6 +305,35 @@ export default function Automatizaciones({ active }) {
               <textarea value={sr.texto || ''} onChange={e => setBloque('saludo_reactivacion', 'texto', e.target.value)}
                 rows={3} placeholder="Escribe el mensaje de reactivación…" style={inputBase} />
             </>)}
+          </Card>
+
+          {/* ── 🔄 REACTIVACIÓN por etapa (fase 3, cron cada hora) ── */}
+          <Card>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: rc.activo ? 14 : 0 }}>
+              <div style={{ fontSize: 26 }}>🔄</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.cream }}>Reactivación de clientes callados</div>
+                <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3 }}>
+                  Le escribe solo a un cliente en <b style={{ color: C.cream }}>💬 Cotizando o 💳 Esperando pago</b> que no contestó después de nuestro mensaje:
+                  a las {(rc.horas || [3, 12, 20]).join(', ')} h de su último mensaje. <b style={{ color: C.cream }}>Nunca</b> entre 22:00 y 08:00, ni con 📌, 🤫, pedido creado o contacto interno.
+                  Se corta apenas el cliente o una persona escribe. Usa <code>{'{nombre}'}</code> para el nombre.
+                </div>
+              </div>
+              <Switch on={!!rc.activo} onClick={() => togReactivacion(!rc.activo)} />
+            </div>
+            {[['cotizando', '💬 Cotizando'], ['esperando_pago', '💳 Esperando pago']].map(([etapa, titulo]) => (
+              <div key={etapa} style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: C.cream, marginBottom: 6 }}>{titulo}</div>
+                {(rc.horas || [3, 12, 20]).map((h, i) => (
+                  <div key={i} style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, color: C.creamDim, marginBottom: 3 }}>Toque {i + 1} · a las {h} h</div>
+                    <textarea value={((rc.textos || {})[etapa] || [])[i] || ''} onChange={e => setTextoReact(etapa, i, e.target.value)}
+                      rows={2} style={{ ...inputBase, resize: 'vertical' }} />
+                  </div>
+                ))}
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 6 }}>Los textos se guardan con el botón Guardar de abajo.</div>
           </Card>
 
           {/* ── ENCUESTA a chats callados (cron cada hora) ── */}

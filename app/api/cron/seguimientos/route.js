@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getContactos, marcarSeguimiento } from '@/lib/contactos'
+import { getContactos, marcarSeguimiento, marcarReactivacion, getPedidosPorTelefono } from '@/lib/contactos'
+import { decidirReactivacion } from '@/lib/reactivacion'
+import { tail9 } from '@/lib/etiqueta-crm'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirSeguimiento } from '@/lib/decidir-seguimiento'
 import { cuerpoSeguimiento } from '@/lib/seguimiento-envio'
@@ -46,8 +48,10 @@ export async function GET(req) {
   }
 
   const cfg = await getAutomatizaciones().catch(() => null)
-  if (!cfg?.seguimientos?.activo) {
-    return NextResponse.json({ ok: true, skipped: 'seguimientos apagado (global)' })
+  const conEncuesta = Boolean(cfg?.seguimientos?.activo)
+  const conReactivacion = Boolean(cfg?.reactivacion?.activo)
+  if (!conEncuesta && !conReactivacion) {
+    return NextResponse.json({ ok: true, skipped: 'encuesta y reactivación apagadas' })
   }
 
   // Dominio de producción, NO req.url: la dirección del despliegue está
@@ -62,8 +66,43 @@ export async function GET(req) {
   const enviados = []
   const errores = []
   let evaluados = 0
+  const yaEscritos = new Set()
 
-  for (const c of contactos) {
+  // POST a /api/saliente con la credencial de máquina; devuelve true si salió.
+  const enviar = async (c, cuerpo, motivo) => {
+    try {
+      const r = await fetch(`${origin}/api/saliente`, {
+        method: 'POST', headers: cabecerasMaquina(), body: JSON.stringify({ ...cuerpo, auto: true }),
+      })
+      if (r.ok) return true
+      const detalle = await r.text().catch(() => '')
+      errores.push({ telefono: c.telefono, motivo, status: r.status, detalle: detalle.slice(0, 160) })
+      console.error('[cron seguimientos] /api/saliente rechazó', r.status, motivo, c.telefono, detalle.slice(0, 160))
+    } catch (e) {
+      errores.push({ telefono: c.telefono, motivo, error: e.message })
+      console.error('[cron seguimientos] envío falló', motivo, c.telefono, e.message)
+    }
+    return false
+  }
+
+  // ── 🔄 Reactivación por etapa (fase 3). Primero, porque es más específica. ──
+  if (conReactivacion) {
+    const pedidos = await getPedidosPorTelefono().catch(() => ({}))
+    for (const c of contactos) {
+      const d = decidirReactivacion({ config: cfg, contacto: c, pedido: pedidos[tail9(c.telefono)] || null, ahoraMs: now })
+      if (!d) continue
+      evaluados++
+      const cuerpo = { Telefono: c.telefono, Nombre: c.alias || c.nombre || '', Canal: c.phoneId, Mensaje: d.texto }
+      if (await enviar(c, cuerpo, `reactivacion_${d.toque}`)) {
+        await marcarReactivacion(c.telefono, d.toque).catch(() => {})
+        yaEscritos.add(c.telefono)
+        enviados.push({ telefono: c.telefono, motivo: `reactivacion_${d.toque}`, etapa: d.etapa })
+      }
+    }
+  }
+
+  for (const c of (conEncuesta ? contactos : [])) {
+    if (yaEscritos.has(c.telefono)) continue
     const d = decidirSeguimiento({ config: cfg, contacto: c, ahoraMs: now })
     if (!d) continue
 
