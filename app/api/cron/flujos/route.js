@@ -7,6 +7,7 @@ import { getEstadosVencidos, borrarEstadosCaducados, borrarEstadoFlujo, guardarE
 import { decidirVencido } from '@/lib/flujo'
 import { correrTanda } from '@/lib/flujo-motor'
 import { enviarConMaquina } from '@/lib/auth-maquina'
+import { urlPropia } from '@/lib/url-propia'
 import { enviarTelegram } from '@/lib/telegram'
 import { CUENTA } from '@/lib/supabase'
 
@@ -42,7 +43,9 @@ export async function GET(req) {
   const cfg = await getAutomatizaciones().catch(() => null)
   if (!cfg?.flujos?.activo) return NextResponse.json({ ok: true, skipped: 'flujos apagados (interruptor general)' })
 
-  const origin = new URL(req.url).origin
+  // Dominio de producción, NO req.url: la dirección del despliegue está
+  // protegida por Vercel y da 401 antes de llegar a /api/saliente (lib/url-propia.js).
+  const origin = urlPropia()
   const ahora = new Date()
   const caducados = await borrarEstadosCaducados(ahora.toISOString())
     .catch(e => { console.error('[/api/cron/flujos] caducados:', e.message); return { borrados: -1 } })

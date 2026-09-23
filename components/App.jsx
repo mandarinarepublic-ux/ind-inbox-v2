@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, updateVentaEnProceso, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
@@ -268,6 +268,7 @@ export default function App() {
   const [refrescando, setRefrescando] = useState(false)
   const localStatusRef = useRef({})
   const localTempRef   = useRef({}) // override optimista de temperatura (Eje 2), hasta que el poll confirme
+  const localVentaRef  = useRef({}) // override optimista de 💰 venta en proceso, hasta que el poll confirme
   const alertadosRef   = useRef(new Set()) // leads calientes ya notificados (1 aviso por ventana)
   const pendingRef     = useRef({}) // mensajes optimistas por teléfono, hasta que Make los registre
   // Fila de salida POR CONVERSACIÓN. Como los envíos ya no bloquean la interfaz, el
@@ -567,6 +568,10 @@ export default function App() {
       // Igual para la temperatura (Eje 2): que el poll no pise un cambio recién hecho.
       Object.entries(localTempRef.current).forEach(([tel, override]) => {
         if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], temperatura: override.temperatura }
+      })
+      // Y para la marca 💰 venta en proceso.
+      Object.entries(localVentaRef.current).forEach(([tel, override]) => {
+        if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], ventaEnProceso: override.ventaEnProceso }
       })
       setContacts(ctMap)
     }
@@ -1023,12 +1028,15 @@ export default function App() {
 
   const activeConv     = convs.find(c => c.telefono === active) || null
   const totalUnread    = convs.reduce((s, c) => s + c.unread, 0)
-  // VENTA desacoplada del estado de flujo (igual que WA INBOX V2):
-  // - getStatus = SOLO el estado real de bandeja (pendiente/atendido/soporte/archivado).
-  // - "Venta" = tiene un PEDIDO CREADO (idVenta, col H). La pestaña 💰 filtra por eso y
-  //   excluye archivados. Así un cliente con venta que vuelve a escribir aparece en
-  //   PENDIENTE (para atenderlo) y a la vez sigue en 💰 Ventas.
-  const hasVenta      = (tel) => String(contacts[tel]?.idVenta || '').trim() !== ''
+  // 💰 VENTA EN PROCESO — interruptor MANUAL, aparte de la bandeja (22-sep-2026).
+  // - La pone y la quita SOLO el humano que atiende, con el botón 💰 del chat. Ni los
+  //   mensajes, ni los flujos, ni los pedidos la tocan, y NO hace falta un pedido creado.
+  // - No es una bandeja: si el cliente vuelve a escribir, el chat entra a PENDIENTE
+  //   (para atenderlo) y a la vez sigue en la pestaña 💰 Ventas.
+  // ☠️ Antes era un ESTADO de bandeja ('venta') y la pestaña filtraba por `idVenta`
+  //   (pedido del CRM): el chat marcado salía de Pendientes y Atendidos y no aparecía
+  //   en NINGUNA pestaña. Un cliente quedó 17 días sin respuesta escondido ahí.
+  const hasVenta      = (tel) => Boolean(contacts[tel]?.ventaEnProceso)
   // ── El estado de bandeja, POR NÚMERO ────────────────────────────────────
   // Viene PEGADO a la fila de la lista (`estadoBandeja`, vista inbox.lista_bandeja),
   // no en una lectura aparte: si se leyera por separado, el mapa arrancaría vacío
@@ -1056,7 +1064,7 @@ export default function App() {
     estadoBandeja: estadoDeBandeja[tel],
     estadoPersona: contacts[tel]?.estado,
   })
-  const esVentaActiva = (tel) => hasVenta(tel) && getStatus(tel) !== 'archivado'
+  const esVentaActiva = (tel) => hasVenta(tel)
   // Eje 2: temperatura del lead ('' = sin clasificar).
   const getTemp = (tel) => contacts[tel]?.temperatura || ''
   const esTemp  = (key) => TEMP_META[key] !== undefined
@@ -1244,6 +1252,22 @@ export default function App() {
       delete localTempRef.current[telefono]
       setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), temperatura: actual } }))
       setToast({ ok: false, msg: '✗ No se pudo cambiar la temperatura — reintenta' })
+      setTimeout(() => setToast(null), 4000)
+    }
+  }
+
+  // ── 💰 Venta en proceso — interruptor manual (clic de nuevo = quitar) ──
+  const changeVentaEnProceso = async (telefono) => {
+    const actual = Boolean(contacts[telefono]?.ventaEnProceso)
+    const nueva  = !actual
+    // 35 s por lo mismo que la temperatura: sobrevivir al caché del edge.
+    localVentaRef.current[telefono] = { ventaEnProceso: nueva, expiresAt: Date.now() + 35000 }
+    setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), ventaEnProceso: nueva } }))
+    const res = await updateVentaEnProceso(telefono, nueva)
+    if (res && res.ok === false) {
+      delete localVentaRef.current[telefono]
+      setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), ventaEnProceso: actual } }))
+      setToast({ ok: false, msg: '✗ No se pudo cambiar la venta en proceso — reintenta' })
       setTimeout(() => setToast(null), 4000)
     }
   }
@@ -2148,7 +2172,7 @@ export default function App() {
                   const canalDistinto = isSearching && canalLabel !== null && canalDePhoneId(contacts[conv.telefono]?.phoneId) !== canal
                   return (
                     <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => irAResultadoBusqueda(conv.telefono)}
-                      search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} temp={getTemp(conv.telefono)} alerta={alertaVentana(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
+                      search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} temp={getTemp(conv.telefono)} venta={hasVenta(conv.telefono)} alerta={alertaVentana(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
                       canalLabel={canalLabel} canalDistinto={canalDistinto} />
                   )
                 })}
@@ -2236,11 +2260,6 @@ export default function App() {
                   {[
                     { s:'pendiente',    icon:'🔴', label:'Pendiente',  activeColor:'#f87171' },
                     { s:'atendido',     icon:'🟢', label:'Atendido',   activeColor:'#4ade80' },
-                    // 💰 Venta en proceso — agregado el 15-ago-2026. El filtro "Ventas"
-                    // ya existía en la lista de la izquierda, pero NO había forma de
-                    // poner un chat en ese estado: era un filtro que jamás podía mostrar
-                    // nada (medido: 0 chats en VENTA en IND, contra 8 en MANDI).
-                    { s:'venta',        icon:'💰', label:'Venta en proceso', activeColor:'#10b981' },
                     { s:'soporte',      icon:'🎧', label:'Soporte',    activeColor:'#a78bfa' },
                     // 📋 Encuesta de reactivación (13-sep-2026): normalmente la pone el
                     // cron de seguimientos al mandar la encuesta; acá se puede poner o
@@ -2262,6 +2281,28 @@ export default function App() {
                   ))}
 
                   {/* separador entre ejes */}
+                  <span style={{ width:1, alignSelf:'stretch', background:C.border2, margin:'2px 2px', flexShrink:0 }} />
+
+                  {/* ── 💰 Venta en proceso: interruptor manual, aparte de la bandeja ── */}
+                  {(() => {
+                    const on = hasVenta(activeConv.telefono)
+                    const color = '#10b981'
+                    return (
+                      <button onClick={() => changeVentaEnProceso(activeConv.telefono)}
+                        title={on ? 'Venta en proceso — clic para quitar' : 'Marcar venta en proceso'} style={{
+                          padding:'4px 6px', fontWeight: on ? 800 : 600, flexShrink:0,
+                          background: on ? `${color}22` : 'transparent',
+                          border: `${on ? 2 : 1}px solid ${on ? color : C.border2}`,
+                          color: on ? color : C.creamFaint,
+                          borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
+                          boxShadow: on ? `0 0 8px ${color}44` : 'none',
+                        }}>
+                        <span className="hide-mobile" style={{ fontSize:10 }}>💰 Venta en proceso</span>
+                        <span className="show-mobile" style={{ fontSize:14 }}>💰</span>
+                      </button>
+                    )
+                  })()}
+
                   <span style={{ width:1, alignSelf:'stretch', background:C.border2, margin:'2px 2px', flexShrink:0 }} />
 
                   {/* ── Eje 2: TEMPERATURA del lead (manual, clic de nuevo = quitar) ── */}

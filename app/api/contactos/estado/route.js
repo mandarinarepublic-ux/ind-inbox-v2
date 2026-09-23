@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
-import { updateEstado, updateModoIA, updateNotas, updateAlias, updateIdVenta, updateTemperatura } from '@/lib/contactos'
+import { updateEstado, updateModoIA, updateNotas, updateAlias, updateIdVenta, updateTemperatura, updateVentaEnProceso } from '@/lib/contactos'
 import { revisarVentaEnProceso } from '@/lib/capi'
 
 export const dynamic = 'force-dynamic'
 
 // PATCH /api/contactos/estado
 // Body: { telefono, campo, valor }
-// campo: 'estado' | 'modoIA' | 'notas' | 'alias' | 'idVenta' | 'temperatura'
+// campo: 'estado' | 'modoIA' | 'notas' | 'alias' | 'idVenta' | 'temperatura' | 'ventaEnProceso'
 export async function PATCH(req) {
   try {
     // `canal` opcional: el número de ESTA conversación. Sin él, el estado solo
@@ -37,6 +37,9 @@ export async function PATCH(req) {
         break
       case 'temperatura':
         result = await updateTemperatura(telefono, valor) // 'caliente'|'tibio'|'frio'|''
+        break
+      case 'ventaEnProceso':
+        result = await updateVentaEnProceso(telefono, valor === true || valor === 'true')
         break
       default:
         return NextResponse.json({ error: `Campo desconocido: ${campo}` }, { status: 400 })

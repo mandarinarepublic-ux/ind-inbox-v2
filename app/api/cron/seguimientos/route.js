@@ -4,6 +4,7 @@ import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirSeguimiento } from '@/lib/decidir-seguimiento'
 import { cuerpoSeguimiento } from '@/lib/seguimiento-envio'
 import { cabecerasMaquina } from '@/lib/auth-maquina'
+import { urlPropia } from '@/lib/url-propia'
 
 // Cron de SEGUIMIENTOS automáticos: por temperatura del lead (Eje 2) y la
 // ENCUESTA DE REACTIVACIÓN para chats atendidos que se quedaron callados.
@@ -48,7 +49,10 @@ export async function GET(req) {
     return NextResponse.json({ ok: true, skipped: 'seguimientos apagado (global)' })
   }
 
-  const origin = new URL(req.url).origin
+  // Dominio de producción, NO req.url: la dirección del despliegue está
+  // protegida por Vercel y TODOS los envíos rebotaban con 401 (hasta 22-sep-2026,
+  // cero seguimientos en la historia). Ver lib/url-propia.js.
+  const origin = urlPropia()
   // `null` = TODOS los canales. Con el default (solo el número principal) los
   // contactos del otro número nunca recibían seguimiento. Cada envío sale por el
   // número al que ese cliente escribió (`Canal: c.phoneId`).
