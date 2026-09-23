@@ -65,3 +65,13 @@ test('ordenarPorEspera: el que más espera primero', () => {
   const orden = ordenarPorEspera(lista.filter(x => pasaFiltro(x, FILTRO_INICIAL))).map(x => x.telefono)
   assert.deepEqual(orden, ['b', 'f', 'a', 'e'])
 })
+
+test('dentro de 24 h va primero (más espera arriba); lo viejo al final, lo más reciente primero', () => {
+  const vs = [
+    v({ t: 'viejo3sem', estado: 'pendiente', ultimoEntranteAt: hace(24 * 21) }),
+    v({ t: 'min40', estado: 'pendiente', ultimoEntranteAt: hace(40 / 60) }),
+    v({ t: 'h5', estado: 'pendiente', ultimoEntranteAt: hace(5) }),
+    v({ t: 'dias2', estado: 'pendiente', ultimoEntranteAt: hace(48) }),
+  ]
+  assert.deepEqual(ordenarPorEspera(vs).map(x => x.telefono), ['h5', 'min40', 'dias2', 'viejo3sem'])
+})

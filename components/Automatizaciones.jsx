@@ -158,15 +158,12 @@ export default function Automatizaciones({ active }) {
   const sr = config?.saludo_reactivacion || {}
   const sg = config?.seguimientos || {}
 
-  // Config visual de las 3 temperaturas para el bloque de seguimientos.
+  // Las reglas por temperatura (🔥 🌤️ ❄️) se quitaron el 22-sep-2026: la temperatura
+  // ahora es automática y los flujos marcaban 🌤️ a toda la pauta. Queda la encuesta.
   const TEMPS = [
-    { key: 'caliente', icon: '🔥', label: 'Caliente', color: '#f97316', ayuda: 'La lista te avisa con ⏰ a las 20 h; si no actúas, manda un "sujeta-ventana" antes de las 24 h.', horasDefault: 23, horasLabel: ['Envía a las', 'h de silencio del cliente'] },
-    { key: 'tibio',    icon: '🌤️', label: 'Tibio',    color: '#fbbf24', ayuda: 'Seguimiento suave a media ventana.', horasDefault: 12, horasLabel: ['Envía a las', 'h de silencio del cliente'] },
-    { key: 'frio',     icon: '❄️', label: 'Frío',     color: '#38bdf8', ayuda: 'Último toque opcional antes de cerrar la ventana.', horasDefault: 22, horasLabel: ['Envía a las', 'h de silencio del cliente'] },
-    // No es una temperatura: aplica a cualquier chat en ATENDIDO donde contesté yo
-    // y el cliente no volvió a escribir. Al enviarse, el chat pasa a la bandeja
-    // 📋 ENCUESTA; la respuesta del cliente lo devuelve a PENDIENTES.
-    { key: 'encuesta', icon: '📋', label: 'Encuesta de reactivación', color: '#f472b6', ayuda: 'Para chats en ATENDIDO que se quedaron callados después de tu respuesta. Al enviarse, el chat pasa a la bandeja 📋 Encuesta.', horasDefault: 6, horasLabel: ['Envía a las', 'h de mi último mensaje, si el cliente no respondió'] },
+    // Aplica a cualquier chat en ATENDIDO donde contesté yo y el cliente no volvió
+    // a escribir. La respuesta del cliente lo devuelve a PENDIENTES.
+    { key: 'encuesta', icon: '📋', label: 'Encuesta de reactivación', color: '#f472b6', ayuda: 'Para chats en ATENDIDO que se quedaron callados después de tu respuesta. No se le manda a chats con 📌, 🤫 o contactos internos.', horasDefault: 6, horasLabel: ['Envía a las', 'h de mi último mensaje, si el cliente no respondió'] },
   ]
   const inputNum = { width: 60, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontSize: 14, fontWeight: 800, padding: '6px 8px', textAlign: 'center', fontFamily: 'Outfit,sans-serif', outline: 'none' }
 
@@ -297,14 +294,14 @@ export default function Automatizaciones({ active }) {
             </>)}
           </Card>
 
-          {/* ── SEGUIMIENTO por temperatura del lead (cron cada hora) ── */}
+          {/* ── ENCUESTA a chats callados (cron cada hora) ── */}
           <Card>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: sg.activo ? 14 : 0 }}>
-              <div style={{ fontSize: 26 }}>🌡️</div>
+              <div style={{ fontSize: 26 }}>📋</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.cream }}>Seguimiento por temperatura</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.cream }}>Encuesta a chats que se quedaron callados</div>
                 <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3 }}>
-                  Escribe solo, según qué tan caliente esté el lead y cuánto lleva callado — <b style={{ color: C.cream }}>siempre dentro de la ventana de 24h</b> de WhatsApp. Máx 1 mensaje por ventana; se cancela si el cliente responde. Si el bot está contestando ese chat, no se mete.
+                  Escribe solo a chats atendidos donde el cliente no volvió a contestar — <b style={{ color: C.cream }}>siempre dentro de la ventana de 24h</b> de WhatsApp. Máx 1 mensaje por ventana; se cancela si el cliente responde. Si el bot está contestando ese chat, no se mete.
                 </div>
               </div>
               <Switch on={!!sg.activo} onClick={() => togSegG(!sg.activo)} />
@@ -369,7 +366,7 @@ export default function Automatizaciones({ active }) {
               })}
 
               <div style={{ fontSize: 11, color: C.creamDim, marginTop: 4, lineHeight: 1.5 }}>
-                ⚠️ Pasadas las 24h la ventana se cierra y ya no se envía gratis (reenganche por plantilla = próximamente). La temperatura la pones solo tú desde el chat. El cron corre cada hora en punto.
+                ⚠️ Pasadas las 24h la ventana se cierra y ya no se envía gratis (reenganche por plantilla = próximamente). El cron corre cada hora en punto.
               </div>
             </>)}
           </Card>

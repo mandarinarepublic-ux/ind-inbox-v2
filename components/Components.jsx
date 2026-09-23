@@ -136,7 +136,23 @@ function IABadge({ modoIA }) {
   )
 }
 
-const TEMP_ICON = { caliente: '🔥', tibio: '🌤️', frio: '❄️' }
+// Marcas de gestión de la fila (bandeja/temperatura/etapa/📌/pedido…). Las arma
+// lib/gestion.js `chipsDeChat`; acá solo se pintan.
+function FilaChips({ chips }) {
+  if (!chips?.length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+      {chips.map(ch => (
+        <span key={ch.key} title={ch.titulo} style={{
+          fontSize: 9.5, fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap',
+          color: ch.color, background: `${ch.color}1a`, border: `1px solid ${ch.color}55`,
+          borderRadius: 6, padding: '2px 6px', maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis',
+          animation: ch.pulso ? 'pulse 2s infinite' : 'none',
+        }}>{ch.texto}</span>
+      ))}
+    </div>
+  )
+}
 // Etiqueta de a qué número (3326 / 9804) pertenece un resultado del buscador.
 // Solo se pinta buscando: el dueño lo pidió explícito — "el buscador debe
 // señalarme dónde está". Cuando es de OTRO canal (no el de la pestaña activa)
@@ -158,7 +174,7 @@ function CanalBadge({ label, distinto }) {
     </span>
   )
 }
-export function ContactRow({ conv, isActive, onClick, search = '', estado, modoIA, temp = '', venta = false, alerta = false, msgSnippet = null, canalLabel = null, canalDistinto = false }) {
+export function ContactRow({ conv, isActive, onClick, search = '', estado, modoIA, chips = [], msgSnippet = null, canalLabel = null, canalDistinto = false }) {
   const [hovered, setHovered] = useState(false)
   const searching = String(search || '').trim().length > 0
   const info = ESTADO_INFO[estado] || null
@@ -206,13 +222,11 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: C.cream, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{highlight(conv.nombre, search)}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {alerta && <span title="🔥 Caliente — cerca de cerrar la ventana de 24h" style={{ fontSize: 12, animation: 'pulse 2s infinite' }}>⏰</span>}
-            {venta && <span title="💰 Venta en proceso" style={{ fontSize: 12 }}>💰</span>}
-            {temp && TEMP_ICON[temp] && <span title={`Lead ${temp}`} style={{ fontSize: 12 }}>{TEMP_ICON[temp]}</span>}
             <IABadge modoIA={modoIA} />
             <span style={{ fontSize: 11, color: C.creamFaint }}>{fmtTime(conv.last?.timestamp)}</span>
           </div>
         </div>
+        <FilaChips chips={chips} />
         {msgSnippet != null ? (
           <div style={{ marginTop: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getContactos, updateTemperatura } from '@/lib/contactos'
+import { getContactos, updateEtapa } from '@/lib/contactos'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { getRespuestas } from '@/lib/respuestas'
 import { getFlujosPublicadosSupabase } from '@/lib/inbox-supabase'
@@ -64,7 +64,7 @@ export async function GET(req) {
     guardarEstado: guardarEstadoFlujo,
     borrarEstado: borrarEstadoFlujo,
     registrarPasos,
-    setTemperatura: updateTemperatura,
+    setEtapa: (tel, etapa) => updateEtapa(tel, etapa, 'flujo', { soloSiVacia: true }),
     avisar: (texto) => enviarTelegram(texto),
     ahora: () => new Date(),
     cuenta: CUENTA,
@@ -90,7 +90,7 @@ export async function GET(req) {
         flujo, desde: d.desde, esDisparo: false,
         contacto: {
           telefono: c.telefono, nombre: c.nombre, alias: c.alias || '', phoneId: c.phoneId,
-          temperatura: c.temperatura, tieneVenta: Boolean(c.idVenta), estado: c.estado,
+          etapa: c.etapa || '', tieneVenta: Boolean(c.idVenta), estado: c.estado,
           ultimoEntranteAt: c.ultimoEntranteAt,
         },
         wamidEntrante: '', ultimoWamid: estado.ultimo_wamid || '', respuestas,

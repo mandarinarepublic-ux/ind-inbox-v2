@@ -1,7 +1,11 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateTemperatura, updateVentaEnProceso, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
+import { ETAPAS, chipsDeChat, alertaVentanaCierra, necesitaConfirmarAtendido } from '@/lib/gestion'
+import { FILTRO_INICIAL, prepararVista, alternar, pasaFiltro, conteos, compararEspera } from '@/lib/filtro-chats'
+import { sumarOverride, aplicarOverrides } from '@/lib/overrides'
+import FiltrosLista from '@/components/FiltrosLista'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
 import { citaUnaVez } from '@/lib/cita'
@@ -57,25 +61,40 @@ const C = {
   creamFaint:'#3A3530',
 }
 
-// ── Dos ejes de estado ────────────────────────────────────────────
-// Eje 1 (bandeja): pendiente / atendido / soporte / archivado — casi todo automático.
-// Eje 2 (temperatura del lead): caliente / tibio / frio — 100% MANUAL, nada la cambia sola.
-const TEMPERATURAS = [
-  { key:'caliente', icon:'🔥', label:'Caliente', color:'#f97316' },
-  { key:'tibio',    icon:'🌤️', label:'Tibio',    color:'#fbbf24' },
-  { key:'frio',     icon:'❄️', label:'Frío',     color:'#38bdf8' },
-]
-const TEMP_META = Object.fromEntries(TEMPERATURAS.map(t => [t.key, t]))
-
-// La ventana de 24h de Meta arranca en el ÚLTIMO mensaje del cliente. Un lead 🔥 caliente
-// que se acerca a las 24h de silencio se resalta con ⏰ (hay que cerrarlo antes de que Meta
-// bloquee el mensaje gratis). Umbral por defecto: 20h.
+// ── Capas de gestión (diseño 2026-09-22: docs/superpowers/specs/2026-09-22-gestion-chats-ind-design.md) ──
+// Bandeja 🔴🟢⚫ (de quién es el turno) · temperatura AUTOMÁTICA (lib/temperatura.js,
+// cuánto hace que habló el cliente) · etapa 💬💳🛒🔁 · 📌 le debemos · 🤫 · tipo de contacto.
+// Un mensaje del cliente SOLO mueve la bandeja: nunca borra etapa, 📌, 🤫 ni tipo.
 const VENTANA_MS = 24 * 60 * 60 * 1000
-const ALERTA_CALIENTE_MS = 20 * 60 * 60 * 1000
 
-// Al RESPONDER, la bandeja pasa a 'atendido' salvo que sea un carril deliberado (soporte).
-// La TEMPERATURA (Eje 2) nunca se toca al responder: es otro campo.
-const estadoAlResponder = (actual) => (actual === 'soporte' ? 'soporte' : 'atendido')
+// Al RESPONDER una persona, la bandeja pasa a 'atendido'. Siempre: SOPORTE ya no es
+// bandeja (la derivación de la IA es 🔴 + 📌 🎧, ver lib/gestion.js).
+const estadoAlResponder = () => 'atendido'
+
+const BANDEJAS = [
+  { key:'pendiente', icon:'🔴', label:'Pendiente', color:'#f87171' },
+  { key:'atendido',  icon:'🟢', label:'Atendido',  color:'#4ade80' },
+  { key:'archivado', icon:'⚫', label:'Archivar',  color:C.creamDim },
+]
+const cortoBoton = (s, n = 18) => (String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s))
+
+// Botón de la cabecera del chat (bandeja, etapa, 📌, 🤫, 🏷️): mismo estilo para todos.
+function BotonEje({ on, color, onClick, title, icon, label }) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      padding:'4px 6px', fontWeight: on ? 800 : 600, flexShrink:0,
+      background: on ? `${color}22` : 'transparent',
+      border: `${on ? 2 : 1}px solid ${on ? color : C.border2}`,
+      color: on ? color : C.creamFaint,
+      borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
+      boxShadow: on ? `0 0 8px ${color}44` : 'none',
+    }}>
+      <span className="hide-mobile" style={{ fontSize:10 }}>{icon} {label}</span>
+      <span className="show-mobile" style={{ fontSize:14 }}>{icon}</span>
+    </button>
+  )
+}
+const Separador = () => <span style={{ width:1, alignSelf:'stretch', background:C.border2, margin:'2px 2px', flexShrink:0 }} />
 
 async function toJpeg(file) {
   return new Promise((resolve) => {
@@ -232,7 +251,7 @@ export default function App() {
   // archivo por encima del chat. Ojo: NO es `arrastrandoAsa`, que es el del asa
   // del panel derecho.
   const [soltarAqui,   setSoltarAqui]   = useState(false)
-  const [filter,       setFilter]       = useState('pendiente')
+  const [filtro,       setFiltro]       = useState(FILTRO_INICIAL)
   const [showBtnPanel, setShowBtnPanel] = useState(false)
   const [btnTexts,     setBtnTexts]     = useState(['', '', ''])
   const [sendingBtns,  setSendingBtns]  = useState(false)
@@ -267,8 +286,7 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [refrescando, setRefrescando] = useState(false)
   const localStatusRef = useRef({})
-  const localTempRef   = useRef({}) // override optimista de temperatura (Eje 2), hasta que el poll confirme
-  const localVentaRef  = useRef({}) // override optimista de 💰 venta en proceso, hasta que el poll confirme
+  const localCamposRef = useRef({}) // overrides optimistas de etapa/📌/🤫/tipo (lib/overrides.js)
   const alertadosRef   = useRef(new Set()) // leads calientes ya notificados (1 aviso por ventana)
   const pendingRef     = useRef({}) // mensajes optimistas por teléfono, hasta que Make los registre
   // Fila de salida POR CONVERSACIÓN. Como los envíos ya no bloquean la interfaz, el
@@ -565,15 +583,8 @@ export default function App() {
       Object.entries(localStatusRef.current).forEach(([tel, override]) => {
         if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], estado: override.estado }
       })
-      // Igual para la temperatura (Eje 2): que el poll no pise un cambio recién hecho.
-      Object.entries(localTempRef.current).forEach(([tel, override]) => {
-        if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], temperatura: override.temperatura }
-      })
-      // Y para la marca 💰 venta en proceso.
-      Object.entries(localVentaRef.current).forEach(([tel, override]) => {
-        if (override.expiresAt > now && ctMap[tel]) ctMap[tel] = { ...ctMap[tel], ventaEnProceso: override.ventaEnProceso }
-      })
-      setContacts(ctMap)
+      // Igual para etapa/📌/🤫/tipo: que el poll no pise un cambio recién hecho.
+      setContacts(aplicarOverrides(ctMap, localCamposRef.current, now))
     }
 
     setLastSync(new Date())
@@ -742,11 +753,11 @@ export default function App() {
   // Cambiar de bandeja CIERRA el chat abierto: si no, al terminar de escribirle a un
   // cliente y pasar a "Pendientes" quedaba en pantalla la conversación anterior, que
   // ya no pertenece a esa bandeja. Se deja el panel del medio en blanco para elegir.
-  const cambiarFiltro = (key) => {
+  const cambiarFiltro = (dim, valor) => {
     // Cierra el chat abierto → el PEDIDO MANUAL se perdería igual que al saltar
     // a otro cliente. Sin el formulario abierto esto no pregunta nada.
     if (!puedoDejarLaConversacion(null)) return
-    setFilter(key)
+    setFiltro(f => alternar(f, dim, valor))
     setActive(null)
     activeRef.current = null
     setCitando(null)
@@ -1005,38 +1016,25 @@ export default function App() {
     openConv(conv ? conv.telefono : telefono)
   }
 
-  // ── Alerta de leads 🔥 calientes cerca del cierre de la ventana de 24h ──
-  // Dispara una notificación del navegador por lead y por ventana. El permiso ya no
-  // se pide acá: Chrome silencia los pedidos sin gesto del usuario, así que ahora lo
-  // pide el botón 🔔 (PushToggle) dentro de su click.
+  // ── ⏰ Ventana de 24 h por cerrarse en chats con algo en juego (💬 💳 📌) ──
+  // Una notificación del navegador por chat y por ventana. El permiso lo pide el
+  // botón 🔔 (PushToggle) dentro de su click: Chrome silencia pedidos sin gesto.
   useEffect(() => {
     const now = Date.now()
     Object.entries(contacts).forEach(([tel, c]) => {
-      if ((c?.temperatura || '') !== 'caliente') return
-      const ent = c?.ultimoEntranteAt ? new Date(c.ultimoEntranteAt).getTime() : 0
-      if (!ent) return
-      const ms = now - ent
-      if (ms < ALERTA_CALIENTE_MS || ms >= VENTANA_MS) return
+      if (!alertaVentanaCierra(c, now)) return
+      const ent = new Date(c.ultimoEntranteAt).getTime()
       const key = `${tel}:${ent}` // 1 alerta por ventana (mismo entrante = misma ventana)
       if (alertadosRef.current.has(key)) return
       alertadosRef.current.add(key)
       const nombre = c.alias || (convs.find(x => x.telefono === tel)?.nombre) || tel
-      const horas  = Math.max(0, Math.ceil((VENTANA_MS - ms) / 3600000))
-      notificar('🔥 Lead caliente por enfriarse', `${nombre}: se cierra la ventana de 24h en ~${horas}h. Escríbele ya.`, `caliente-${key}`)
+      const horas  = Math.max(0, Math.ceil((VENTANA_MS - (now - ent)) / 3600000))
+      notificar('⏰ Se cierra la ventana de 24 h', `${nombre}: te quedan ~${horas} h para escribirle gratis.`, `ventana-${key}`)
     })
   }, [contacts, convs])
 
   const activeConv     = convs.find(c => c.telefono === active) || null
   const totalUnread    = convs.reduce((s, c) => s + c.unread, 0)
-  // 💰 VENTA EN PROCESO — interruptor MANUAL, aparte de la bandeja (22-sep-2026).
-  // - La pone y la quita SOLO el humano que atiende, con el botón 💰 del chat. Ni los
-  //   mensajes, ni los flujos, ni los pedidos la tocan, y NO hace falta un pedido creado.
-  // - No es una bandeja: si el cliente vuelve a escribir, el chat entra a PENDIENTE
-  //   (para atenderlo) y a la vez sigue en la pestaña 💰 Ventas.
-  // ☠️ Antes era un ESTADO de bandeja ('venta') y la pestaña filtraba por `idVenta`
-  //   (pedido del CRM): el chat marcado salía de Pendientes y Atendidos y no aparecía
-  //   en NINGUNA pestaña. Un cliente quedó 17 días sin respuesta escondido ahí.
-  const hasVenta      = (tel) => Boolean(contacts[tel]?.ventaEnProceso)
   // ── El estado de bandeja, POR NÚMERO ────────────────────────────────────
   // Viene PEGADO a la fila de la lista (`estadoBandeja`, vista inbox.lista_bandeja),
   // no en una lectura aparte: si se leyera por separado, el mapa arrancaría vacío
@@ -1064,20 +1062,21 @@ export default function App() {
     estadoBandeja: estadoDeBandeja[tel],
     estadoPersona: contacts[tel]?.estado,
   })
-  const esVentaActiva = (tel) => hasVenta(tel)
-  // Eje 2: temperatura del lead ('' = sin clasificar).
-  const getTemp = (tel) => contacts[tel]?.temperatura || ''
-  const esTemp  = (key) => TEMP_META[key] !== undefined
-  // Ventana de 24h: ms desde el último mensaje del cliente.
-  const silencioMs = (tel) => {
-    const t = contacts[tel]?.ultimoEntranteAt
-    return t ? (Date.now() - new Date(t).getTime()) : Infinity
-  }
-  // 🔥 caliente que se acerca al cierre de la ventana (entre el umbral y las 24h) → ⏰.
-  const alertaVentana = (tel) => {
-    if (getTemp(tel) !== 'caliente') return false
-    const ms = silencioMs(tel)
-    return ms >= ALERTA_CALIENTE_MS && ms < VENTANA_MS
+  // ── Gestión del chat (diseño 2026-09-22) ──────────────────────────────
+  // Todo lo que las reglas puras necesitan de un chat. La temperatura NO viene de la
+  // base: se calcula con `ahora`, que avanza cada minuto para que los chips se muevan.
+  const [ahora, setAhora] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setAhora(Date.now()), 60000)
+    return () => clearInterval(id)
+  }, [])
+  const datosGestion = (tel) => {
+    const ct = contacts[tel] || {}
+    return {
+      telefono: tel, estado: getStatus(tel), ultimoEntranteAt: ct.ultimoEntranteAt,
+      etapa: ct.etapa, etapaPor: ct.etapaPor, deudaAt: ct.deudaAt, deudaNota: ct.deudaNota, deudaPor: ct.deudaPor,
+      sinAutomaticos: ct.sinAutomaticos, tipoContacto: ct.tipoContacto,
+    }
   }
 
   // Búsqueda tolerante de teléfono (Ecuador): 0987… == 593987… (últimos 9 díg).
@@ -1183,34 +1182,24 @@ export default function App() {
   // Al BUSCAR mostramos TODOS los resultados sin importar la pestaña activa: ni
   // bandeja (estado) ni NÚMERO (canal) — `searched` ya trae contactos del otro
   // canal (arriba). Fuera de la búsqueda, acá se aplica el filtro de siempre:
-  // un solo filtro activo a la vez (venta / temperatura / bandeja), y por canal
+  // filtros COMBINABLES (bandeja × temperatura × etapa × 📌 × 🎧 × ⏰ × interno), y por canal
   // ya viene recortado `convs`.
   // El tope vuelve a 100 al cambiar de bandeja, de número o al buscar: cada
   // lista empieza de cero y nadie hereda el "ver más" de otra.
-  useEffect(() => { setTope(100) }, [filter, search, canal])
+  useEffect(() => { setTope(100) }, [filtro, search, canal])
 
+  const vistas = searched.map(c => prepararVista(datosGestion(c.telefono), ahora))
+  const vistaPorTel = Object.fromEntries(vistas.map(v => [v.telefono, v]))
   const filtered = isSearching
     ? searched
-    : searched.filter(c =>
-        filter === 'venta' ? esVentaActiva(c.telefono)
-        : esTemp(filter)   ? getTemp(c.telefono) === filter
-        :                    getStatus(c.telefono) === filter)
-  const counts = {
-    pendiente:  searched.filter(c => getStatus(c.telefono) === 'pendiente').length,
-    atendido:   searched.filter(c => getStatus(c.telefono) === 'atendido').length,
-    archivado:  searched.filter(c => getStatus(c.telefono) === 'archivado').length,
-    venta:      searched.filter(c => esVentaActiva(c.telefono)).length,
-    soporte:    searched.filter(c => getStatus(c.telefono) === 'soporte').length,
-    // 📋 Encuesta de reactivación: la puso el cron; la respuesta del cliente lo
-    // devuelve a Pendientes sola.
-    encuesta:   searched.filter(c => getStatus(c.telefono) === 'encuesta').length,
-    // Temperaturas (Eje 2)
-    caliente:   searched.filter(c => getTemp(c.telefono) === 'caliente').length,
-    tibio:      searched.filter(c => getTemp(c.telefono) === 'tibio').length,
-    frio:       searched.filter(c => getTemp(c.telefono) === 'frio').length,
-    // Calientes que se acercan a las 24h → para el aviso ⏰.
-    alerta:     searched.filter(c => alertaVentana(c.telefono)).length,
-  }
+    : (() => {
+        const pasan = searched.filter(c => pasaFiltro(vistaPorTel[c.telefono], filtro))
+        // En 🔴 el que más espera va arriba (dentro de las 24 h); ver lib/filtro-chats.js.
+        if (filtro.bandeja !== 'pendiente') return pasan
+        return [...pasan].sort((a, b) => compararEspera(vistaPorTel[a.telefono], vistaPorTel[b.telefono]))
+      })()
+  const counts = conteos(vistas, filtro)
+  const totalPendientes = vistas.filter(v => v.estado === 'pendiente').length
 
   const lastIncoming = activeConv ? [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE') : null
   const windowOpen   = lastIncoming ? (Date.now() - _parseDate(lastIncoming.timestamp).getTime()) < 24 * 60 * 60 * 1000 : false
@@ -1238,38 +1227,48 @@ export default function App() {
     load({ sinCache: true }).catch(() => {})
   }
 
-  // ── Cambiar TEMPERATURA del lead (Eje 2) — 100% manual ────────
-  // Clic en la temperatura activa la QUITA (toggle). Nada más la toca.
-  const changeTemperatura = async (telefono, temp) => {
-    const actual = contacts[telefono]?.temperatura || ''
-    const nueva  = actual === temp ? '' : temp
-    // 35 s por lo mismo que en changeStatus: el override debe sobrevivir al caché
-    // del edge (hasta 25 s), o el poll revierte el cambio en pantalla.
-    localTempRef.current[telefono] = { temperatura: nueva, expiresAt: Date.now() + 35000 }
-    setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), temperatura: nueva } }))
-    const res = await updateTemperatura(telefono, nueva)
+  // ── Gestión: etapa, 📌, 🤫, tipo — optimista con override de 35 s ──────
+  // (el poll puede traer una lectura vieja del edge; lib/overrides.js)
+  const cambiarCampos = async (telefono, campos, llamada, msgError) => {
+    const antes = contacts[telefono] || {}
+    localCamposRef.current = sumarOverride(localCamposRef.current, telefono, campos)
+    setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), ...campos } }))
+    const res = await llamada()
     if (res && res.ok === false) {
-      delete localTempRef.current[telefono]
-      setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), temperatura: actual } }))
-      setToast({ ok: false, msg: '✗ No se pudo cambiar la temperatura — reintenta' })
+      delete localCamposRef.current[telefono]
+      const revertir = Object.fromEntries(Object.keys(campos).map(k => [k, antes[k]]))
+      setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), ...revertir } }))
+      setToast({ ok: false, msg: `✗ ${msgError} — reintenta` })
       setTimeout(() => setToast(null), 4000)
     }
   }
-
-  // ── 💰 Venta en proceso — interruptor manual (clic de nuevo = quitar) ──
-  const changeVentaEnProceso = async (telefono) => {
-    const actual = Boolean(contacts[telefono]?.ventaEnProceso)
-    const nueva  = !actual
-    // 35 s por lo mismo que la temperatura: sobrevivir al caché del edge.
-    localVentaRef.current[telefono] = { ventaEnProceso: nueva, expiresAt: Date.now() + 35000 }
-    setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), ventaEnProceso: nueva } }))
-    const res = await updateVentaEnProceso(telefono, nueva)
-    if (res && res.ok === false) {
-      delete localVentaRef.current[telefono]
-      setContacts(prev => ({ ...prev, [telefono]: { ...(prev[telefono] || {}), ventaEnProceso: actual } }))
-      setToast({ ok: false, msg: '✗ No se pudo cambiar la venta en proceso — reintenta' })
-      setTimeout(() => setToast(null), 4000)
+  // Clic en la etapa activa la QUITA.
+  const cambiarEtapa = (telefono, etapa) => {
+    const nueva = contacts[telefono]?.etapa === etapa ? '' : etapa
+    cambiarCampos(telefono,
+      { etapa: nueva, etapaPor: nueva ? 'humano' : '', etapaAt: nueva ? new Date().toISOString() : null },
+      () => updateEtapa(telefono, nueva), 'No se pudo cambiar la etapa')
+  }
+  // 📌 prendido → preguntar si ya cumpliste; apagado → pedir la nota.
+  const cambiarDeuda = (telefono) => {
+    const c = contacts[telefono] || {}
+    if (c.deudaAt) {
+      if (!window.confirm(`¿Ya cumpliste?\n\n📌 ${c.deudaNota || 'Le debemos algo'}`)) return
+      cambiarCampos(telefono, { deudaAt: null, deudaNota: '', deudaPor: '' }, () => updateDeuda(telefono, ''), 'No se pudo apagar el 📌')
+      return
     }
+    const nota = window.prompt('¿Qué le debemos al cliente? (boceto, guía, precio, respuesta…)', '')
+    if (!nota || !nota.trim()) return
+    cambiarCampos(telefono, { deudaAt: new Date().toISOString(), deudaNota: nota.trim(), deudaPor: 'humano' },
+      () => updateDeuda(telefono, nota.trim()), 'No se pudo prender el 📌')
+  }
+  const cambiarSinAutomaticos = (telefono) => {
+    const on = !contacts[telefono]?.sinAutomaticos
+    cambiarCampos(telefono, { sinAutomaticos: on }, () => updateSinAutomaticos(telefono, on), 'No se pudo cambiar 🤫')
+  }
+  const cambiarTipoContacto = (telefono) => {
+    const tipo = contacts[telefono]?.tipoContacto === 'interno' ? 'cliente' : 'interno'
+    cambiarCampos(telefono, { tipoContacto: tipo }, () => updateTipoContacto(telefono, tipo), 'No se pudo cambiar el tipo de contacto')
   }
 
   const handleUpdateContact = async ({ alias }) => {
@@ -2047,7 +2046,7 @@ export default function App() {
                     <div style={{ fontSize:13, fontWeight:800, color:C.cream }}>INDLOVERS CHAT</div>
                     <div style={{ fontSize:10, fontWeight:700, color:C.creamDim, display:'flex', alignItems:'center', gap:3, marginTop:1 }}>
                       <span style={{ animation:'pulse 2s infinite', display:'inline-block', width:5, height:5, borderRadius:'50%', background:'#4ade80' }} />
-                      {`En vivo · ${counts.pendiente} pendiente${counts.pendiente === 1 ? '' : 's'}`}
+                      {`En vivo · ${totalPendientes} pendiente${totalPendientes === 1 ? '' : 's'}`}
                     </div>
                   </div>
                 </div>
@@ -2074,76 +2073,8 @@ export default function App() {
                   }}>{label}</button>
                 ))}
               </div>
-              <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                {[
-                  { key:'pendiente',    label:'Pendientes',   icon:'🔴', color:'#f87171' },
-                  { key:'atendido',     label:'Atendidos',    icon:'🟢', color:'#4ade80' },
-                  { key:'venta',        label:'Ventas',       icon:'💰', color:'#10b981' },
-                ].map(({ key, label, icon, color }) => (
-                  <button key={key} onClick={() => cambiarFiltro(key)} style={{
-                    flex:1, padding:'5px 2px', fontSize:9, fontWeight:700,
-                    background:filter===key?`${color}18`:'transparent',
-                    border:`1px solid ${filter===key?color+'40':C.border}`,
-                    color:filter===key?color:C.creamFaint,
-                    borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
-                  }}>
-                    {icon} {label}
-                    {counts[key]>0 && <span style={{ marginLeft:3, background:filter===key?color:C.border2, color:filter===key?C.bg:C.creamDim, borderRadius:10, padding:'0 4px', fontSize:8, fontWeight:800 }}>{counts[key]}</span>}
-                  </button>
-                ))}
-              </div>
-              {/* Soporte + Archivados colapsados */}
-              <div style={{ marginTop:4, display:'flex', gap:4 }}>
-                <button onClick={() => cambiarFiltro('soporte')} style={{
-                  flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
-                  background:filter==='soporte'?`rgba(167,139,250,.18)`:'transparent',
-                  border:`1px solid ${filter==='soporte'?'rgba(167,139,250,.4)':C.border}`,
-                  color:filter==='soporte'?'#a78bfa':C.creamFaint,
-                  borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
-                  display:'flex', alignItems:'center', justifyContent:'center', gap:4,
-                }}>
-                  🎧 Soporte
-                  {counts['soporte']>0 && <span style={{ background:filter==='soporte'?'#a78bfa':C.border2, color:filter==='soporte'?C.bg:C.creamDim, borderRadius:10, padding:'0 5px', fontSize:8, fontWeight:800 }}>{counts['soporte']}</span>}
-                </button>
-                <button onClick={() => cambiarFiltro('encuesta')} style={{
-                  flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
-                  background:filter==='encuesta'?`rgba(244,114,182,.18)`:'transparent',
-                  border:`1px solid ${filter==='encuesta'?'rgba(244,114,182,.4)':C.border}`,
-                  color:filter==='encuesta'?'#f472b6':C.creamFaint,
-                  borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
-                  display:'flex', alignItems:'center', justifyContent:'center', gap:4,
-                }}>
-                  📋 Encuesta
-                  {counts['encuesta']>0 && <span style={{ background:filter==='encuesta'?'#f472b6':C.border2, color:filter==='encuesta'?C.bg:C.creamDim, borderRadius:10, padding:'0 5px', fontSize:8, fontWeight:800 }}>{counts['encuesta']}</span>}
-                </button>
-                <button onClick={() => cambiarFiltro('archivado')} style={{
-                  flex:1, padding:'4px 8px', fontSize:9, fontWeight:700,
-                  background:filter==='archivado'?`rgba(160,154,144,.18)`:'transparent',
-                  border:`1px solid ${filter==='archivado'?'rgba(160,154,144,.4)':C.border}`,
-                  color:filter==='archivado'?C.creamDim:C.creamFaint,
-                  borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
-                  display:'flex', alignItems:'center', justifyContent:'center', gap:4,
-                }}>
-                  ⚫ Archivados
-                  {counts['archivado']>0 && <span style={{ background:filter==='archivado'?C.creamDim:C.border2, color:filter==='archivado'?C.bg:C.creamFaint, borderRadius:10, padding:'0 5px', fontSize:8, fontWeight:800 }}>{counts['archivado']}</span>}
-                </button>
-              </div>
-              {/* Fila TEMPERATURA del lead (Eje 2, manual) */}
-              <div style={{ display:'flex', gap:4, marginTop:4 }}>
-                {TEMPERATURAS.map(({ key, icon, label, color }) => (
-                  <button key={key} onClick={() => cambiarFiltro(key)} style={{
-                    flex:1, padding:'5px 2px', fontSize:9, fontWeight:700,
-                    background:filter===key?`${color}18`:'transparent',
-                    border:`1px solid ${filter===key?color+'40':C.border}`,
-                    color:filter===key?color:C.creamFaint,
-                    borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
-                  }}>
-                    {icon} {label}
-                    {key==='caliente' && counts.alerta>0 && <span title={`${counts.alerta} caliente(s) cerca de cerrar la ventana de 24h`} style={{ marginLeft:3 }}>⏰</span>}
-                    {counts[key]>0 && <span style={{ marginLeft:3, background:filter===key?color:C.border2, color:filter===key?C.bg:C.creamDim, borderRadius:10, padding:'0 4px', fontSize:8, fontWeight:800 }}>{counts[key]}</span>}
-                  </button>
-                ))}
-              </div>
+              {/* ── Filtros combinables (diseño 2026-09-22 §4) ── */}
+              <FiltrosLista filtro={filtro} conteos={counts} onCambiar={cambiarFiltro} />
             </div>
 
             <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
@@ -2172,7 +2103,7 @@ export default function App() {
                   const canalDistinto = isSearching && canalLabel !== null && canalDePhoneId(contacts[conv.telefono]?.phoneId) !== canal
                   return (
                     <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => irAResultadoBusqueda(conv.telefono)}
-                      search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} temp={getTemp(conv.telefono)} venta={hasVenta(conv.telefono)} alerta={alertaVentana(conv.telefono)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
+                      search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} chips={chipsDeChat(datosGestion(conv.telefono), ahora)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
                       canalLabel={canalLabel} canalDistinto={canalDistinto} />
                   )
                 })}
@@ -2256,73 +2187,51 @@ export default function App() {
                       opacity: refrescando ? .5 : 1,
                       animation: refrescando ? 'spin .8s linear infinite' : 'none',
                     }}>&#8635;</button>
-                  {/* ── Eje 1: BANDEJA (estado de conversación) ── */}
-                  {[
-                    { s:'pendiente',    icon:'🔴', label:'Pendiente',  activeColor:'#f87171' },
-                    { s:'atendido',     icon:'🟢', label:'Atendido',   activeColor:'#4ade80' },
-                    { s:'soporte',      icon:'🎧', label:'Soporte',    activeColor:'#a78bfa' },
-                    // 📋 Encuesta de reactivación (13-sep-2026): normalmente la pone el
-                    // cron de seguimientos al mandar la encuesta; acá se puede poner o
-                    // quitar a mano.
-                    { s:'encuesta',     icon:'📋', label:'Encuesta',   activeColor:'#f472b6' },
-                    { s:'archivado',    icon:'⚫', label:'Archivar',   activeColor:C.creamDim },
-                  ].map(({ s, icon, label, activeColor }) => (
-                    <button key={s} onClick={() => changeStatus(activeConv.telefono, s)} title={label} style={{
-                      padding:'4px 6px', fontWeight: currentStatusView===s ? 800 : 600, flexShrink:0,
-                      background: currentStatusView===s ? `${activeColor}22` : 'transparent',
-                      border: `${currentStatusView===s ? 2 : 1}px solid ${currentStatusView===s ? activeColor : C.border2}`,
-                      color: currentStatusView===s ? activeColor : C.creamFaint,
-                      borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
-                      boxShadow: currentStatusView===s ? `0 0 8px ${activeColor}44` : 'none',
-                    }}>
-                      <span className="hide-mobile" style={{ fontSize:10 }}>{icon} {label}</span>
-                      <span className="show-mobile" style={{ fontSize:14 }}>{icon}</span>
-                    </button>
+                  {/* ── Bandeja: de quién es el turno ── */}
+                  {BANDEJAS.map(({ key, icon, label, color }) => (
+                    <BotonEje key={key} on={currentStatusView===key} color={color} icon={icon} label={label} title={label}
+                      onClick={() => {
+                        // Freno: marcar 🟢 a mano con el cliente hablando de último.
+                        if (key === 'atendido' && currentStatusView !== 'atendido') {
+                          const ultimo = activeConv.msgs[activeConv.msgs.length - 1]
+                          if (necesitaConfirmarAtendido(ultimo?.direccion) &&
+                              !window.confirm('El cliente escribió de último. ¿Lo contestaste por otro lado?')) return
+                        }
+                        changeStatus(activeConv.telefono, key)
+                      }} />
                   ))}
+                  <Separador />
 
-                  {/* separador entre ejes */}
-                  <span style={{ width:1, alignSelf:'stretch', background:C.border2, margin:'2px 2px', flexShrink:0 }} />
-
-                  {/* ── 💰 Venta en proceso: interruptor manual, aparte de la bandeja ── */}
-                  {(() => {
-                    const on = hasVenta(activeConv.telefono)
-                    const color = '#10b981'
+                  {/* ── Etapa de la venta (clic de nuevo = quitar) ── */}
+                  {Object.entries(ETAPAS).map(([key, e]) => {
+                    const on = contacts[activeConv.telefono]?.etapa === key
                     return (
-                      <button onClick={() => changeVentaEnProceso(activeConv.telefono)}
-                        title={on ? 'Venta en proceso — clic para quitar' : 'Marcar venta en proceso'} style={{
-                          padding:'4px 6px', fontWeight: on ? 800 : 600, flexShrink:0,
-                          background: on ? `${color}22` : 'transparent',
-                          border: `${on ? 2 : 1}px solid ${on ? color : C.border2}`,
-                          color: on ? color : C.creamFaint,
-                          borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
-                          boxShadow: on ? `0 0 8px ${color}44` : 'none',
-                        }}>
-                        <span className="hide-mobile" style={{ fontSize:10 }}>💰 Venta en proceso</span>
-                        <span className="show-mobile" style={{ fontSize:14 }}>💰</span>
-                      </button>
-                    )
-                  })()}
-
-                  <span style={{ width:1, alignSelf:'stretch', background:C.border2, margin:'2px 2px', flexShrink:0 }} />
-
-                  {/* ── Eje 2: TEMPERATURA del lead (manual, clic de nuevo = quitar) ── */}
-                  {TEMPERATURAS.map(({ key, icon, label, color }) => {
-                    const on = getTemp(activeConv.telefono) === key
-                    return (
-                      <button key={key} onClick={() => changeTemperatura(activeConv.telefono, key)}
-                        title={on ? `${label} — clic para quitar` : `Marcar ${label}`} style={{
-                          padding:'4px 6px', fontWeight: on ? 800 : 600, flexShrink:0,
-                          background: on ? `${color}22` : 'transparent',
-                          border: `${on ? 2 : 1}px solid ${on ? color : C.border2}`,
-                          color: on ? color : C.creamFaint,
-                          borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
-                          boxShadow: on ? `0 0 8px ${color}44` : 'none',
-                        }}>
-                        <span className="hide-mobile" style={{ fontSize:10 }}>{icon} {label}</span>
-                        <span className="show-mobile" style={{ fontSize:14 }}>{icon}</span>
-                      </button>
+                      <BotonEje key={key} on={on} color={e.color} icon={e.icon} label={e.label}
+                        title={on ? `${e.label} — clic para quitar` : `Marcar ${e.label}`}
+                        onClick={() => cambiarEtapa(activeConv.telefono, key)} />
                     )
                   })}
+                  <Separador />
+
+                  {/* ── 📌 le debemos · 🤫 sin automáticos · 🏷️ interno ── */}
+                  {(() => {
+                    const ct = contacts[activeConv.telefono] || {}
+                    return (
+                      <>
+                        <BotonEje on={Boolean(ct.deudaAt)} color={ct.deudaAt ? '#fbbf24' : C.creamDim}
+                          icon={ct.deudaPor === 'ia' ? '📌🎧' : '📌'}
+                          label={ct.deudaAt ? cortoBoton(ct.deudaNota || 'Le debemos') : 'Le debemos'}
+                          title={ct.deudaAt ? `Le debemos: ${ct.deudaNota || 'algo'} — clic cuando cumplas` : 'Anotar algo que le prometiste al cliente'}
+                          onClick={() => cambiarDeuda(activeConv.telefono)} />
+                        <BotonEje on={Boolean(ct.sinAutomaticos)} color={C.creamDim} icon="🤫" label="Sin automáticos"
+                          title={ct.sinAutomaticos ? 'No le llegan mensajes automáticos — clic para permitirlos' : 'Que el sistema no le escriba solo (prometió algo, hay una queja…)'}
+                          onClick={() => cambiarSinAutomaticos(activeConv.telefono)} />
+                        <BotonEje on={ct.tipoContacto === 'interno'} color={C.creamDim} icon="🏷️" label="Interno"
+                          title={ct.tipoContacto === 'interno' ? 'Contacto interno o proveedor — clic para volverlo cliente' : 'Marcar como contacto interno o proveedor'}
+                          onClick={() => cambiarTipoContacto(activeConv.telefono)} />
+                      </>
+                    )
+                  })()}
                   <button onClick={() => setShowRight(r=>!r)} className="mob-ham" style={{ background:showRight?`rgba(244,241,236,.1)`:'rgba(255,255,255,.04)', border:`1px solid ${showRight?'rgba(244,241,236,.3)':C.border2}`, color:showRight?C.cream:C.creamFaint, borderRadius:8, width:30, height:28, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>⚡</button>
 
                   {/* Toggle IA */}

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
-import { getContactos, marcarSeguimiento, updateEstado } from '@/lib/contactos'
+import { getContactos, marcarSeguimiento } from '@/lib/contactos'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirSeguimiento } from '@/lib/decidir-seguimiento'
 import { cuerpoSeguimiento } from '@/lib/seguimiento-envio'
 import { cabecerasMaquina } from '@/lib/auth-maquina'
 import { urlPropia } from '@/lib/url-propia'
 
-// Cron de SEGUIMIENTOS automáticos: por temperatura del lead (Eje 2) y la
-// ENCUESTA DE REACTIVACIÓN para chats atendidos que se quedaron callados.
+// Cron de SEGUIMIENTOS automáticos: la ENCUESTA DE REACTIVACIÓN para chats
+// atendidos que se quedaron callados (las reglas por temperatura se quitaron el
+// 22-sep-2026) y, desde la fase 3, la REACTIVACIÓN por etapa (lib/reactivacion.js).
 // Lo llama Vercel Cron CADA HORA (ver vercel.json). Reglas, textos y botones
 // viven en inbox.automatizaciones.config.seguimientos. Arranca TODO APAGADO.
 //
@@ -77,13 +78,8 @@ export async function GET(req) {
       })
       if (r.ok) {
         await marcarSeguimiento(c.telefono).catch(() => {})
-        // La encuesta mueve el chat a su propia bandeja: así se ve a quién se le
-        // preguntó y no se vuelve a preguntar. La respuesta del cliente lo
-        // devuelve a PENDIENTES como cualquier entrante.
-        if (d.motivo === 'encuesta') {
-          await updateEstado(c.telefono, 'ENCUESTA', c.phoneId)
-            .catch(e => console.error('[cron seguimientos] no pude marcar ENCUESTA', c.telefono, e.message))
-        }
+        // Ya no se mueve el chat a una bandeja ENCUESTA (diseño 2026-09-22): se
+        // queda en ATENDIDO y `ultimo_seguimiento_at` evita repetir la pregunta.
         enviados.push({ telefono: c.telefono, motivo: d.motivo, botones: (d.regla.botones || []).length })
       } else {
         // El código y el cuerpo van a la respuesta Y al log: un 401 acá es el

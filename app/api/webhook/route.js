@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
-import { registrarContactoEntrante, getModoIA, getContactos, marcarPush, updateTemperatura, marcarReceta } from '@/lib/contactos'
+import { registrarContactoEntrante, getModoIA, getContactos, marcarPush, updateEtapa, marcarReceta } from '@/lib/contactos'
 import { enviarPush, avisoDeEntrante } from '@/lib/push'
 import { enviarConMaquina } from '@/lib/auth-maquina'
 import { usaSupabaseLectura, CUENTA } from '@/lib/supabase'
@@ -381,7 +381,7 @@ export async function POST(req) {
         guardarEstado: guardarEstadoFlujo,
         borrarEstado: borrarEstadoFlujo,
         registrarPasos,
-        setTemperatura: updateTemperatura,
+        setEtapa: (tel, etapa) => updateEtapa(tel, etapa, 'flujo', { soloSiVacia: true }),
         avisar: (texto) => enviarTelegram(texto),
         ahora: () => new Date(),
         cuenta: CUENTA,
@@ -391,7 +391,7 @@ export async function POST(req) {
         const c = contactoDe(m.telefono)
         return {
           telefono: m.telefono, nombre: m.nombre, alias: c?.alias || '', phoneId: m.phoneId,
-          temperatura: c?.temperatura || '', tieneVenta: Boolean(c?.idVenta), estado: c?.estado || 'pendiente',
+          etapa: c?.etapa || '', tieneVenta: Boolean(c?.idVenta), estado: c?.estado || 'pendiente',
           // El snapshot es de ANTES de este mensaje: el último entrante es ESTE, ahora.
           ultimoEntranteAt: new Date().toISOString(),
         }
