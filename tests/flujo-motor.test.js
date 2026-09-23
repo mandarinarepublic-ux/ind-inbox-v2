@@ -116,3 +116,16 @@ test('correrTanda: espera las pausas en segundos ANTES de cada pieza y no manda 
   assert.ok(reg.enviadas.every(p => !('_esperaSeg' in p)))
   assert.equal(reg.enviadas[0].ContextoId, 'w')
 })
+
+test('correrTanda: el nodo con "le debemos" prende 📌 (y un fallo no frena el envío)', async () => {
+  const { deps, reg } = depsFalsas()
+  const deudas = []
+  deps.setDeuda = async (_t, nota) => { deudas.push(nota) }
+  const grafo = { nodos: [D({ tipo: 'organico' }), M('a', { etapa: 'cotizando', deuda: 'enviar boceto' }), F], lineas: [L('d', 'a'), L('a', 'f')] }
+  const r = await correrTanda(deps, { flujo: flujo(grafo), desde: desdeD, esDisparo: true, contacto, wamidEntrante: 'w', ultimoWamid: 'w', respuestas: [] })
+  assert.equal(r.salieron, 1)
+  assert.deepEqual(deudas, ['enviar boceto'])
+  deps.setDeuda = async () => { throw new Error('base caída') }
+  const r2 = await correrTanda(deps, { flujo: flujo(grafo), desde: desdeD, esDisparo: true, contacto, wamidEntrante: 'w', ultimoWamid: 'w', respuestas: [] })
+  assert.equal(r2.salieron, 1)
+})

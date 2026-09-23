@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert'
-import { normalizarTexto, nodoDisparador, puertosDe, validarFlujo, choquesDeDisparador, elegirFlujo, caminoLineal, piezasDeNodos, etapaAlPasar, recetaAFlujo, nuevoGrafo, avanzarDesde, evaluarCondicion, puertoDeEntrante, paradaDeCamino, citaDeTanda, ventanaAbierta, horaEcuador, decidirEntranteEnFlujo, decidirVencido, MAX_ESPERA_SEG, MAX_PAUSA_TANDA_SEG } from '../lib/flujo.js'
+import { normalizarTexto, nodoDisparador, puertosDe, validarFlujo, choquesDeDisparador, elegirFlujo, caminoLineal, piezasDeNodos, etapaAlPasar, deudaAlPasar, recetaAFlujo, nuevoGrafo, avanzarDesde, evaluarCondicion, puertoDeEntrante, paradaDeCamino, citaDeTanda, ventanaAbierta, horaEcuador, decidirEntranteEnFlujo, decidirVencido, MAX_ESPERA_SEG, MAX_PAUSA_TANDA_SEG } from '../lib/flujo.js'
 import { MAX_PIEZAS } from '../lib/recetas.js'
 
 const D = (datos) => ({ id: 'd', tipo: 'disparador', pos: { x: 0, y: 0 }, datos })
@@ -17,7 +17,7 @@ test('normalizarTexto: minúsculas, sin acentos, espacios simples', () => {
 })
 test('puertosDe: mensaje simple, con botones, esperando, condición', () => {
   assert.deepEqual(puertosDe(M('a', {})), ['siguiente'])
-  assert.deepEqual(puertosDe(M('a', { botones: [{ title: 'Sí' }, { title: 'No' }] })), ['btn_1', 'btn_2', 'otra'])
+  assert.deepEqual(puertosDe(M('a', { botones: [{ title: 'Sí' }, { title: 'No' }] })), ['btn_1', 'btn_2', 'foto', 'otra'])
   assert.deepEqual(puertosDe(M('a', { esperarRespuesta: true })), ['respuesta'])
   assert.deepEqual(puertosDe({ id: 'c', tipo: 'condicion', datos: { campo: 'temperatura', valor: 'caliente' } }), ['si', 'no'])
 })
@@ -100,7 +100,7 @@ test('caminoLineal: la línea del puerto "otra" nunca se sigue (se detiene en bo
   assert.equal(c.detenidoEn, 'a')
 })
 test('puertosDe: con botones Y esperarRespuesta a la vez, ganan los botones', () => {
-  assert.deepEqual(puertosDe(M('a', { botones: [{ title: 'Sí' }], esperarRespuesta: true })), ['btn_1', 'otra'])
+  assert.deepEqual(puertosDe(M('a', { botones: [{ title: 'Sí' }], esperarRespuesta: true })), ['btn_1', 'foto', 'otra'])
 })
 test('caminoLineal: una línea a un nodo que no existe → huerfano, parado en el último nodo válido', () => {
   const roto = { nodos: [D({ tipo: 'organico' }), M('a', {})], lineas: [L('d', 'a'), { id: 'a-siguiente-x', de: 'a', puerto: 'siguiente', a: 'no-existe', esperaMin: 0 }] }
@@ -353,4 +353,23 @@ test('piezasDeNodos: sin pausas, ninguna pieza lleva el campo interno', () => {
   const piezas = piezasDeNodos({ nodos: [M('a', {}), M('b', {})], respuestas: [], contacto, citaId: 'w1' })
   assert.ok(piezas.every(p => !('_esperaSeg' in p)))
   assert.equal(piezas[0].ContextoId, 'w1')
+})
+
+test('📸 foto en vez de botón: sigue por "foto" SOLO si esa salida tiene línea; si no, "otra" como siempre', () => {
+  const preg = M('preg', { botones: [{ title: '📸 Tengo mi idea' }, { title: '🎁 Es un regalo' }] })
+  assert.equal(puertoDeEntrante(preg, { esFoto: true, conFoto: true }), 'foto')
+  assert.equal(puertoDeEntrante(preg, { esFoto: true, conFoto: false }), 'otra')
+  assert.equal(puertoDeEntrante(preg, { texto: '¿cuánto cuesta?', conFoto: true }), 'otra')
+  assert.equal(puertoDeEntrante(preg, { botonId: 'rc_2', esFoto: false, conFoto: true }), 'btn_2')
+  const ahora = new Date('2026-09-23T15:00:00Z')
+  const estado = { nodo_id: 'preg', esperando: 'boton', vence_at: '2026-09-24T00:00:00Z' }
+  const conLinea = { publicado: true, grafo_vivo: { nodos: [preg], lineas: [{ id: 'l', de: 'preg', a: 'x', puerto: 'foto' }] } }
+  const sinLinea = { publicado: true, grafo_vivo: { nodos: [preg], lineas: [] } }
+  assert.deepEqual(decidirEntranteEnFlujo({ estado, flujo: conLinea, entrante: { esFoto: true }, ahora }).desde.puerto, 'foto')
+  assert.deepEqual(decidirEntranteEnFlujo({ estado, flujo: sinLinea, entrante: { esFoto: true }, ahora }).desde.puerto, 'otra')
+})
+
+test('deudaAlPasar: la última nota no vacía', () => {
+  assert.equal(deudaAlPasar([M('a', { deuda: 'enviar boceto' }), M('b', {}), M('c', { deuda: '  ' })]), 'enviar boceto')
+  assert.equal(deudaAlPasar([M('a', {})]), '')
 })

@@ -260,6 +260,14 @@ function EditorMensaje({ datos, respuestas, onCambiar }) {
           <option value="esperando_pago">{EMOJI_ETAPA.esperando_pago} Esperando pago</option>
         </select>
       </Bloque>
+
+      <Bloque titulo="📌 LE DEBEMOS AL LLEGAR ACÁ">
+        {/* Si este mensaje le PROMETE algo al cliente ("ya se lo paso al diseñador"),
+            anótalo: queda 📌 🤖 en el chat hasta que una persona cumpla. No pisa un 📌
+            que ya exista. Vacío = no anota nada. */}
+        <input value={datos?.deuda || ''} onChange={(e) => onCambiar({ deuda: e.target.value.slice(0, 60) })}
+          placeholder="ej: enviar boceto" style={estiloCampo} />
+      </Bloque>
     </>
   )
 }

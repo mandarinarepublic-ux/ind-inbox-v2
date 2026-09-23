@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
-import { registrarContactoEntrante, getModoIA, getContactos, marcarPush, updateEtapa, marcarReceta } from '@/lib/contactos'
+import { registrarContactoEntrante, getModoIA, getContactos, marcarPush, updateEtapa, updateDeuda, marcarReceta } from '@/lib/contactos'
 import { enviarPush, avisoDeEntrante } from '@/lib/push'
 import { enviarConMaquina } from '@/lib/auth-maquina'
 import { usaSupabaseLectura, CUENTA } from '@/lib/supabase'
@@ -382,6 +382,7 @@ export async function POST(req) {
         borrarEstado: borrarEstadoFlujo,
         registrarPasos,
         setEtapa: (tel, etapa) => updateEtapa(tel, etapa, 'flujo', { soloSiVacia: true }),
+        setDeuda: (tel, nota) => updateDeuda(tel, nota, 'auto', { noPisar: true }),
         avisar: (texto) => enviarTelegram(texto),
         ahora: () => new Date(),
         cuenta: CUENTA,
@@ -413,6 +414,7 @@ export async function POST(req) {
         const entrante = {
           botonId: m.raw?.interactive?.button_reply?.id || '',
           texto: ['text', 'interactive', 'button'].includes(tipoCrudo) ? m.contenido : '',
+          esFoto: tipoCrudo === 'image',
         }
         const d = decidirEntranteEnFlujo({ estado, flujo, entrante, ahora: new Date() })
         if (d.accion === 'borrar') {

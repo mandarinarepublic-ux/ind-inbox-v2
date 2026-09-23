@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getContactos, updateEtapa } from '@/lib/contactos'
+import { getContactos, updateEtapa, updateDeuda } from '@/lib/contactos'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { getRespuestas } from '@/lib/respuestas'
 import { getFlujosPublicadosSupabase } from '@/lib/inbox-supabase'
@@ -65,6 +65,7 @@ export async function GET(req) {
     borrarEstado: borrarEstadoFlujo,
     registrarPasos,
     setEtapa: (tel, etapa) => updateEtapa(tel, etapa, 'flujo', { soloSiVacia: true }),
+    setDeuda: (tel, nota) => updateDeuda(tel, nota, 'auto', { noPisar: true }),
     avisar: (texto) => enviarTelegram(texto),
     ahora: () => new Date(),
     cuenta: CUENTA,
