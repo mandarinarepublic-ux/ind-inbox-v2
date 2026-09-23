@@ -50,7 +50,8 @@ Lo que ve el vendedor en la fila y en la cabecera del chat:
 | 🟢 Atendido | contestamos (humano), o a mano |
 | ⚫ Archivado | a mano |
 
-- Se eliminan como bandeja: 🎧 Soporte (→ etapa 🔁), 📋 Encuesta (→ reactivación), 💰 Venta (→ etapa 🛒).
+- Se eliminan como bandeja: 🎧 Soporte (→ 🔴 + `📌 🎧`, ver 2.4.1), 📋 Encuesta (→ reactivación), 💰 Venta (→ etapa 🛒).
+- **El mensaje de espera de la IA al derivar no cuenta como atendido:** el chat queda 🔴. (Las respuestas normales de la IA siguen como hoy.)
 - **Freno:** marcar 🟢 a mano cuando el último mensaje es del cliente pide confirmar
   ("¿Lo contestaste por otro lado? El cliente escribió de último"). No bloquea: un "gracias 👍"
   no necesita respuesta.
@@ -106,6 +107,23 @@ Lo que ve el vendedor en la fila y en la cabecera del chat:
   "le aviso", "le escribo", "lo reviso con", "ya le consulto", "déjeme verificar". Normaliza
   tildes y mayúsculas; prueba con los textos reales de la revisión.
 - Si ya hay un 📌 encendido, no lo pisa (conserva la nota del vendedor).
+
+#### 2.4.1 La IA deriva a una persona (`📌 🎧`) — reemplaza a la bandeja SOPORTE
+
+Decidido por Rodrigo el 22-sep: se unifica en 🔴 + 📌 🎧.
+
+- Hoy `indx-agent` usa la tool `escalar_a_soporte` cuando no sabe (cambios, envío, pago que no
+  cuadra, reclamo, audio, foto): contesta *"Permíteme un momento, verifico esto y te confirmo
+  enseguida 🖤"* y llama a `/api/contactos/estado` con `estado=SOPORTE` y `modoIA=HUMANO`.
+- Ese mensaje es una **promesa nuestra**. En el modelo nuevo, `estado=SOPORTE` se **traduce en el
+  inbox** (el agente no cambia):
+  - bandeja → **🔴 Pendiente** (aunque el último mensaje sea del bot),
+  - `📌` encendido con `deuda_por='ia'` y nota `IA: <motivo>` (el motivo, si el agente lo manda; si no, "IA derivó"),
+  - `modo_ia = HUMANO` (igual que hoy).
+- Se ve como `📌 🎧 IA: foto`. Filtro propio **🎧 "La IA te pasó estos chats"**.
+- La alerta 🔴 "cliente esperando" corre desde el mensaje del cliente, como siempre.
+- SOPORTE ya **no** dispara InitiateCheckout (la mayoría son postventa/reclamos).
+- Pendiente opcional: que el agente mande el motivo en la llamada (hoy no lo manda).
 
 ### 2.5 🤫 Sin automáticos
 
@@ -166,7 +184,7 @@ alter table inbox.conversaciones
   add column etapa_por text check (etapa_por in ('humano','flujo')),
   add column etapa_at timestamptz,
   add column deuda_nota text,          -- 📌 encendido ⇔ deuda_at no nulo
-  add column deuda_por text check (deuda_por in ('humano','auto')),
+  add column deuda_por text check (deuda_por in ('humano','auto','ia')),
   add column deuda_at timestamptz,
   add column sin_automaticos boolean not null default false,
   add column tipo_contacto text not null default 'cliente' check (tipo_contacto in ('cliente','interno'));
