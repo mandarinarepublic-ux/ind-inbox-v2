@@ -95,7 +95,8 @@ export async function GET(req) {
       // RESERVAR antes de enviar (I1): si otra corrida ya lo tomó o el cliente
       // escribió entre medio, no se manda nada.
       const reservado = await reclamarReactivacion(c.telefono, {
-        nEsperado: c.reactivacionN || 0, nNuevo: d.nNuevo, ultimoEntranteAt: c.ultimoEntranteAt,
+        nEsperado: c.reactivacionN || 0, nNuevo: d.nNuevo,
+        ultimoEntranteAt: c.ultimoEntranteAt, ultimoHumanoAt: c.ultimoHumanoAt,
       }).catch(e => { console.error('[cron seguimientos] reservar reactivación:', c.telefono, e.message); return false })
       if (!reservado) continue
       yaEscritos.add(c.telefono)

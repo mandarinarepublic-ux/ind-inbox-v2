@@ -120,9 +120,10 @@ test('nombre de pila: alias primero; "Mamá", emojis o frases no se usan', () =>
 })
 
 test('parámetros editables desde AUTOS, con límites seguros', () => {
-  assert.deepEqual(parametrosReactivacion({}), { horas: [3, 12, 20], silencioMinH: 3, entreToquesH: 4, horaDesde: 8, horaHasta: 22 })
-  const p = parametrosReactivacion({ horas: [20, '5', 5, 0, 30, 'x'], silencio_min_h: 0, entre_toques_h: 99, hora_desde: 2, hora_hasta: 23 })
-  assert.deepEqual(p.horas, [5, 20])          // sin repetidos, sin 0 ni 30, ordenadas
+  assert.deepEqual(parametrosReactivacion({}), { horas: [3, 12, 20], indiceTexto: [0, 1, 2], silencioMinH: 3, entreToquesH: 4, horaDesde: 8, horaHasta: 22 })
+  const p = parametrosReactivacion({ horas: [20, '5', 5], silencio_min_h: 0, entre_toques_h: 99, hora_desde: 2, hora_hasta: 23 })
+  assert.deepEqual(p.horas, [5, 20])          // sin repetidos, ordenadas
+  assert.deepEqual(p.indiceTexto, [1, 0])     // cada hora con el texto que tenía al lado
   assert.equal(p.silencioMinH, 1)
   assert.equal(p.entreToquesH, 12)
   assert.equal(p.horaDesde, 6)                // nunca antes de las 06:00
@@ -134,4 +135,9 @@ test('las horas editadas se respetan', () => {
   assert.equal(decidirReactivacion({ config: cfg, contacto: base, ahoraMs: AHORA }), null)   // h=3.5 < 5
   const c = { ...base, ultimoEntranteAt: hace(5.5), ultimoHumanoAt: hace(5) }
   assert.equal(decidirReactivacion({ config: cfg, contacto: c, ahoraMs: AHORA }).toque, 1)
+})
+
+test('horas escritas en desorden: cada hora sale con el texto que tenía al lado', () => {
+  const cfg = { ...config, reactivacion: { activo: true, horas: [12, 3, 20], textos: { cotizando: ['texto de 12 h', 'texto de 3 h', 'texto de 20 h'] } } }
+  assert.equal(decidirReactivacion({ config: cfg, contacto: base, ahoraMs: AHORA }).texto, 'texto de 3 h')
 })
