@@ -118,11 +118,15 @@ Lo que ve el vendedor en la fila y en la cabecera del chat:
 
 - Último pedido no cancelado del cliente, en **cualquier tienda**, cruzado por los últimos 9
   dígitos (`crm.cliente_conversacion.telefono`, `crm.clientes.celular`) o por `id_venta`.
-- Chip: `💳 Saldo $X` (estado_pago ABONO) · `🏭 En fábrica` (EN_FABRICA) · `🚚 Despacho` · `✅ Completado`.
+- Chip según `estado_pedido`:
+  - `EN_FABRICA` → `🏭 En fábrica`
+  - `DESPACHO` → `📦 Por despachar` (supuesto: listo, todavía no sale; confirmar)
+  - `COMPLETADO` → `🚚 Despachado` (**confirmado por Rodrigo 22-sep: COMPLETADO = ya se despachó**). Se muestra 7 días desde `fecha_actualizacion` y luego se oculta.
+  - `ENTREGADO` → no se muestra · `CANCELADO` → se ignora (se busca el anterior).
+  - Aparte, si `estado_pago = ABONO`: `💳 Saldo $X` (`monto_pendiente`), en cualquier estado.
 - Se arma **en la base** (vista `inbox.pedido_por_telefono`), una lectura por ciclo, nunca chat por chat.
-- ⚠️ `guia_numero` está vacío en los pedidos revisados: 🚚 con guía no puede ser automático hasta que despacho la cargue.
-- ❓ **Abierto:** ¿`COMPLETADO` = entregado o = listo en fábrica? Define cuándo desaparece ✅
-  (propuesta: si es entregado, 7 días; si es listo, hasta ENTREGADO).
+- ⚠️ `guia_numero` está vacío en los pedidos revisados: el número de guía no puede mostrarse hasta que despacho lo cargue (el 🚚 sí sale, del estado).
+- Regla para el vendedor: **nunca decir "ya fue enviado" sin ver 🚚 Despachado.**
 
 ### 2.7 Tipo de contacto
 
