@@ -10,6 +10,7 @@ import { etiquetaPedido, etapaVigente, tail9 } from '@/lib/etiqueta-crm'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
 import { citaUnaVez } from '@/lib/cita'
+import { claveRespuesta, decidirRespuestaRapida, haceTexto } from '@/lib/respuesta-repetida'
 import { debePausar, hayNovedad, EVENTOS_ACTIVIDAD } from '@/lib/inactividad'
 import { pestanaGuardada } from '@/lib/pestana'
 import { fusionarHilo } from '@/lib/hilo-historico'
@@ -296,6 +297,10 @@ export default function App() {
   // al cliente le llegaba todo mezclado. Acá lo que se clickea primero sale primero y
   // COMPLETO antes de que empiece lo siguiente. Chats distintos no se esperan entre sí.
   const colaRef        = useRef({})
+  // Respuestas rápidas por "cliente|respuesta": { estado: 'enviando'|'enviada'|'fallida', at }.
+  // Es un ref y NO estado a propósito: el candado tiene que cerrarse en el MISMO
+  // clic, sin esperar a que React vuelva a pintar. Ver lib/respuesta-repetida.js.
+  const rapidasRef     = useRef({})
   const seenRef        = useRef(null) // { telefono: epochMs } — última vez que se vio cada chat
   // Hilos completos ya descargados, por teléfono (carga por chat: /api/hilo).
   // La lista lateral solo trae el ÚLTIMO mensaje de cada conversación, así que el
@@ -1718,6 +1723,26 @@ export default function App() {
     const nombre   = activeConv.nombre
     const estadoDestino = estadoAlResponder(currentStatus)
 
+    // ☠️ Que un clic de más no mande la respuesta DOS veces (lib/respuesta-repetida.js):
+    // en 30 días salió 17 veces repetida al mismo cliente, a veces con 10 fotos.
+    // Esto corre ANTES de cualquier `await`, así que el candado queda puesto en el
+    // mismo clic: un segundo clic, venga del panel o del cajón del celular, ya lo ve.
+    // Si se frena, se sale ANTES de tocar la cita: no se mandó nada.
+    const clave = claveRespuesta(telefono, reply)
+    const decision = decidirRespuestaRapida({
+      registro: rapidasRef.current[clave], msgs: activeConv.msgs, reply, ahora: Date.now(),
+    })
+    if (decision.accion === 'en_vuelo') {
+      setToast({ ok: false, msg: 'Esa respuesta ya se está enviando a este cliente' })
+      setTimeout(() => setToast(null), 3000)
+      return
+    }
+    if (decision.accion === 'confirmar' &&
+        !window.confirm(`Ya le mandaste esta respuesta a este cliente hace ${haceTexto(decision.haceMs)}.\n\n¿Mandarla OTRA VEZ?`)) {
+      return
+    }
+    rapidasRef.current[clave] = { estado: 'enviando', at: Date.now() }
+
     // La cita se toma ANTES de limpiarla y se congela acá, igual que el teléfono:
     // si el envío espera turno en la fila, la barra ya no está en pantalla pero el
     // wamid citado tiene que viajar igual.
@@ -1759,57 +1784,68 @@ export default function App() {
       // Si CUALQUIER pieza de la respuesta rápida falla, el chat no puede quedar
       // como atendido: al cliente le llegó media respuesta o ninguna.
       let todoOk = true
-      const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
-      if (botones.length && reply.text) {
-        // Respuesta rápida CON botones interactivos
-        const validBtns = botones.map((t, i) => ({ id: `btn_${i + 1}`, title: t }))
-        // El servidor guarda SOLO el cuerpo en `mensaje`; los botones van aparte en `botones`
-        // (así el texto optimista coincide con lo guardado → la reconciliación descarta el
-        // temporal sin duplicar, y la burbuja pinta los botones desde `botones`).
-        const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now(), contextoId: citaOriginal }
-        setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
-        pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
-        // Se ESPERA (antes iba suelto): las fotos tienen que salir después del texto.
-        const r = await sendInteractiveButtons(telefono, nombre, reply.text, validBtns, tomarCita()).catch(() => null)
-        if (!r || r.ok === false) { todoOk = false; marcarFallido(telefono, tmpMsg.id) }
-        avanzar()
-      } else if (reply.text) {
-        // enviarTextoSuelto ya marca su propia burbuja si falla.
-        const r = await enviarTextoSuelto(telefono, nombre, reply.text, tomarCita())
-        if (!r || r.ok === false) todoOk = false
-        avanzar()
-      }
-
-      // Envía las imágenes en orden (WhatsApp respeta el orden de llegada). La pausa
-      // era de 800 ms cuando cada envío tardaba segundos; ahora que van por media id
-      // alcanza con un respiro corto.
-      const ids = await idsPromesa
-      for (let i = 0; i < adjuntos.length; i++) {
-        const a = adjuntos[i]
-        let ok
-        if (a.tipo === 'documento') {
-          // ⚠️ Esta rama va ANTES del `else` de imagen a proposito: sin ella el
-          // documento caeria ahi y se mandaria como FOTO. Meta lo rechazaria y
-          // el vendedor no se enteraria.
-          const r = await enviarDocumentoUrl(telefono, nombre, a.url, a.nombre, tomarCita())
-          ok = r?.ok !== false
-        } else if (a.tipo === 'audio') {
-          // El audio de una respuesta rápida YA está en OGG/Opus: se convirtió una
-          // sola vez, al guardar la respuesta. Acá solo se manda el link, así que
-          // sale tan rápido como una foto cacheada.
-          const r = await enviarAudioUrl(telefono, nombre, a.url, tomarCita())
-          ok = r?.ok !== false
-        } else {
-          ok = await sendImageUrl(telefono, nombre, a.url, ids[a.url] || '', tomarCita())
+      try {
+        const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
+        if (botones.length && reply.text) {
+          // Respuesta rápida CON botones interactivos
+          const validBtns = botones.map((t, i) => ({ id: `btn_${i + 1}`, title: t }))
+          // El servidor guarda SOLO el cuerpo en `mensaje`; los botones van aparte en `botones`
+          // (así el texto optimista coincide con lo guardado → la reconciliación descarta el
+          // temporal sin duplicar, y la burbuja pinta los botones desde `botones`).
+          const tmpMsg = { id: 'tmp_' + Date.now(), telefono, nombre, mensaje: reply.text, botones: validBtns, direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now(), contextoId: citaOriginal }
+          setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+          pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
+          // Se ESPERA (antes iba suelto): las fotos tienen que salir después del texto.
+          const r = await sendInteractiveButtons(telefono, nombre, reply.text, validBtns, tomarCita()).catch(() => null)
+          if (!r || r.ok === false) { todoOk = false; marcarFallido(telefono, tmpMsg.id) }
+          avanzar()
+        } else if (reply.text) {
+          // enviarTextoSuelto ya marca su propia burbuja si falla.
+          const r = await enviarTextoSuelto(telefono, nombre, reply.text, tomarCita())
+          if (!r || r.ok === false) todoOk = false
+          avanzar()
         }
-        if (!ok) todoOk = false
-        avanzar()
-        if (i < adjuntos.length - 1) await new Promise(r => setTimeout(r, 150))
-      }
 
-      if (todoOk) changeStatus(telefono, estadoDestino)
-      else { setToast({ ok: false, error: 'La respuesta rápida no salió completa' }); setTimeout(() => setToast(null), 4000) }
-      setTimeout(load, 4000)
+        // Envía las imágenes en orden (WhatsApp respeta el orden de llegada). La pausa
+        // era de 800 ms cuando cada envío tardaba segundos; ahora que van por media id
+        // alcanza con un respiro corto.
+        const ids = await idsPromesa
+        for (let i = 0; i < adjuntos.length; i++) {
+          const a = adjuntos[i]
+          let ok
+          if (a.tipo === 'documento') {
+            // ⚠️ Esta rama va ANTES del `else` de imagen a proposito: sin ella el
+            // documento caeria ahi y se mandaria como FOTO. Meta lo rechazaria y
+            // el vendedor no se enteraria.
+            const r = await enviarDocumentoUrl(telefono, nombre, a.url, a.nombre, tomarCita())
+            ok = r?.ok !== false
+          } else if (a.tipo === 'audio') {
+            // El audio de una respuesta rápida YA está en OGG/Opus: se convirtió una
+            // sola vez, al guardar la respuesta. Acá solo se manda el link, así que
+            // sale tan rápido como una foto cacheada.
+            const r = await enviarAudioUrl(telefono, nombre, a.url, tomarCita())
+            ok = r?.ok !== false
+          } else {
+            ok = await sendImageUrl(telefono, nombre, a.url, ids[a.url] || '', tomarCita())
+          }
+          if (!ok) todoOk = false
+          avanzar()
+          if (i < adjuntos.length - 1) await new Promise(r => setTimeout(r, 150))
+        }
+
+        if (todoOk) changeStatus(telefono, estadoDestino)
+        else { setToast({ ok: false, error: 'La respuesta rápida no salió completa' }); setTimeout(() => setToast(null), 4000) }
+        setTimeout(load, 4000)
+      } catch (e) {
+        todoOk = false
+        throw e
+      } finally {
+        // Salió completa → se recuerda para preguntar si la vuelven a apretar.
+        // Si falló (toda o una parte) se anota como 'fallida': el próximo clic
+        // la manda sin preguntar, aunque el texto ya esté en el hilo — mandarla
+        // de nuevo es justo lo que el vendedor tiene que poder hacer.
+        rapidasRef.current[clave] = { estado: todoOk ? 'enviada' : 'fallida', at: Date.now() }
+      }
     })
   }
 
