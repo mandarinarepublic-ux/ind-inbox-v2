@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getContactos, marcarAvisoTelegram } from '@/lib/contactos'
 import { enviarTelegram, telegramConfigurado } from '@/lib/telegram'
 import { chatsQueAvisar, textoAviso, enHorarioLaboral, partirPorAntiguedad } from '@/lib/pendientes'
+import { autorizadoCron } from '@/lib/cron-auth'
 
 // Recordatorio de chats sin contestar, por Telegram. Lo llama Vercel Cron cada
 // 5 min (ver vercel.json). Puerto 1:1 desde wa-inbox-next (MANDARINA), con el
@@ -30,26 +31,8 @@ const BASE_URL = String(process.env.INBOX_URL || 'https://ind-inbox.apps.mandari
   .replace(/[^\x21-\x7E]/g, '')   // por si la variable llega con BOM desde PowerShell
   .replace(/\/+$/, '')            // sin barra final: el link ya la pone
 
-function autorizado(req) {
-  const secret = process.env.CRON_SECRET
-  const auth = req.headers.get('authorization') || ''
-  const keyQ = new URL(req.url).searchParams.get('key')
-  // ⚠️ La cabecera `x-vercel-cron` NO alcanza por sí sola cuando hay secreto: no
-  // está documentada como imposible de falsificar, y aceptarla primero dejaba la
-  // ruta abierta a cualquiera que supiera el path. Con secreto configurado manda
-  // el secreto —que Vercel manda solo en los crons de verdad—; sin secreto, la
-  // cabecera es lo único que hay y ahí sí vale.
-  //
-  // IND hoy NO tiene CRON_SECRET configurado (verificado el 13-ago-2026), así que
-  // este cron arranca en la rama "sin secreto" — igual de segura porque Vercel es
-  // el único que manda esa cabecera, pero lista para endurecerse solo con crear la
-  // variable, sin tocar código. Copiado de la versión ENDURECIDA de MANDI, no de
-  // `app/api/cron/seguimientos/route.js` de este mismo repo, que acepta
-  // `x-vercel-cron` SIEMPRE que esté presente, tenga o no secreto — esa es la forma
-  // permisiva vieja, y no se toca acá.
-  if (secret) return auth === `Bearer ${secret}` || keyQ === secret
-  return req.headers.get('x-vercel-cron') != null
-}
+// Quién puede disparar este cron: una sola regla para todos (lib/cron-auth.js).
+const autorizado = (req) => autorizadoCron(req)
 
 export async function GET(req) {
   if (!autorizado(req)) {

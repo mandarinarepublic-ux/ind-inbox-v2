@@ -7,6 +7,7 @@ import { decidirSeguimiento } from '@/lib/decidir-seguimiento'
 import { cuerpoSeguimiento } from '@/lib/seguimiento-envio'
 import { cabecerasMaquina } from '@/lib/auth-maquina'
 import { urlPropia } from '@/lib/url-propia'
+import { autorizadoCron } from '@/lib/cron-auth'
 
 // Cron de SEGUIMIENTOS automáticos: la ENCUESTA DE REACTIVACIÓN para chats
 // atendidos que se quedaron callados (las reglas por temperatura se quitaron el
@@ -32,15 +33,8 @@ import { urlPropia } from '@/lib/url-propia'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-function autorizado(req) {
-  const secret = process.env.CRON_SECRET
-  const auth = req.headers.get('authorization') || ''
-  const isVercelCron = req.headers.get('x-vercel-cron') != null // Vercel lo pone solo en crons reales
-  const keyQ = new URL(req.url).searchParams.get('key')
-  if (isVercelCron) return true
-  if (secret && (auth === `Bearer ${secret}` || keyQ === secret)) return true
-  return false
-}
+// Quién puede disparar este cron: una sola regla para todos (lib/cron-auth.js).
+const autorizado = (req) => autorizadoCron(req)
 
 export async function GET(req) {
   if (!autorizado(req)) {
