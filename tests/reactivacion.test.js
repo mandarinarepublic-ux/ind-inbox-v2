@@ -141,3 +141,24 @@ test('horas escritas en desorden: cada hora sale con el texto que tenía al lado
   const cfg = { ...config, reactivacion: { activo: true, horas: [12, 3, 20], textos: { cotizando: ['texto de 12 h', 'texto de 3 h', 'texto de 20 h'] } } }
   assert.equal(decidirReactivacion({ config: cfg, contacto: base, ahoraMs: AHORA }).texto, 'texto de 3 h')
 })
+
+test('26-sep: quien solo PREGUNTÓ (sin etapa) recibe los toques de 12 h y 23 h solo si se pidió', () => {
+  const cfg = { ia: { principal: false, secundario: false }, reactivacion: { activo: true, incluir_sin_etapa: true, horas: [12, 23] } }
+  const c12 = { ...base, etapa: '', etapaAt: null, ultimoEntranteAt: hace(12.5), ultimoHumanoAt: hace(12.2) }
+  const d = decidirReactivacion({ config: cfg, contacto: c12, ahoraMs: AHORA })
+  assert.equal(d.etapa, 'pregunto')
+  assert.match(d.texto, /^¡Hola Andrea! 👋 Me preguntaste/)
+  const d2 = decidirReactivacion({ config: cfg, contacto: { ...c12, ultimoEntranteAt: hace(23.2), reactivacionN: 1, reactivacionAt: hace(11) }, ahoraMs: AHORA })
+  assert.equal(d2.toque, 2)
+  assert.match(d2.texto, /IND10/)
+  // sin la opción, igual que antes: sin etapa no se escribe
+  assert.equal(decidirReactivacion({ config: { ...cfg, reactivacion: { activo: true, horas: [12, 23] } }, contacto: c12, ahoraMs: AHORA }), null)
+  // postventa / falta pedido nunca
+  assert.equal(decidirReactivacion({ config: cfg, contacto: { ...c12, etapa: 'postventa' }, ahoraMs: AHORA }), null)
+})
+
+test('26-sep: solo_canales deja fuera un número caído', () => {
+  const cfg = { ia: { principal: false, secundario: false }, reactivacion: { activo: true, solo_canales: ['1153686904504422'] } }
+  assert.ok(decidirReactivacion({ config: cfg, contacto: base, ahoraMs: AHORA }))
+  assert.equal(decidirReactivacion({ config: cfg, contacto: { ...base, phoneId: '2241248862581450' }, ahoraMs: AHORA }), null)
+})
