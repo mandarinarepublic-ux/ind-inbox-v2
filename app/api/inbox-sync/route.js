@@ -64,7 +64,8 @@ export async function GET(req) {
       // 304 sin cuerpo: cero bytes de Fast Origin Transfer.
       return new Response(null, {
         status: 304,
-        headers: { ETag: etagActual, 'Cache-Control': 'no-store' },
+        // El commit va también en el 304: con la bandeja quieta casi todo es 304.
+        headers: { ETag: etagActual, 'Cache-Control': 'no-store', 'X-Build': process.env.VERCEL_GIT_COMMIT_SHA || '' },
       })
     }
 
@@ -85,7 +86,7 @@ export async function GET(req) {
       contarPendientesPorCanalSupabase().catch(() => ({})),
     ])
     // `v` va en el cuerpo: es de donde el cliente la toma para la próxima vuelta.
-    return NextResponse.json({ lista, rows, contactos, pendientes, v: etagActual }, {
+    return NextResponse.json({ lista, rows, contactos, pendientes, v: etagActual, build: process.env.VERCEL_GIT_COMMIT_SHA || '' }, {
       // Cache COMPARTIDO en el edge: varias pestañas que pollean dentro de la misma
       // ventana comparten UNA ejecución de origen. El caché se indexa por URL, y
       // `canal` va en la query, así que cada bandeja tiene su entrada y no se pisan.

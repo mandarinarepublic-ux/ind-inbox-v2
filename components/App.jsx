@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza } from '@/lib/api-client'
+import { fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { ETAPAS, chipsDeChat, alertaVentanaCierra, necesitaConfirmarAtendido } from '@/lib/gestion'
 import { FILTRO_INICIAL, prepararVista, alternar, pasaFiltro, conteos, compararEspera } from '@/lib/filtro-chats'
@@ -229,6 +229,7 @@ export default function App() {
   const [search,       setSearch]       = useState('')
   const [searchMode,   setSearchMode]   = useState('contacto') // 'contacto' | 'mensaje'
   const [toast,        setToast]        = useState(null)
+  const [versionNueva, setVersionNueva] = useState(false)
   const [showSidebar,  setShowSidebar]  = useState(true)
   const [showRight,    setShowRight]    = useState(false)
   const [rightWidth,   setRightWidth]   = useState(300) // ancho del panel derecho (px), redimensionable
@@ -545,6 +546,14 @@ export default function App() {
     // UN request por ciclo (antes 3: lista+mensajes+contactos → /api/inbox-sync).
     // null (error) → se conservan los datos previos, no parpadea a blanco.
     const sync   = await fetchInboxSync({ sinCache })
+    // Versión nueva: sin chat abierto, sin borrador y sin envíos en vuelo → se
+    // recarga SOLA. Si estás trabajando, queda un chip chico en la esquina.
+    if (hayVersionNueva()) {
+      const libre = !activeRef.current && !String(taRef.current?.value || '').trim() &&
+        Object.keys(pendingRef.current).length === 0 && Object.keys(colaRef.current).length === 0
+      if (libre) { window.location.reload(); return }
+      setVersionNueva(true)
+    }
     const lista  = sync?.lista ?? null
     const rows   = sync?.rows ?? null
     const ctList = sync?.contactos ?? null
@@ -668,7 +677,8 @@ export default function App() {
     const stop  = () => { clearInterval(pollRef.current); pollRef.current = null }
     const onVisibility = () => { if (document.hidden) stop(); else { despertar(); start() } }
     load()
-    start()
+    // Si la app se abrió ya oculta, no se arranca el poll hasta que se vea.
+    if (!document.hidden) start()
     document.addEventListener('visibilitychange', onVisibility)
     for (const ev of EVENTOS_ACTIVIDAD) window.addEventListener(ev, despertar, { passive: true })
     return () => {
@@ -737,7 +747,13 @@ export default function App() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const tel = new URLSearchParams(window.location.search).get('tel')
-    if (tel) pedidoRef.current = tel
+    if (tel) {
+      pedidoRef.current = tel
+      // Se consume UNA vez: si se queda en la URL, cada recarga vuelve a saltar.
+      const u = new URL(window.location.href)
+      u.searchParams.delete('tel')
+      window.history.replaceState(window.history.state, '', u.toString())
+    }
     if (!('serviceWorker' in navigator)) return
     const onMsg = (ev) => {
       if (ev.data?.tipo === 'abrir-chat' && ev.data.tel) pedidoRef.current = ev.data.tel
@@ -784,6 +800,14 @@ export default function App() {
     // formulario se pierde. Volver a tocar el número que YA estás atendiendo no
     // pierde nada, así que el guard solo corre cuando el canal cambia de verdad.
     if (id !== canal && !puedoDejarLaConversacion(null)) return false
+    // ☠️ Los envíos en fila leen el número de salida AL SALIR, no al encolar:
+    // cambiar de número a mitad de una respuesta rápida con fotos mandaba las que
+    // faltaban por el OTRO número. Mientras haya envíos en vuelo, no se cambia.
+    if (id !== canal && Object.keys(colaRef.current).length > 0) {
+      setToast({ ok: false, error: 'Espera a que termine de enviarse antes de cambiar de número' })
+      setTimeout(() => setToast(null), 3500)
+      return false
+    }
     setVista('CHAT')
     if (id === canal) return true
     setCanalActivo(id)        // manda a api-client: lecturas y envíos van por acá
@@ -889,13 +913,13 @@ export default function App() {
 
   // Y el efecto de guardar SALTA su primera corrida: si no, escribiría el valor
   // por defecto encima de lo guardado cuando no hay nada que restaurar.
-  const yaGuardeUnaVez = useRef(false)
-  useEffect(() => {
-    if (!yaGuardeUnaVez.current) { yaGuardeUnaVez.current = true; return }
-    if (!CANALES.map(c => c.id).includes(canal)) return
-    try { localStorage.setItem(CANAL_KEY, canal) } catch { /* modo privado */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canal])
+  // ☠️ Se recuerda SOLO lo que el vendedor eligió con un CLIC. Antes se guardaba
+  // cualquier cambio, también los saltos automáticos (aviso push, CONTACTOS): un
+  // aviso del otro número dejaba la app arrancando ahí en cada recarga.
+  const recordarCanal = (id) => {
+    if (!CANALES.map(c => c.id).includes(id)) return
+    try { localStorage.setItem(CANAL_KEY, id) } catch { /* modo privado */ }
+  }
 
   // ☠️ La restauración pasa por `cambiarCanal`, NUNCA por `setCanal` a mano.
   // Esa función es la que además mueve el canal del módulo de envíos
@@ -1992,6 +2016,13 @@ export default function App() {
       {/* Va lo primero y fuera de todo layout: es fixed y tiene que verse aunque
           la pantalla esté en cualquier pestaña o con el cajón móvil abierto. */}
       <AvisoSesion />
+      {versionNueva && (
+        <button onClick={() => window.location.reload()} title="Hay una versión nueva del inbox. Se recarga sola cuando cierres el chat; o toca para recargar ya." style={{
+          position:'fixed', bottom:10, left:10, zIndex:9999, background:'rgba(255,255,255,.08)',
+          color:'#f5efe6', border:'1px solid rgba(245,239,230,.25)', borderRadius:14,
+          padding:'3px 10px', fontWeight:600, fontSize:11, cursor:'pointer', fontFamily:'inherit',
+        }}>🔄 versión nueva</button>
+      )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -2065,7 +2096,7 @@ export default function App() {
             const activo = vista === 'CHAT' && canal === c.id
             const n = pendientes[c.phoneId] || 0
             return (
-              <button key={c.id} onClick={() => cambiarCanal(c.id)} title={c.titulo} style={{
+              <button key={c.id} onClick={() => { if (cambiarCanal(c.id)) recordarCanal(c.id) }} title={c.titulo} style={{
                 padding:'4px 12px', border:'none', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, height:'100%',
                 display:'flex', alignItems:'center', gap:6,
                 background: activo ? 'rgba(244,241,236,.1)' : 'transparent',
