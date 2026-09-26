@@ -28,6 +28,7 @@ import { decidirArrastre } from '@/lib/arrastre'
 import { decidirPegado, decidirAdjuntos, TOPE_FOTOS } from '@/lib/adjuntos'
 import { piezasDeReenvio, destinosParaReenviar, resumenDeReenvio } from '@/lib/reenvio'
 import nextDynamic from 'next/dynamic'
+import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
 
 // ☠️ FLUJOS SE CARGA APARTE Y SOLO AL ENTRAR. React Flow pesa ~150 kB gz: metido
 // en el bundle principal, lo pagaría cada vendedor en cada carga del inbox aunque
@@ -2169,7 +2170,7 @@ export default function App() {
                   const canalLabel    = isSearching ? canalEtiquetaDe(conv.telefono) : null
                   const canalDistinto = isSearching && canalLabel !== null && canalDePhoneId(contacts[conv.telefono]?.phoneId) !== canal
                   return (
-                    <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono) }} isActive={active===conv.telefono} onClick={() => irAResultadoBusqueda(conv.telefono)}
+                    <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono), username: contacts[conv.telefono]?.username || '' }} isActive={active===conv.telefono} onClick={() => irAResultadoBusqueda(conv.telefono)}
                       search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} chips={chipsDeChat(datosGestion(conv.telefono), ahora)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
                       canalLabel={canalLabel} canalDistinto={canalDistinto} />
                   )
@@ -2237,7 +2238,7 @@ export default function App() {
                   <Avatar name={displayName(activeConv.telefono)} phone={activeConv.telefono} size={34} />
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontWeight:800, color:C.cream, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:160 }}>{displayName(activeConv.telefono)}</div>
-                    <div style={{ fontSize:9, color:C.creamFaint }}>+{activeConv.telefono}</div>
+                    <div style={{ fontSize:9, color:C.creamFaint }}>{etiquetaTelefono(activeConv.telefono, contacts[activeConv.telefono]?.username)}</div>
                   </div>
                 </div>
                 <div className="chat-actions" style={{ display:'flex', alignItems:'center', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>

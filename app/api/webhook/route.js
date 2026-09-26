@@ -18,6 +18,7 @@ import { elegirFlujo, caminoLineal, decidirEntranteEnFlujo } from '@/lib/flujo'
 import { correrTanda } from '@/lib/flujo-motor'
 import { getEstadoFlujo, guardarEstadoFlujo, borrarEstadoFlujo, registrarPasos } from '@/lib/flujos'
 import { getRespuestas } from '@/lib/respuestas'
+import { identificadorEntrante, perfilesDeContactos } from '@/lib/cliente-sin-telefono'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
 
@@ -295,8 +296,9 @@ export async function POST(req) {
         // responder. Meta ya lo manda en cada evento y hasta ahora lo tirábamos.
         const phoneId  = value?.metadata?.phone_number_id || ''
         const contacts = value?.contacts || []
-        const nombreDe = {}
-        for (const c of contacts) nombreDe[c.wa_id] = c.profile?.name || ''
+        // Por teléfono (wa_id) o, si el cliente escribe con nombre de usuario y sin
+        // número, por su BSUID (user_id). Ver lib/cliente-sin-telefono.js.
+        const perfiles = perfilesDeContactos(contacts)
 
         // Estados de entrega (✓✓) de mensajes que ENVIAMOS.
         for (const st of value?.statuses || []) {
@@ -304,12 +306,13 @@ export async function POST(req) {
         }
 
         for (const msg of value?.messages || []) {
-          const telefono = String(msg.from || '')
+          const telefono = identificadorEntrante(msg)   // teléfono, o BSUID si no dio número
           const { tipo, contenido, mediaId, contextoId, referral } = extraer(msg)
           nuevos.push({
             wamid: msg.id || '',
             telefono,
-            nombre: nombreDe[telefono] || '',
+            nombre: perfiles[telefono]?.nombre || '',
+            username: perfiles[telefono]?.username || '',
             tipo, contenido, mediaId, contextoId, referral, phoneId,
             raw: msg, // respaldo: objeto crudo del mensaje tal cual de Meta
             fecha: msg.timestamp ? new Date(Number(msg.timestamp) * 1000).toISOString() : new Date().toISOString(),
@@ -561,7 +564,7 @@ export async function POST(req) {
         }
 
         // Upsert del contacto (no pisa nombre/alias editados a mano)
-        try { await registrarContactoEntrante(m.telefono, m.nombre, m.telefono) }
+        try { await registrarContactoEntrante(m.telefono, m.nombre, m.telefono, m.username) }
         catch (e) { console.error('[/api/webhook] contacto:', e.message) }
 
         // ── Señales a Meta (Conversions API) ─────────────────────────────────

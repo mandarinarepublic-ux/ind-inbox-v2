@@ -5,6 +5,7 @@ import { limpiarPush, revisarPromesa, marcarRespuestaHumana } from '@/lib/contac
 import { borrarEstadoFlujo } from '@/lib/flujos'
 import { resolverMediaId, invalidarMediaId, esErrorDeMediaId, urlLiviana, META_PHONE_ID } from '@/lib/media-id'
 import { CANALES } from '@/lib/canales'
+import { destinoMeta, esBsuid } from '@/lib/cliente-sin-telefono'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -33,13 +34,18 @@ const canalDe = (body) => {
 const urlGraph = (phoneId) => `https://graph.facebook.com/v19.0/${phoneId}/messages`
 
 const soloDigitos = (s) => String(s || '').replace(/\D/g, '')
+// El teléfono con que se guarda el saliente: el BSUID tal cual (es la clave de su
+// conversación) o los dígitos de siempre.
+const telDe = (body) => esBsuid(body?.Telefono) ? String(body.Telefono).trim() : soloDigitos(body?.Telefono)
 
 // La conversión URL → media_id (descarga + subida a Meta + caché) vive en
 // lib/media-id.js: la comparten esta ruta y /api/media/precache.
 
 // Traduce el body del cliente → { payload Graph, tipo, contenido, mediaUrl, mediaId }
 function construir(body) {
-  const to = soloDigitos(body.Telefono)
+  // A quién: `to` con teléfono (el camino de siempre) o `recipient` con BSUID
+  // (cliente con nombre de usuario, sin número). lib/cliente-sin-telefono.js.
+  const dest = destinoMeta(body.Telefono)
 
   // Plantilla (HSM) — único formato permitido FUERA de la ventana de 24h.
   if (body.TipoMensaje === 'template') {
@@ -66,7 +72,7 @@ function construir(body) {
       mediaUrl: '', mediaId: '',
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'template',
         template: { name, language: { code }, ...(components.length ? { components } : {}) },
       },
@@ -87,7 +93,7 @@ function construir(body) {
       mediaUrl: '', mediaId: '',
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'interactive',
         interactive: {
           type: 'button',
@@ -105,7 +111,7 @@ function construir(body) {
       contenido: '', mediaUrl: '', mediaId: body.VideoMediaId,
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'video',
         video: { id: body.VideoMediaId },
       },
@@ -121,7 +127,7 @@ function construir(body) {
       contenido: '', mediaUrl: body.VideoURL, mediaId: '',
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'video',
         video: { link: body.VideoURL },
       },
@@ -146,7 +152,7 @@ function construir(body) {
       contenido: '', mediaUrl: body.AudioURL, mediaId: '',
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'audio',
         audio: { link: body.AudioURL },
       },
@@ -172,7 +178,7 @@ function construir(body) {
       mediaUrl: body.DocURL, mediaId: '',
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'document',
         document: {
           link: body.DocURL,
@@ -190,7 +196,7 @@ function construir(body) {
       contenido: '', mediaUrl: body.AudioURL || '', mediaId: body.AudioMediaId,
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'audio',
         audio: { id: body.AudioMediaId },
       },
@@ -206,7 +212,7 @@ function construir(body) {
       mediaId: body.ImagenMediaId,
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'image',
         image: { id: body.ImagenMediaId },
       },
@@ -220,7 +226,7 @@ function construir(body) {
       contenido: '', mediaUrl: body.ImagenURL, mediaId: '',
       payload: {
         messaging_product: 'whatsapp',
-        to,
+        ...dest,
         type: 'image',
         image: { link: body.ImagenURL },
       },
@@ -234,7 +240,7 @@ function construir(body) {
     mediaUrl: '', mediaId: '',
     payload: {
       messaging_product: 'whatsapp',
-      to,
+      ...dest,
       type: 'text',
       text: { body: body.Mensaje || '', preview_url: true },
     },
@@ -247,6 +253,17 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'META_TOKEN no configurado' }, { status: 500 })
     }
     const body = await req.json()
+    // ☠️ Un `Canal` que VINO pero no es ninguno de nuestros números no se manda por
+    // el principal "por defecto": es una pestaña con código viejo o un bug, y era
+    // contestarle al cliente por el número equivocado sin que nadie se enterara.
+    // Sin `Canal` sigue el principal (crons y llamadas viejas).
+    const canalPedido = String(body?.Canal || '').trim()
+    if (canalPedido && !CANALES_VALIDOS.has(canalPedido)) {
+      return NextResponse.json(
+        { ok: false, error: 'Número de salida desconocido. Recarga el inbox (Ctrl+Shift+R) y vuelve a enviar.', canal: canalPedido },
+        { status: 409 }
+      )
+    }
     const canal = canalDe(body)   // numero por el que sale este mensaje
     const construido = construir(body)
     const { payload, tipo, contenido, mediaUrl, botones } = construido
@@ -364,7 +381,7 @@ export async function POST(req) {
     const botonesStr = botones && botones.length ? JSON.stringify(botones) : ''
     waitUntil(
       guardarMensajeSupabase({
-        id: wamid, telefono: soloDigitos(body.Telefono), nombre: body.Nombre || '', tipo,
+        id: wamid, telefono: telDe(body), nombre: body.Nombre || '', tipo,
         mensaje: contenido, mediaUrl, timestamp: fechaSal, direccion: 'SALIENTE', mediaId,
         botones: botonesStr,
         // Por qué número salió. Hoy siempre es el principal, pero queda registrado
@@ -383,13 +400,13 @@ export async function POST(req) {
     // IA está llevando ese chat, no hay que interrumpir al humano.
     if (!body.auto) {
       waitUntil(
-        limpiarPush(soloDigitos(body.Telefono))
+        limpiarPush(telDe(body))
           .catch(e => console.error('[/api/saliente] limpiar enfriamiento push:', e.message))
       )
       // Una persona contestó: el flujo automático de ese cliente se retira ("cualquier
       // mensaje humano cancela el flujo"). Las piezas del flujo salen con auto:true.
       waitUntil(
-        borrarEstadoFlujo(soloDigitos(body.Telefono))
+        borrarEstadoFlujo(telDe(body))
           .catch(e => console.error('[/api/saliente] borrar estado de flujo:', e.message))
       )
       // 📌 🤖 (diseño 2026-09-22): una promesa escrita por una persona prende 📌;
@@ -397,14 +414,14 @@ export async function POST(req) {
       // plantillas no cuentan: son texto fijo aprobado por Meta.
       if (body.TipoMensaje !== 'template') {
         waitUntil(
-          revisarPromesa(soloDigitos(body.Telefono), { tipo, texto: contenido })
+          revisarPromesa(telDe(body), { tipo, texto: contenido })
             .catch(e => console.error('[/api/saliente] 📌 promesa:', e.message))
         )
       }
       // Escribió una PERSONA: se guarda cuándo (la reactivación exige que haya
       // atendido una persona, no un flujo ni la IA) y el contador vuelve a cero.
       waitUntil(
-        marcarRespuestaHumana(soloDigitos(body.Telefono))
+        marcarRespuestaHumana(telDe(body))
           .catch(e => console.error('[/api/saliente] marcar respuesta humana:', e.message))
       )
     }

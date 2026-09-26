@@ -11,6 +11,7 @@ import VerPedido from './VerPedido'
 import { textoNotaPedido } from '@/lib/pedido-manual'
 import { parseDate } from '@/lib/utils'
 import { moverItem } from '@/lib/orden-lista'
+import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
 
 const MAX_IMGS  = 10
 
@@ -749,7 +750,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                   style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:10, padding:0, flexShrink:0 }}>✏️</button>
               </div>
             )}
-            <div style={{ fontSize:10, color:C.creamFaint, marginTop:1 }}>+{activeConv.telefono}</div>
+            <div style={{ fontSize:10, color:C.creamFaint, marginTop:1 }}>{etiquetaTelefono(activeConv.telefono, contactInfo?.username)}</div>
           </div>
         </div>
         <div style={{ marginTop:7, padding:'5px 10px', background:windowOpen?`rgba(244,241,236,.05)`:'rgba(245,158,11,.06)', border:`1px solid ${windowOpen?'rgba(244,241,236,.15)':'rgba(245,158,11,.2)'}`, borderRadius:7, fontSize:11, color:windowOpen?C.cream:'#f59e0b', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}>

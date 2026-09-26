@@ -4,6 +4,7 @@ import { colorFor, initialsFor, fmtTime, parseDate, hashWamid } from '@/lib/util
 import { partirEnlaces } from '@/lib/enlaces'
 import { resumenDeLista } from '@/lib/resumen-lista'
 import { puedeReenviar } from '@/lib/reenvio'
+import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -230,7 +231,7 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
         {msgSnippet != null ? (
           <div style={{ marginTop: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, color: C.creamFaint, fontFamily: 'monospace' }}>+{conv.telefono}</span>
+              <span style={{ fontSize: 11, color: C.creamFaint, fontFamily: 'monospace' }}>{etiquetaTelefono(conv.telefono, conv.username)}</span>
               {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
               <CanalBadge label={canalLabel} distinto={canalDistinto} />
             </div>
