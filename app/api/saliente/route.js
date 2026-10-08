@@ -79,6 +79,24 @@ function construir(body) {
     }
   }
 
+  // Reacción con emoji a un mensaje del cliente (lib/reacciones.js). Emoji vacío
+  // = quitar la reacción. Se guarda como en las reacciones que nos llegan: tipo
+  // 'reaction', el emoji de contenido y el mensaje destino en contexto_id.
+  if (body.TipoMensaje === 'reaction') {
+    return {
+      tipo: 'reaction',
+      contenido: String(body.Emoji || ''),
+      contextoReaccion: String(body.ReaccionA || '').trim(),
+      mediaUrl: '', mediaId: '',
+      payload: {
+        messaging_product: 'whatsapp',
+        ...dest,
+        type: 'reaction',
+        reaction: { message_id: String(body.ReaccionA || '').trim(), emoji: String(body.Emoji || '') },
+      },
+    }
+  }
+
   // Botones interactivos
   if (body.TipoMensaje === 'interactive_buttons') {
     let buttons = []
@@ -389,7 +407,8 @@ export async function POST(req) {
         phoneId: canal,
         // Solo si la cita SALIÓ de verdad: si Meta la rechazó y reenviamos sin ella,
         // guardarla pintaría en el hilo una cita que el cliente nunca vio.
-        contextoId: citaAplicada ? contextoId : '',
+        // Una reacción guarda SU destino en el mismo campo (así se pinta pegada).
+        contextoId: construido.contextoReaccion || (citaAplicada ? contextoId : ''),
       }).catch(e => console.error('[/api/saliente] Enviado pero no se pudo registrar:', e.message))
     )
 

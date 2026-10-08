@@ -5,6 +5,7 @@ import { partirEnlaces } from '@/lib/enlaces'
 import { resumenDeLista } from '@/lib/resumen-lista'
 import { puedeReenviar } from '@/lib/reenvio'
 import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
+import { EMOJIS_REACCION } from '@/lib/reacciones'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -686,7 +687,7 @@ function UbicacionCard({ u }) {
   )
 }
 
-export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenviar }) {
+export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenviar, reaccion = '', onReaccionar = null }) {
   const [accion, setAccion] = useState(false)
   const [hover, setHover] = useState(false)
   const isMe     = msg.direccion === 'SALIENTE'
@@ -717,6 +718,20 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
       }}>↪</button>
   ) : null
 
+  // ☺ Reaccionar: abre la misma barrita que tocar el mensaje. Afuera de la burbuja,
+  // tenue, igual que ↪ — en el celular basta con tocar el mensaje.
+  const botonReaccionar = onReaccionar ? (
+    <button
+      onClick={(e) => { e.stopPropagation(); setAccion(v => !v) }}
+      title="Reaccionar"
+      style={{
+        alignSelf: 'center', flexShrink: 0, margin: '0 2px',
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        fontSize: 14, lineHeight: 1, padding: 4, color: '#94a3b8',
+        opacity: (hover || accion) ? 1 : 0, transition: 'opacity .15s',
+      }}>☺</button>
+  ) : null
+
   return (
     <div
       onMouseEnter={() => setHover(true)}
@@ -734,6 +749,9 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
         boxShadow: '0 2px 8px rgba(0,0,0,.5)',
         border: isMe ? `1px solid rgba(244,241,236,.12)` : `1px solid ${C.border}`,
         cursor: onResponder ? 'pointer' : 'default',
+        position: 'relative',
+        // Deja sitio a la reacción, que cuelga del borde de abajo.
+        marginBottom: reaccion ? 12 : 0,
       }}>
         {msg.referral && <ReferralCard referral={msg.referral} />}
         {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} esReaccion={msg.tipo === 'reaction'} />}
@@ -803,6 +821,20 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
         </div>
 
         {/* Aparece SOLO en el mensaje que tocaste. Se va al usarlo o al tocar de nuevo. */}
+        {accion && onReaccionar && (
+          <div style={{ display:'flex', gap:2, justifyContent:'flex-start', marginTop:6, flexWrap:'wrap' }}>
+            {EMOJIS_REACCION.map((e) => (
+              <button key={e}
+                onClick={(ev) => { ev.stopPropagation(); setAccion(false); onReaccionar(e) }}
+                title={reaccion === e ? 'Quitar reacción' : 'Reaccionar'}
+                style={{
+                  background: reaccion === e ? 'rgba(244,241,236,.18)' : 'rgba(244,241,236,.04)',
+                  border: `1px solid ${reaccion === e ? 'rgba(244,241,236,.55)' : C.border}`,
+                  borderRadius: 14, padding: '2px 7px', fontSize: 16, lineHeight: 1.3, cursor: 'pointer',
+                }}>{e}</button>
+            ))}
+          </div>
+        )}
         {accion && onResponder && (
           <div style={{ display:'flex', justifyContent: isMe ? 'flex-start' : 'flex-end', marginTop: 6 }}>
             <button
@@ -814,7 +846,17 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
               }}>↩ Responder</button>
           </div>
         )}
+
+        {/* ❤️ Nuestra reacción, colgada del borde como en WhatsApp. */}
+        {reaccion && (
+          <span title="Tu reacción" style={{
+            position: 'absolute', bottom: -12, right: 10,
+            background: '#1A1A1A', border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: '1px 6px', fontSize: 13, lineHeight: 1.4,
+          }}>{reaccion}</span>
+        )}
       </div>
+      {!isMe && botonReaccionar}
       {!isMe && botonReenviar}
     </div>
   )
