@@ -162,3 +162,43 @@ test('26-sep: solo_canales deja fuera un número caído', () => {
   assert.ok(decidirReactivacion({ config: cfg, contacto: base, ahoraMs: AHORA }))
   assert.equal(decidirReactivacion({ config: cfg, contacto: { ...base, phoneId: '2241248862581450' }, ahoraMs: AHORA }), null)
 })
+
+// ── 🎯 Ventana de PAUTA (8-oct-2026) ─────────────────────────────────────────
+// A quien llegó de un anuncio se le puede escribir hasta 7 días (probado el 7-oct
+// en MANDI: texto libre entregado a las 52 h, gratis). Los toques pasadas las 24 h
+// solo salen si su ventana de pauta sigue abierta.
+const cfgPauta = { ...config, reactivacion: { activo: true, horas: [4, 20, 48], incluir_sin_etapa: true } }
+// Escribió hace 50 h, una persona contestó hace 49 h, ya salieron los toques 1 y 2.
+const callado = { ...base, ultimoEntranteAt: hace(50), ultimoHumanoAt: hace(49), reactivacionN: 2, reactivacionAt: hace(30) }
+
+test('pauta: el toque de 48 h sale si la ventana de pauta sigue abierta', () => {
+  const d = decidirReactivacion({ config: cfgPauta, contacto: { ...callado, pautaVenceEn: hace(-100) }, ahoraMs: AHORA })
+  assert.equal(d.toque, 3)
+  assert.equal(d.nNuevo, 3)
+})
+
+test('pauta: sin ventana de pauta, pasadas las 24 h no se escribe (como siempre)', () => {
+  assert.equal(decidirReactivacion({ config: cfgPauta, contacto: callado, ahoraMs: AHORA }), null)
+  assert.equal(decidirReactivacion({ config: cfgPauta, contacto: { ...callado, pautaVenceEn: hace(1) }, ahoraMs: AHORA }), null)   // ya venció
+  assert.equal(decidirReactivacion({ config: cfgPauta, contacto: { ...callado, pautaVenceEn: 'basura' }, ahoraMs: AHORA }), null)
+})
+
+test('pauta: los toques de dentro de 24 h no cambian', () => {
+  assert.equal(decidirReactivacion({ config: cfgPauta, contacto: { ...base, ultimoEntranteAt: hace(4.5), ultimoHumanoAt: hace(4.2) }, ahoraMs: AHORA }).toque, 1)
+})
+
+test('pauta: las horas aceptan hasta 167 (7 días − 1 h); más allá se descartan', () => {
+  assert.deepEqual(parametrosReactivacion({ horas: [4, 72, 168] }).horas, [4, 72])
+  assert.deepEqual(parametrosReactivacion({ horas: [4, 72, 168] }).indiceTexto, [0, 1])
+})
+
+test('pauta: un toque de menos de 24 h que se saltó NO sale después por la pauta', () => {
+  // La config de hoy (4 h y 20 h): el de 20 h no salió (noche). A las 50 h, con
+  // pauta abierta, NO se manda: solo cuentan los toques puestos a 24 h o más.
+  const hoy = { ...config, reactivacion: { activo: true, horas: [4, 20] } }
+  const c = { ...callado, reactivacionN: 1, pautaVenceEn: hace(-100) }
+  assert.equal(decidirReactivacion({ config: hoy, contacto: c, ahoraMs: AHORA }), null)
+  // y con un toque de 48 h configurado, sale ESE (el 3.º), no el de 20 h
+  const d = decidirReactivacion({ config: cfgPauta, contacto: c, ahoraMs: AHORA })
+  assert.equal(d.toque, 3)
+})

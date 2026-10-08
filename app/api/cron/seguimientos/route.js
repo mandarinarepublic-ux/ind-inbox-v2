@@ -8,6 +8,7 @@ import { cuerpoSeguimiento } from '@/lib/seguimiento-envio'
 import { cabecerasMaquina } from '@/lib/auth-maquina'
 import { urlPropia } from '@/lib/url-propia'
 import { autorizadoCron } from '@/lib/cron-auth'
+import { getPautasVigentesSupabase } from '@/lib/inbox-supabase'
 
 // Cron de SEGUIMIENTOS automáticos: la ENCUESTA DE REACTIVACIÓN para chats
 // atendidos que se quedaron callados (las reglas por temperatura se quitaron el
@@ -22,7 +23,8 @@ import { autorizadoCron } from '@/lib/cron-auth'
 //  - Interruptor global + por regla.
 //  - Tope 1 auto-envío por ventana por contacto (ultimo_seguimiento_at > ultimo_entrante_at).
 //  - Se cancela solo si el cliente responde (su nuevo mensaje reinicia la ventana).
-//  - Nunca fuera de las 24h (ahí se necesita plantilla → fase 2).
+//  - Nunca fuera de las 24h, salvo la REACTIVACIÓN con ventana de pauta abierta
+//    (toques puestos a 24 h o más, hasta 7 días: lib/reactivacion.js).
 //  - Si el bot va a contestar ese chat, se lo deja en paz.
 //
 // ⚠️ Por qué era diario y no mandaba nada (hasta 13-sep-2026): corría una vez al
@@ -82,7 +84,11 @@ export async function GET(req) {
   // ── 🔄 Reactivación por etapa (fase 3). Primero, porque es más específica. ──
   if (conReactivacion) {
     const pedidos = await getPedidosPorTelefono().catch(() => ({}))
-    for (const c of contactos) {
+    // 🎯 Ventana de pauta por cliente y número: con ella los toques pueden ir
+    // más allá de las 24 h. Si la lectura falla, mapa vacío = todo como antes.
+    const pautas = await getPautasVigentesSupabase().catch(e => { console.error('[cron seguimientos] pautas:', e.message); return new Map() })
+    for (const c0 of contactos) {
+      const c = { ...c0, pautaVenceEn: pautas.get(`${c0.telefono}|${c0.phoneId || ''}`) || null }
       const d = decidirReactivacion({ config: cfg, contacto: c, pedido: pedidos[tail9(c.telefono)] || null, ahoraMs: now })
       if (!d) continue
       evaluados++

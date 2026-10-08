@@ -334,7 +334,7 @@ export default function Automatizaciones({ active }) {
               {[0, 1, 2].map(i => (
                 <label key={i} style={{ fontSize: 11, color: C.creamDim }}>
                   Toque {i + 1}: a las
-                  <input type="number" min={1} max={23} value={(rc.horas || [3, 12, 20])[i] ?? ''} onChange={e => setHoraToque(i, e.target.value)} style={{ ...inputNum, margin: '0 6px' }} />
+                  <input type="number" min={1} max={167} value={(rc.horas || [3, 12, 20])[i] ?? ''} onChange={e => setHoraToque(i, e.target.value)} style={{ ...inputNum, margin: '0 6px' }} />
                   h de su último mensaje
                 </label>
               ))}
@@ -357,7 +357,8 @@ export default function Automatizaciones({ active }) {
               </label>
             </div>
             <div style={{ fontSize: 11, color: C.creamDim, marginTop: 6 }}>Límites de seguridad: nunca antes de las 06:00 ni después de las 22:00, y nunca más de 3 toques por ventana. Deja un texto vacío para no mandar ese toque.</div>
-            {[['cotizando', '💬 Cotizando'], ['esperando_pago', '💳 Esperando pago']].map(([etapa, titulo]) => (
+            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 4 }}>🎯 Un toque a <b style={{ color: C.cream }}>24 h o más</b> (hasta 167 h = 7 días) solo le llega a quien vino de un <b style={{ color: C.cream }}>anuncio</b> y mientras su ventana de pauta siga abierta. A los demás se les salta.</div>
+            {[...(rc.incluir_sin_etapa ? [['pregunto', '❓ Solo preguntó']] : []), ['cotizando', '💬 Cotizando'], ['esperando_pago', '💳 Esperando pago']].map(([etapa, titulo]) => (
               <div key={etapa} style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: C.cream, marginBottom: 6 }}>{titulo}</div>
                 {(rc.horas || [3, 12, 20]).map((h, i) => (
