@@ -16,6 +16,7 @@ import { pestanaGuardada } from '@/lib/pestana'
 import { fusionarHilo } from '@/lib/hilo-historico'
 import { estadoVisible } from '@/lib/bandeja'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
+import { pautaAbierta, etiquetaVencePauta } from '@/lib/bandeja'
 import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/Components'
 import RightPanel from '@/components/RightPanel'
 import Contactos, { PlantillaModal } from '@/components/Contactos'
@@ -1056,6 +1057,9 @@ export default function App() {
       if (!alertaVentanaCierra(c, now)) return
       const ent = new Date(c.ultimoEntranteAt).getTime()
       const key = `${tel}:${ent}` // 1 alerta por ventana (mismo entrante = misma ventana)
+      // 🎯 Si la ventana de PAUTA sigue abierta cuando se cierre la de 24 h, avisar
+      // "se cierra" es falso: se le puede seguir escribiendo.
+      if (pautaAbierta(convs.find(x => x.telefono === tel)?.pautaVenceEn, ent + VENTANA_MS)) return
       if (alertadosRef.current.has(key)) return
       alertadosRef.current.add(key)
       const nombre = c.alias || (convs.find(x => x.telefono === tel)?.nombre) || tel
@@ -1256,7 +1260,12 @@ export default function App() {
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const lastIncoming = activeConv ? [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE') : null
-  const windowOpen   = lastIncoming ? (Date.now() - _parseDate(lastIncoming.timestamp).getTime()) < 24 * 60 * 60 * 1000 : false
+  const ventana24    = lastIncoming ? (Date.now() - _parseDate(lastIncoming.timestamp).getTime()) < 24 * 60 * 60 * 1000 : false
+  // 🎯 Ventana de PAUTA: si el cliente llegó de un anuncio, Meta deja escribirle
+  // texto libre hasta 7 días (probado el 7-oct-2026 en MANDI). El vencimiento lo
+  // da Meta, por canal; la lista ya viene filtrada a UN número. Sin dato → nada.
+  const enPauta      = !ventana24 && pautaAbierta(activeConv?.pautaVenceEn)
+  const windowOpen   = ventana24 || enPauta
 
   const changingRef = useRef({})
   const changeStatus = async (telefono, status) => {
@@ -2384,6 +2393,12 @@ export default function App() {
 
               {/* Input bar */}
               <div className="input-bar" style={{ position:'relative' }}>
+                {enPauta && (
+                  <div title="El cliente llegó de un anuncio: Meta deja escribirle texto libre y gratis hasta que vence esta ventana, aunque ya pasaron 24 h."
+                    style={{ marginBottom:8, padding:'6px 12px', background:'rgba(244,241,236,.05)', border:'1px solid rgba(244,241,236,.15)', borderRadius:8, fontSize:11, color:C.cream, textAlign:'center' }}>
+                    🎯 Ventana de pauta — puedes escribirle gratis hasta el <b>{etiquetaVencePauta(activeConv?.pautaVenceEn)}</b>
+                  </div>
+                )}
                 {!windowOpen && lastIncoming && (
                   <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)', borderRadius:8, fontSize:11, color:'#fbbf24', display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexWrap:'wrap' }}>
                     <span>⚠️ Ventana de 24h cerrada — solo plantilla</span>
@@ -2576,7 +2591,7 @@ export default function App() {
                 onMouseLeave={e => e.currentTarget.style.background = C.border}
               />
               <div className="right-col" style={{ width:'auto', flex:1, borderLeft:'none' }}>
-                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} onPedidoManual={alPedidoManualEscritorio} onVerPedido={alVerPedidoEscritorio} onEnviarHojaPedido={handleEnviarHojaPedido} />
+                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} onPedidoManual={alPedidoManualEscritorio} onVerPedido={alVerPedidoEscritorio} onEnviarHojaPedido={handleEnviarHojaPedido} />
               </div>
             </div>
           )}
@@ -2585,7 +2600,7 @@ export default function App() {
               <div style={{ display:'flex', justifyContent:'flex-end', padding:'10px 10px 0' }}>
                 <button onClick={cerrarCajonDerecho} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:17 }}>✕</button>
               </div>
-              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} />
+              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} />
             </div>
           )}
 

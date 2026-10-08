@@ -12,6 +12,7 @@ import { textoNotaPedido } from '@/lib/pedido-manual'
 import { parseDate } from '@/lib/utils'
 import { moverItem } from '@/lib/orden-lista'
 import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
+import { etiquetaVencePauta } from '@/lib/bandeja'
 
 const MAX_IMGS  = 10
 
@@ -354,7 +355,7 @@ const TABS = [
 // Etiqueta del catálogo online en el selector de la pestaña Tienda (este inbox = INDLOVERS).
 const CATALOGO_LABEL = 'INDLOVERS'
 
-export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, onPedidoManual, onVerPedido, onEnviarHojaPedido }) {
+export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, ventanaPautaHasta = null, onPedidoManual, onVerPedido, onEnviarHojaPedido }) {
   const [tab, setTab] = useState('respuestas')
   const [countdown, setCountdown] = useState('')
 
@@ -754,8 +755,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
           </div>
         </div>
         <div style={{ marginTop:7, padding:'5px 10px', background:windowOpen?`rgba(244,241,236,.05)`:'rgba(245,158,11,.06)', border:`1px solid ${windowOpen?'rgba(244,241,236,.15)':'rgba(245,158,11,.2)'}`, borderRadius:7, fontSize:11, color:windowOpen?C.cream:'#f59e0b', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span>{windowOpen?'✅ Ventana activa':'⚠️ Ventana cerrada'}</span>
-          {countdown&&windowOpen&&<span style={{ fontFamily:'monospace', fontSize:12, fontWeight:800, color:parseInt(countdown.split(':')[0])===0&&parseInt(countdown.split(':')[1])<30?'#f87171':C.cream }}>⏱ {countdown}</span>}
+          <span>{ventanaPautaHasta?'🎯 Ventana de pauta':windowOpen?'✅ Ventana activa':'⚠️ Ventana cerrada'}</span>
+          {ventanaPautaHasta&&<span style={{ fontFamily:'monospace', fontSize:11, color:C.cream }}>hasta {etiquetaVencePauta(ventanaPautaHasta)}</span>}
+          {countdown&&windowOpen&&!ventanaPautaHasta&&<span style={{ fontFamily:'monospace', fontSize:12, fontWeight:800, color:parseInt(countdown.split(':')[0])===0&&parseInt(countdown.split(':')[1])<30?'#f87171':C.cream }}>⏱ {countdown}</span>}
           {!windowOpen&&<span style={{ fontFamily:'monospace', fontSize:11, color:C.creamFaint }}>Expirada</span>}
         </div>
       </div>
