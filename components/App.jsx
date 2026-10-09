@@ -2300,7 +2300,7 @@ export default function App() {
                   <Avatar name={displayName(activeConv.telefono)} phone={activeConv.telefono} size={34} />
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontWeight:800, color:C.cream, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:160 }}>{displayName(activeConv.telefono)}</div>
-                    <div style={{ fontSize:9, color:C.creamFaint }}>{etiquetaTelefono(activeConv.telefono, contacts[activeConv.telefono]?.username)}</div>
+                    <div style={{ fontSize:12, fontWeight:600, color:C.creamDim, whiteSpace:'nowrap', userSelect:'text' }}>{etiquetaTelefono(activeConv.telefono, contacts[activeConv.telefono]?.username)}</div>
                   </div>
                 </div>
                 <div className="chat-actions" style={{ display:'flex', alignItems:'center', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
