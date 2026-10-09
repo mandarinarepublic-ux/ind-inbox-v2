@@ -13,6 +13,16 @@ import { parseDate } from '@/lib/utils'
 import { moverItem } from '@/lib/orden-lista'
 import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
 import { etiquetaVencePauta } from '@/lib/bandeja'
+import { GRUPOS_RESPUESTA, TODAS, indicesVisibles, conteoPorGrupo, vecinaVisible, normalizarGrupo } from '@/lib/grupos-respuestas'
+
+// La preferencia del botón elegido es del navegador de cada vendedor: si el
+// almacenamiento no está (modo privado), simplemente arranca en "Todas".
+const LLAVE_GRUPO = 'respuestas-grupo'
+const leerGrupoGuardado = () => { try { return localStorage.getItem(LLAVE_GRUPO) || TODAS } catch { return TODAS } }
+const guardarGrupo = (g) => { try { localStorage.setItem(LLAVE_GRUPO, g) } catch { /* sin almacenamiento */ } }
+
+// ¿El botón elegido no tiene ninguna respuesta? (para decirlo en vez de mostrar nada)
+const visibles_vacio = (replies, filtro) => (Array.isArray(replies) && replies.length > 0) && indicesVisibles(replies, filtro).length === 0
 
 const MAX_IMGS  = 10
 
@@ -287,6 +297,27 @@ function MultiImgEditor({ urls, onChange }) {
 }
 
 // ── Editor de 3 botones interactivos para una respuesta rápida ──
+// Elegir el grupo de UNA respuesta (al crearla o editarla).
+function GrupoSelector({ grupo, onChange }) {
+  const opciones = [{ id: '', emoji: '', nombre: 'Sin grupo' }, ...GRUPOS_RESPUESTA]
+  return (
+    <div style={{ display:'flex', gap:3, flexWrap:'wrap', marginTop:6 }}>
+      {opciones.map(o => {
+        const on = normalizarGrupo(grupo) === o.id
+        return (
+          <button key={o.id || 'sin'} type="button" onClick={() => onChange(o.id)}
+            style={{ padding:'3px 8px', borderRadius:12, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+              background: on ? 'rgba(244,241,236,.12)' : 'transparent',
+              border: `1px solid ${on ? 'rgba(244,241,236,.4)' : C.border}`,
+              color: on ? C.cream : C.creamFaint }}>
+            {o.emoji ? `${o.emoji} ` : ''}{o.nombre}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function BotonesEditor({ botones, onChange }) {
   const set = (i, v) => onChange([0, 1, 2].map(j => j === i ? v : (botones[j] || '')))
   return (
@@ -393,6 +424,16 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [newImgUrls,    setNewImgUrls]    = useState([])
   const [editBotones,   setEditBotones]   = useState(['', '', ''])
   const [newBotones,    setNewBotones]    = useState(['', '', ''])
+  // 📋🛍️📐 Botón de grupo activo y grupo de la respuesta que se edita / crea.
+  const [grupoFiltro,   setGrupoFiltroEstado] = useState(TODAS)
+  useEffect(() => { setGrupoFiltroEstado(leerGrupoGuardado()) }, [])
+  const [editGrupo,     setEditGrupo]     = useState('')
+  const [newGrupo,      setNewGrupo]      = useState('')
+  const setGrupoFiltro = (g) => {
+    setGrupoFiltroEstado(g); guardarGrupo(g)
+    // La respuesta nueva nace en el grupo que estás mirando.
+    setNewGrupo(normalizarGrupo(g))
+  }
   // Respuestas rápidas EN VUELO: { [idx]: '⏳' | '3/5' }. Es un mapa y no un solo
   // índice a propósito — antes el panel esperaba a que terminara una para dejar
   // mandar otra, y con 5 fotos eso eran 40 segundos de brazos cruzados.
@@ -580,6 +621,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     setEditImgUrls(getImgUrls(replies[idx]))
     const b = replies[idx].botones || []
     setEditBotones([b[0] || '', b[1] || '', b[2] || ''])
+    setEditGrupo(normalizarGrupo(replies[idx].grupo))
   }
   const clearEdit = () => { setEditingId(null); setEditText(''); setEditImgUrls([]); setEditBotones(['', '', '']) }
   const saveEdit = async () => {
@@ -598,7 +640,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
       return
     }
     const botones = editBotones.map(s => s.trim()).filter(Boolean).slice(0, 3)
-    const updated = { ...actual, text: editText.trim(), ...urlsToReply(editImgUrls), botones }
+    const updated = { ...actual, text: editText.trim(), ...urlsToReply(editImgUrls), botones, grupo: normalizarGrupo(editGrupo) }
     setReplies(prev => prev.map(r => r.id === editingId ? updated : r))
     clearEdit()
     await writeReply('actualizar', updated)
@@ -645,7 +687,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const addReply = async () => {
     if (!newText.trim()) return
     const botones = newBotones.map(s => s.trim()).filter(Boolean).slice(0, 3)
-    const nr = { id: crypto.randomUUID(), text: newText.trim(), ...urlsToReply(newImgUrls), botones }
+    const nr = { id: crypto.randomUUID(), text: newText.trim(), ...urlsToReply(newImgUrls), botones, grupo: normalizarGrupo(newGrupo) }
     setReplies(prev => [nr, ...prev])   // la nueva entra PRIMERA, igual que en la base
     // Se marca como "guardando" mientras el POST de alta sigue en vuelo. addReply
     // mete la respuesta en el estado ANTES de esperar la confirmación del servidor,
@@ -796,11 +838,35 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 {repliesLoaded&&<span style={{ fontSize:8, background:`rgba(244,241,236,.06)`, color:C.creamDim, borderRadius:10, padding:'1px 5px' }}>{replies.length}</span>}
                 <span onClick={() => setRepliesLoaded(false)} title="Recargar" style={{ marginLeft:'auto', color:C.creamFaint, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
               </p>
+              {/* 📋🛍️📐 Botones de grupo (lib/grupos-respuestas.js). "Todas" incluye las sin grupo. */}
+              {(() => {
+                const n = conteoPorGrupo(replies)
+                const botones = [{ id: TODAS, emoji: '', nombre: 'Todas' }, ...GRUPOS_RESPUESTA]
+                return (
+                  <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:8 }}>
+                    {botones.map(b => {
+                      const on = (grupoFiltro || TODAS) === b.id
+                      return (
+                        <button key={b.id} onClick={() => setGrupoFiltro(b.id)}
+                          style={{ padding:'4px 9px', borderRadius:14, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+                            background: on ? 'rgba(244,241,236,.12)' : 'rgba(244,241,236,.03)',
+                            border: `1px solid ${on ? 'rgba(244,241,236,.4)' : C.border}`,
+                            color: on ? C.cream : C.creamDim }}>
+                          {b.emoji ? `${b.emoji} ` : ''}{b.nombre} <span style={{ opacity:.6, fontWeight:600 }}>{n[b.id] ?? 0}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
 
             <div style={{ padding:'0 12px', display:'flex', flexDirection:'column', gap:5 }}>
-              {replies.map((reply, idx) => {
+              {(() => { const visibles = indicesVisibles(replies, grupoFiltro); const verSet = new Set(visibles); return replies.map((reply, idx) => {
+                if (!verSet.has(idx)) return null
                 const imgs = getImgUrls(reply)
+                const arriba = vecinaVisible(visibles, idx, -1)
+                const abajo  = vecinaVisible(visibles, idx, +1)
                 // Alta todavía sin confirmar (ver addReply): no se deja editar ni
                 // reordenar esta fila hasta que el servidor la confirme.
                 const guardando = savingIds.has(reply.id)
@@ -813,6 +879,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                         <p style={{ fontSize:9, color:C.creamFaint, marginBottom:3 }}>Adjuntos ({editImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
                         <MultiImgEditor urls={editImgUrls} onChange={setEditImgUrls} />
                         <BotonesEditor botones={editBotones} onChange={setEditBotones} />
+                        <GrupoSelector grupo={editGrupo} onChange={setEditGrupo} />
                         <div style={{ display:'flex', gap:3, marginTop:7 }}>
                           <button onClick={saveEdit} style={{ ...btnBase, flex:1, padding:'5px', background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.25)`, color:C.cream, borderRadius:6, fontSize:10 }}>✓ Guardar</button>
                           <button onClick={clearEdit} style={{ ...btnBase, flex:1, padding:'5px', background:'transparent', border:`1px solid ${C.border}`, color:C.creamDim, borderRadius:6, fontSize:10 }}>✕</button>
@@ -855,15 +922,15 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                         )}
                         <div style={{ padding:'5px 7px', display:'flex', alignItems:'flex-start', gap:3 }}>
                           <span style={{ flex:1, fontSize:11, color:C.creamDim, lineHeight:1.35, overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>
-                            {imgs.filter(a=>a.tipo!=='audio').length>0&&`🖼×${imgs.filter(a=>a.tipo!=='audio').length} `}{imgs.filter(a=>a.tipo==='audio').length>0&&`🎤×${imgs.filter(a=>a.tipo==='audio').length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{reply.text}
+                            {imgs.filter(a=>a.tipo!=='audio').length>0&&`🖼×${imgs.filter(a=>a.tipo!=='audio').length} `}{imgs.filter(a=>a.tipo==='audio').length>0&&`🎤×${imgs.filter(a=>a.tipo==='audio').length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{(grupoFiltro || TODAS) === TODAS && GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)) ? `${GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)).emoji} ` : ''}{reply.text}
                           </span>
                           <div style={{ display:'flex', gap:2, flexShrink:0 }}>
-                            <button onClick={() => reordenar(idx, idx - 1)} disabled={idx === 0 || hayAltaPendiente}
+                            <button onClick={() => reordenar(idx, arriba)} disabled={arriba < 0 || hayAltaPendiente}
                               title={hayAltaPendiente ? 'Espera a que se confirme el alta pendiente' : 'Subir'}
-                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (idx === 0 || hayAltaPendiente) ? C.creamFaint : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:9, cursor: (idx === 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↑</button>
-                            <button onClick={() => reordenar(idx, idx + 1)} disabled={idx === replies.length - 1 || hayAltaPendiente}
+                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (arriba < 0 || hayAltaPendiente) ? C.creamFaint : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:9, cursor: (arriba < 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↑</button>
+                            <button onClick={() => reordenar(idx, abajo)} disabled={abajo < 0 || hayAltaPendiente}
                               title={hayAltaPendiente ? 'Espera a que se confirme el alta pendiente' : 'Bajar'}
-                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (idx === replies.length - 1 || hayAltaPendiente) ? C.creamFaint : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:9, cursor: (idx === replies.length - 1 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↓</button>
+                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (abajo < 0 || hayAltaPendiente) ? C.creamFaint : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:9, cursor: (abajo < 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↓</button>
                             <button onClick={()=>handleSendQuick(idx)} disabled={!!sending[idx]||!windowOpen}
                               style={{ ...btnBase, background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.2)`, color:C.cream, borderRadius:5, minWidth:20, height:20, padding:'0 3px', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center' }}>
                               {sending[idx] || '➤'}
@@ -876,7 +943,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                     )}
                   </div>
                 )
-              })}
+              }) })()}
+              {visibles_vacio(replies, grupoFiltro) && (
+                <div style={{ fontSize:11, color:C.creamFaint, padding:'8px 4px' }}>No hay respuestas en este grupo. Crea una abajo o elige el grupo al editar ✏️.</div>
+              )}
               {errorOrden && (
                 <div style={{ fontSize:11, color:'#ef4444', padding:'6px 8px' }}>⚠️ {errorOrden}</div>
               )}
@@ -891,6 +961,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
               <p style={{ fontSize:9, color:C.creamFaint, marginBottom:3 }}>Adjuntos ({newImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
               <MultiImgEditor urls={newImgUrls} onChange={setNewImgUrls} />
               <BotonesEditor botones={newBotones} onChange={setNewBotones} />
+              <GrupoSelector grupo={newGrupo} onChange={setNewGrupo} />
               <button onClick={addReply} disabled={!newText.trim()}
                 style={{ ...btnBase, width:'100%', marginTop:7, padding:'6px', background:newText.trim()?`rgba(244,241,236,.1)`:'transparent', border:`1px solid ${newText.trim()?'rgba(244,241,236,.25)':C.border}`, color:newText.trim()?C.cream:C.creamFaint, borderRadius:7, fontSize:11, fontWeight:600, cursor:newText.trim()?'pointer':'default' }}>
                 + Agregar
