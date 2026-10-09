@@ -23,13 +23,14 @@ test('un botón muestra solo su grupo, con los índices de la lista completa', (
 })
 
 test('conteo por botón', () => {
-  assert.deepEqual(conteoPorGrupo(replies), { todas: 6, datos: 1, productos: 1, tallas: 2 })
+  assert.deepEqual(conteoPorGrupo(replies), { todas: 6, datos: 1, productos: 1, tallas: 2, postventa: 0 })
 })
 
 test('normalizar: solo los grupos conocidos; lo demás es sin grupo', () => {
   assert.equal(normalizarGrupo(' TALLAS'), 'tallas')
   assert.equal(normalizarGrupo('promos'), '')
   assert.equal(normalizarGrupo(null), '')
+  assert.equal(normalizarGrupo('Postventa'), 'postventa')
 })
 
 test('las flechas saltan a la vecina VISIBLE', () => {
