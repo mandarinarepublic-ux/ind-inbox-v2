@@ -16,6 +16,7 @@ import { extraerEchoes } from '@/lib/echoes'
 import { capturarCtwaClid, revisarLeadAutomatico, revisarVentaEnProceso } from '@/lib/capi'
 import { elegirFlujo, caminoLineal, decidirEntranteEnFlujo } from '@/lib/flujo'
 import { correrTanda } from '@/lib/flujo-motor'
+import { mandarEscribiendo } from '@/lib/escribiendo'
 import { getEstadoFlujo, guardarEstadoFlujo, borrarEstadoFlujo, registrarPasos } from '@/lib/flujos'
 import { getRespuestas } from '@/lib/respuestas'
 import { identificadorEntrante, perfilesDeContactos } from '@/lib/cliente-sin-telefono'
@@ -381,6 +382,7 @@ export async function POST(req) {
       // ya manda auto:true: NO reinicia el push ni borra el estado del flujo.
       const depsFlujo = {
         enviar: (p) => enviarSaliente(origin, p),
+        escribiendo: mandarEscribiendo,
         guardarEstado: guardarEstadoFlujo,
         borrarEstado: borrarEstadoFlujo,
         registrarPasos,

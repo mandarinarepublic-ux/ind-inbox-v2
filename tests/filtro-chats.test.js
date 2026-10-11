@@ -82,3 +82,12 @@ test('I6: un estado desconocido se trata como 🔴 (nunca desaparece de las band
   }
   assert.equal(prepararVista({ telefono: 'z', estado: 'ATENDIDO' }, AHORA).estado, 'atendido')
 })
+
+// ── Botón ⇅ de 🔴: más nuevos arriba ──
+import { compararEsperaNuevos } from '../lib/filtro-chats.js'
+
+test('compararEsperaNuevos: el que escribió último arriba, también sobre la ventana de 24 h', () => {
+  const vistas = [{ telefono: 'a', espera: 30 }, { telefono: 'b', espera: 5 }, { telefono: 'c', espera: 3000 }, { telefono: 'd', espera: 200 }]
+  assert.deepEqual([...vistas].sort(compararEsperaNuevos).map(v => v.telefono), ['b', 'a', 'd', 'c'])
+  assert.equal(compararEsperaNuevos(undefined, { espera: 0 }), 0)
+})

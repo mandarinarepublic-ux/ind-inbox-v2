@@ -6,6 +6,7 @@ import { getFlujosPublicadosSupabase } from '@/lib/inbox-supabase'
 import { getEstadosVencidos, borrarEstadosCaducados, borrarEstadoFlujo, guardarEstadoFlujo, registrarPasos } from '@/lib/flujos'
 import { decidirVencido } from '@/lib/flujo'
 import { correrTanda } from '@/lib/flujo-motor'
+import { mandarEscribiendo } from '@/lib/escribiendo'
 import { enviarConMaquina } from '@/lib/auth-maquina'
 import { urlPropia } from '@/lib/url-propia'
 import { enviarTelegram } from '@/lib/telegram'
@@ -55,6 +56,7 @@ export async function GET(req) {
   ])
   const deps = {
     enviar: (p) => enviarConMaquina(`${origin}/api/saliente`, { ...p, auto: true }, 'flujo (cron)'),
+    escribiendo: mandarEscribiendo,
     guardarEstado: guardarEstadoFlujo,
     borrarEstado: borrarEstadoFlujo,
     registrarPasos,

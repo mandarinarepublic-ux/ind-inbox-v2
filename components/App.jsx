@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { sendReaction, fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { ETAPAS, chipsDeChat, alertaVentanaCierra, necesitaConfirmarAtendido } from '@/lib/gestion'
-import { FILTRO_INICIAL, prepararVista, alternar, pasaFiltro, conteos, compararEspera } from '@/lib/filtro-chats'
+import { FILTRO_INICIAL, prepararVista, alternar, pasaFiltro, conteos, compararEspera, compararEsperaNuevos } from '@/lib/filtro-chats'
 import { sumarOverride, aplicarOverrides } from '@/lib/overrides'
 import FiltrosLista from '@/components/FiltrosLista'
 import { etiquetaPedido, etapaVigente, tail9 } from '@/lib/etiqueta-crm'
@@ -260,6 +260,16 @@ export default function App() {
   // del panel derecho.
   const [soltarAqui,   setSoltarAqui]   = useState(false)
   const [filtro,       setFiltro]       = useState(FILTRO_INICIAL)
+  // Botón ⇅ de 🔴: false = la regla de siempre (compararEspera), true = el que
+  // escribió último arriba. Se recuerda en ESTE navegador.
+  const [pendNuevosArriba, setPendNuevosArriba] = useState(false)
+  useEffect(() => {
+    try { setPendNuevosArriba(localStorage.getItem('ind_pend_nuevos_arriba') === '1') } catch { /* modo privado */ }
+  }, [])
+  const alternarOrdenPend = () => setPendNuevosArriba(v => {
+    try { localStorage.setItem('ind_pend_nuevos_arriba', v ? '0' : '1') } catch { /* modo privado */ }
+    return !v
+  })
   const [showBtnPanel, setShowBtnPanel] = useState(false)
   const [btnTexts,     setBtnTexts]     = useState(['', '', ''])
   const [sendingBtns,  setSendingBtns]  = useState(false)
@@ -1251,7 +1261,8 @@ export default function App() {
       lista = searched.filter(c => pasaFiltro(vistaPorTel[c.telefono], filtro))
       // En 🔴 el que más espera va arriba (dentro de las 24 h); ver lib/filtro-chats.js.
       if (filtro.bandeja === 'pendiente') {
-        lista = [...lista].sort((a, b) => compararEspera(vistaPorTel[a.telefono], vistaPorTel[b.telefono]))
+        const cmp = pendNuevosArriba ? compararEsperaNuevos : compararEspera   // botón ⇅
+        lista = [...lista].sort((a, b) => cmp(vistaPorTel[a.telefono], vistaPorTel[b.telefono]))
       }
     }
     return {
@@ -1259,7 +1270,7 @@ export default function App() {
       counts: conteos(vistas, filtro),
       totalPendientes: vistas.filter(v => v.estado === 'pendiente').length,
     }
-  }, [searched, isSearching, contacts, estadoDeBandeja, pedidosChat, ahora, filtro])
+  }, [searched, isSearching, contacts, estadoDeBandeja, pedidosChat, ahora, filtro, pendNuevosArriba])
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const lastIncoming = activeConv ? [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE') : null
@@ -2205,6 +2216,13 @@ export default function App() {
               </div>
               {/* ── Filtros combinables (diseño 2026-09-22 §4) ── */}
               <FiltrosLista filtro={filtro} conteos={counts} onCambiar={cambiarFiltro} />
+              {/* ⇅ Orden de 🔴 (lib/filtro-chats.js) — solo en esa bandeja */}
+              {filtro.bandeja === 'pendiente' && !isSearching && (
+                <button onClick={alternarOrdenPend} title="Cambiar el orden de Pendientes"
+                  style={{ width:'100%', marginTop:8, padding:'5px 8px', fontSize:10, fontWeight:700, background:'transparent', border:`1px solid ${C.border}`, color:C.creamFaint, borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>
+                  ⇅ {pendNuevosArriba ? 'Más nuevos arriba' : 'Más antiguos arriba'}
+                </button>
+              )}
             </div>
 
             <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
