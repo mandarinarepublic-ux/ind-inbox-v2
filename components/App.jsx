@@ -260,6 +260,9 @@ export default function App() {
   // del panel derecho.
   const [soltarAqui,   setSoltarAqui]   = useState(false)
   const [filtro,       setFiltro]       = useState(FILTRO_INICIAL)
+  // 📤 Enviar del historial en curso: { tel, id } o null. Lo avisa RightPanel y se
+  // pinta como burbuja verde titilando en el chat (la hoja tarda unos segundos).
+  const [hojaEnviando, setHojaEnviando] = useState(null)
   // Botón ⇅ de 🔴: false = la regla de siempre (compararEspera), true = el que
   // escribió último arriba. Se recuerda en ESTE navegador.
   const [pendNuevosArriba, setPendNuevosArriba] = useState(false)
@@ -2436,8 +2439,19 @@ export default function App() {
                     </div>
                   </div>
                 )}
-                <Toast result={toast} />
-                <div ref={endRef} />
+                {/* 📤 Enviar del historial: la hoja tarda unos segundos (el CRM la
+                    arma en un iframe escondido). Se avisa ACÁ, en el chat, que es
+                    donde se mira. En VERDE a pedido de Rodrigo: es "en proceso". */}
+                {hojaEnviando && activeConv && hojaEnviando.tel === activeConv.telefono && (
+                  <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:4 }}>
+                    <div style={{ background:'rgba(37,211,102,.12)', borderRadius:'18px 18px 4px 18px', padding:'9px 14px', border:'1px solid rgba(37,211,102,.45)' }}>
+                      <span style={{ color:'#25d366', fontSize:12, fontWeight:800, letterSpacing:'.04em', animation:'blink 1s infinite' }}>
+                        📤 ENVIANDO FOTO DEL PEDIDO {hojaEnviando.id}…
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <Toast result={toast} />                <div ref={endRef} />
               </div>
 
               {/* Input bar */}
@@ -2640,7 +2654,7 @@ export default function App() {
                 onMouseLeave={e => e.currentTarget.style.background = C.border}
               />
               <div className="right-col" style={{ width:'auto', flex:1, borderLeft:'none' }}>
-                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} onPedidoManual={alPedidoManualEscritorio} onVerPedido={alVerPedidoEscritorio} onEnviarHojaPedido={handleEnviarHojaPedido} />
+                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} onPedidoManual={alPedidoManualEscritorio} onVerPedido={alVerPedidoEscritorio} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={setHojaEnviando} />
               </div>
             </div>
           )}
@@ -2649,7 +2663,7 @@ export default function App() {
               <div style={{ display:'flex', justifyContent:'flex-end', padding:'10px 10px 0' }}>
                 <button onClick={cerrarCajonDerecho} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:17 }}>✕</button>
               </div>
-              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} />
+              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={setHojaEnviando} />
             </div>
           )}
 

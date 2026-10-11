@@ -401,7 +401,7 @@ const TABS = [
 // Etiqueta del catálogo online en el selector de la pestaña Tienda (este inbox = INDLOVERS).
 const CATALOGO_LABEL = 'INDLOVERS'
 
-export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, ventanaPautaHasta = null, onPedidoManual, onVerPedido, onEnviarHojaPedido }) {
+export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, ventanaPautaHasta = null, onPedidoManual, onVerPedido, onEnviarHojaPedido, onEnviandoHoja }) {
   const [tab, setTab] = useState('respuestas')
   const [countdown, setCountdown] = useState('')
 
@@ -610,6 +610,16 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   // al chat ABIERTO, así que una hoja que termine de armarse después le llegaría
   // a OTRO cliente. Desmontar el iframe escondido mata el envío en vuelo.
   useEffect(() => { setHojaEnvio(null) }, [activeConv?.telefono])
+  // Avisarle al chat (App) que hay una hoja saliendo, para la burbuja que titila.
+  // Hay DOS paneles montados (escritorio y celular): cada uno avisa solo cuando
+  // SU envío cambia, y solo apaga el aviso si él lo había prendido — si no, el
+  // panel que no está enviando lo borraría al montarse.
+  const avisoHojaRef = useRef(false)
+  useEffect(() => {
+    const enviando = hojaEnvio?.estado === 'enviando'
+    if (enviando) { avisoHojaRef.current = true; onEnviandoHoja?.({ tel: hojaEnvio.tel, id: hojaEnvio.id }) }
+    else if (avisoHojaRef.current) { avisoHojaRef.current = false; onEnviandoHoja?.(null) }
+  }, [hojaEnvio?.estado, hojaEnvio?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadHistorial = async (tel, idVenta) => {
     setHistorial(null); setHistError(false)
