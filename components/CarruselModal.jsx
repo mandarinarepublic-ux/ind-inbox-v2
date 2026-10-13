@@ -1,0 +1,116 @@
+'use client'
+// 🛍️ Elegir de 2 a 10 productos del catálogo de Meta y mandarlos como carrusel.
+// La vía (interactivo o plantilla) la decide el servidor: ver lib/carrusel.js.
+import React, { useEffect, useMemo, useState } from 'react'
+import { fetchCatalogoCarrusel } from '@/lib/api-client'
+import { MIN_TARJETAS, MAX_TARJETAS, MAX_TEXTO } from '@/lib/carrusel'
+
+// Paleta IND (crema sobre negro, como `C` en Components.jsx). `verde` es el acento: acá, crema.
+const P = { bg: '#111111', borde: '#2A2A2A', texto: '#F4F1EC', tenue: '#A09A90', muy: '#6b645b', verde: '#F4F1EC' }
+
+export default function CarruselModal({ nombreCliente, onEnviar, onCerrar, ventanaCerrada = false, canal = '' }) {
+  const [productos, setProductos] = useState(null)
+  const [error, setError] = useState('')
+  const [q, setQ] = useState('')
+  const [elegidos, setElegidos] = useState([])   // en el orden en que se eligen = orden de las tarjetas
+  const [texto, setTexto] = useState('')
+  const [enviando, setEnviando] = useState(false)
+
+  const cargar = async (fresco = false) => {
+    setError(''); setProductos(null)
+    const r = await fetchCatalogoCarrusel(fresco, canal)   // IND: catálogo POR número
+    if (r.ok) setProductos(r.productos || [])
+    else { setError(r.error || 'No se pudo leer el catálogo'); setProductos([]) }
+  }
+  useEffect(() => { cargar() }, [])
+
+  const visibles = useMemo(() => {
+    const t = q.trim().toLowerCase()
+    const l = productos || []
+    return t ? l.filter(p => p.nombre.toLowerCase().includes(t)) : l
+  }, [productos, q])
+
+  const alternar = (p) => setElegidos(prev => {
+    if (prev.some(x => x.retailerId === p.retailerId)) return prev.filter(x => x.retailerId !== p.retailerId)
+    if (prev.length >= MAX_TARJETAS) return prev
+    return [...prev, p]
+  })
+
+  const listo = elegidos.length >= MIN_TARJETAS && elegidos.length <= MAX_TARJETAS && texto.trim() && texto.length <= MAX_TEXTO
+  const enviar = async () => {
+    if (!listo || enviando) return
+    setEnviando(true); setError('')
+    const r = await onEnviar(texto.trim(), elegidos)
+    setEnviando(false)
+    if (r?.ok) onCerrar()
+    else setError(r?.error || 'No se pudo enviar')
+  }
+
+  return (
+    <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 720, height: '88vh', display: 'flex', flexDirection: 'column', background: P.bg, border: `1px solid ${P.borde}`, borderRadius: 14, padding: 14, fontFamily: 'inherit', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontWeight: 800, color: P.texto, fontSize: 14 }}>🛍️ Enviar productos{nombreCliente ? ` a ${nombreCliente}` : ''}</div>
+          <button onClick={onCerrar} style={{ background: 'transparent', border: 'none', color: P.tenue, fontSize: 18, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {ventanaCerrada && (
+          <div style={{ fontSize: 11.5, color: '#fbbf24', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 8, padding: '7px 10px', lineHeight: 1.4 }}>
+            ⚠️ La ventana de 24 h está cerrada: sale con la <b>plantilla de carrusel</b> (la cobra Meta como marketing). Tu texto va en el saludo: «¡Hola! 🧡 <i>tu texto</i> … Desliza para ver más 👉».
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar producto…" autoFocus
+            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: `1px solid ${P.borde}`, background: '#0A0A0A', color: P.texto, fontFamily: 'inherit', fontSize: 13 }} />
+          <button onClick={() => cargar(true)} title="Volver a leer el catálogo de Meta" style={{ padding: '0 10px', borderRadius: 8, border: `1px solid ${P.borde}`, background: 'transparent', color: P.tenue, cursor: 'pointer' }}>↻</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          {productos === null ? (
+            <div style={{ color: P.tenue, fontSize: 12, padding: 20, textAlign: 'center' }}>Leyendo el catálogo…</div>
+          ) : visibles.length === 0 ? (
+            <div style={{ color: P.tenue, fontSize: 12, padding: 20, textAlign: 'center' }}>{error ? '' : 'Ningún producto con ese nombre'}</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+              {visibles.map(p => {
+                const n = elegidos.findIndex(x => x.retailerId === p.retailerId)
+                const on = n >= 0
+                return (
+                  <button key={p.retailerId} onClick={() => alternar(p)} title={p.nombre} style={{
+                    position: 'relative', padding: 0, borderRadius: 10, overflow: 'hidden', cursor: 'pointer', textAlign: 'left',
+                    border: `2px solid ${on ? P.verde : P.borde}`, background: '#0A0A0A', fontFamily: 'inherit',
+                    opacity: !on && elegidos.length >= MAX_TARJETAS ? .4 : 1,
+                  }}>
+                    <img src={p.foto} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+                    <div style={{ padding: '5px 6px' }}>
+                      <div style={{ fontSize: 11, color: P.texto, lineHeight: 1.25, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.nombre}</div>
+                      <div style={{ fontSize: 11, color: P.verde, fontWeight: 800, marginTop: 2 }}>{p.precio}</div>
+                    </div>
+                    {on && <span style={{ position: 'absolute', top: 5, right: 5, width: 22, height: 22, borderRadius: 11, background: P.verde, color: '#0d1520', fontWeight: 900, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n + 1}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={2} maxLength={MAX_TEXTO}
+          placeholder="Texto que acompaña al carrusel (obligatorio)…"
+          style={{ padding: '8px 10px', borderRadius: 8, border: `1px solid ${P.borde}`, background: '#0A0A0A', color: P.texto, fontFamily: 'inherit', fontSize: 13, resize: 'vertical' }} />
+        {error && <div style={{ color: '#f87171', fontSize: 12 }}>{error}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, color: elegidos.length >= MIN_TARJETAS ? P.verde : P.tenue }}>
+            {elegidos.length}/{MAX_TARJETAS} elegidos{elegidos.length < MIN_TARJETAS ? ` · mínimo ${MIN_TARJETAS}` : ''}
+          </span>
+          {elegidos.length > 0 && <button onClick={() => setElegidos([])} style={{ background: 'transparent', border: 'none', color: P.muy, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>limpiar</button>}
+          <span style={{ flex: 1 }} />
+          <button disabled={!listo || enviando} onClick={enviar} style={{
+            padding: '9px 16px', borderRadius: 9, border: 'none', fontWeight: 800, fontSize: 13, fontFamily: 'inherit',
+            background: listo ? '#F4F1EC' : '#161616', color: listo ? '#0A0A0A' : P.muy,
+            cursor: listo && !enviando ? 'pointer' : 'default',
+          }}>{enviando ? 'Enviando…' : '🛍️ Enviar carrusel'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}

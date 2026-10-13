@@ -247,7 +247,7 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
 }
 
 // ── Modal de plantilla reutilizable (lo usa también el composer del CHAT) ──────
-export function PlantillaModal({ telefono, nombre, onClose, flash }) {
+export function PlantillaModal({ telefono, nombre, onClose, flash, onCarrusel }) {
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 500 }} />
@@ -261,14 +261,14 @@ export function PlantillaModal({ telefono, nombre, onClose, flash }) {
           <div style={{ fontSize: 15, fontWeight: 800, color: C.cream }}>📋 Enviar plantilla</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.creamFaint, cursor: 'pointer', fontSize: 20 }}>✕</button>
         </div>
-        <SelectorPlantilla contacto={{ telefono, nombre }} flash={flash} onClose={onClose} />
+        <SelectorPlantilla contacto={{ telefono, nombre }} flash={flash} onClose={onClose} onCarrusel={onCarrusel} />
       </div>
     </>
   )
 }
 
 // ── Selector de plantilla (para contactos fuera de 24h) ───────────────────────
-function SelectorPlantilla({ contacto: c, flash, onClose }) {
+function SelectorPlantilla({ contacto: c, flash, onClose, onCarrusel }) {
   const [estado,  setEstado]  = useState('loading')
   const [error,   setError]   = useState('')
   const [tpls,    setTpls]    = useState([])
@@ -349,11 +349,15 @@ function SelectorPlantilla({ contacto: c, flash, onClose }) {
         <div>
           <div style={{ fontSize: 12, fontWeight: 800, color: C.creamDim, marginBottom: 8 }}>Elige una plantilla</div>
           {tpls.map((t) => (
-            <button key={`${t.name}_${t.language}`} onClick={() => elegir(t)} style={{
+            <button key={`${t.name}_${t.language}`} onClick={() => {
+              // 🛍️ La de carrusel necesita productos: se elige en el 🛍️ del chat.
+              if (t.carrusel) { if (onCarrusel) { onClose(); onCarrusel() } else flash('🛍️ El carrusel se manda desde el chat, con el botón 🛍️'); return }
+              elegir(t)
+            }} style={{
               width: '100%', textAlign: 'left', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10,
               padding: '10px 12px', marginBottom: 8, cursor: 'pointer',
             }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.cream }}>{t.name} <span style={{ fontSize: 10, color: C.creamFaint }}>· {t.language}</span></div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.cream }}>{t.carrusel ? '🛍️ ' : ''}{t.name} <span style={{ fontSize: 10, color: C.creamFaint }}>· {t.language}{t.carrusel ? ' · carrusel: eliges los productos' : ''}</span></div>
               <div style={{ fontSize: 11.5, color: C.creamDim, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.bodyText}</div>
             </button>
           ))}

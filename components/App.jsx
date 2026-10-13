@@ -1,11 +1,15 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { sendReaction, fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva } from '@/lib/api-client'
+import { sendReaction, fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva, fetchEtiquetas, crearEtiquetaApi, editarEtiquetaApi, ponerEtiquetaApi, quitarEtiquetaApi, sendCarrusel } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { ETAPAS, chipsDeChat, alertaVentanaCierra, necesitaConfirmarAtendido } from '@/lib/gestion'
 import { FILTRO_INICIAL, prepararVista, alternar, pasaFiltro, conteos, compararEspera, compararEsperaNuevos } from '@/lib/filtro-chats'
 import { sumarOverride, aplicarOverrides } from '@/lib/overrides'
 import FiltrosLista from '@/components/FiltrosLista'
+import { MenuEtiquetas, AdminEtiquetas, ChipEtiqueta } from '@/components/Etiquetas'
+import { expandirEtiquetas } from '@/lib/etiquetas-mapa'
+import CarruselModal from '@/components/CarruselModal'
+import { guardadoCarrusel } from '@/lib/carrusel'
 import { etiquetaPedido, etapaVigente, tail9 } from '@/lib/etiqueta-crm'
 import { avisoDeFormato } from '@/lib/audio-nota-voz'
 import { adjuntosDeRespuesta } from '@/lib/adjuntos-respuesta'
@@ -234,6 +238,18 @@ export default function App() {
   // Reacciones que acabamos de mandar y todavía no vuelven del sync: wamid → emoji.
   const [reaccionLocal, setReaccionLocal] = useState({})
   const [versionNueva, setVersionNueva] = useState(false)
+  // 🔖 Etiquetas (lib/etiquetas.js, port desde MANDI 13-oct-2026): el catálogo y
+  // { telefono: [ids] }. El mapa llega en cada inbox-sync; el catálogo, al abrir y al editar.
+  const [etiquetas, setEtiquetas] = useState([])
+  const [etiquetasChat, setEtiquetasChat] = useState({})
+  const [menuEtiquetas, setMenuEtiquetas] = useState(false)
+  const [adminEtiquetas, setAdminEtiquetas] = useState(false)
+  const [etiquetaOcupada, setEtiquetaOcupada] = useState(null)
+  const [showCarrusel, setShowCarrusel] = useState(false)   // 🛍️ lib/carrusel.js
+  // Cambios recién hechos en ESTA pestaña: un poll que salió antes del clic traería
+  // el mapa viejo y la etiqueta "rebotaría". Se respetan 20 s.
+  const etiquetasLocalRef = useRef({})   // telefono → { ids, hasta }
+  const etiquetasRef = useRef([])
   const [showSidebar,  setShowSidebar]  = useState(true)
   const [showRight,    setShowRight]    = useState(false)
   const [rightWidth,   setRightWidth]   = useState(300) // ancho del panel derecho (px), redimensionable
@@ -576,6 +592,21 @@ export default function App() {
     const ctList = sync?.contactos ?? null
     // Pendientes de TODOS los canales (incluido el que no se está mirando).
     if (sync?.pendientes) setPendientes(sync.pendientes)
+    // 🔖 `null` = la lectura falló → se conserva el mapa anterior (no se borran etiquetas).
+    if (sync?.etiquetasCompacto && typeof sync.etiquetasCompacto === 'object') {
+      const mapa = expandirEtiquetas(sync.etiquetasCompacto)
+      const ahoraMs = Date.now()
+      for (const [tel, o] of Object.entries(etiquetasLocalRef.current)) {
+        if (o.hasta > ahoraMs) { if (o.ids.length) mapa[tel] = o.ids; else delete mapa[tel] }
+        else delete etiquetasLocalRef.current[tel]
+      }
+      setEtiquetasChat(mapa)
+      // Una etiqueta que no está en el catálogo la creó otra pestaña: se recarga.
+      const conocidas = new Set(etiquetasRef.current.map(e => e.id))
+      if (Object.values(mapa).some(ids => ids.some(id => !conocidas.has(id)))) {
+        fetchEtiquetas().then(l => { if (l) { etiquetasRef.current = l; setEtiquetas(l) } })
+      }
+    }
 
     // null → hubo ERROR (no "vacío"): conservar lo previo, no parpadear a blanco
     if (Array.isArray(lista) || Array.isArray(rows)) {
@@ -1126,6 +1157,7 @@ export default function App() {
   useEffect(() => {
     let vivo = true
     const traer = () => fetchPedidosChat().then(p => { if (vivo && p) setPedidosChat(p) })
+    fetchEtiquetas().then(l => { if (vivo && l) { etiquetasRef.current = l; setEtiquetas(l) } })
     traer()
     const id = setInterval(traer, 5 * 60 * 1000)
     return () => { vivo = false; clearInterval(id) }
@@ -1140,6 +1172,7 @@ export default function App() {
       deudaAt: ct.deudaAt, deudaNota: ct.deudaNota, deudaPor: ct.deudaPor,
       sinAutomaticos: ct.sinAutomaticos, tipoContacto: ct.tipoContacto,
       pedido: etiquetaPedido(pedido, ahora),
+      etiquetas: etiquetasChat[tel] || [],
     }
   }
 
@@ -1273,7 +1306,7 @@ export default function App() {
       counts: conteos(vistas, filtro),
       totalPendientes: vistas.filter(v => v.estado === 'pendiente').length,
     }
-  }, [searched, isSearching, contacts, estadoDeBandeja, pedidosChat, ahora, filtro, pendNuevosArriba])
+  }, [searched, isSearching, contacts, estadoDeBandeja, pedidosChat, ahora, filtro, pendNuevosArriba, etiquetasChat])
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const lastIncoming = activeConv ? [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE') : null
@@ -1353,6 +1386,52 @@ export default function App() {
     const on = !contacts[telefono]?.sinAutomaticos
     cambiarCampos(telefono, { sinAutomaticos: on }, () => updateSinAutomaticos(telefono, on), 'No se pudo cambiar 🤫')
   }
+  // ── 🔖 Etiquetas ──
+  const avisarEtiqueta = (msg) => { setToast({ ok: false, msg }); setTimeout(() => setToast(null), 4000) }
+  const etiquetasDe = (telefono) => {
+    const porId = new Map(etiquetas.map(e => [e.id, e]))
+    return (etiquetasChat[telefono] || []).map(id => porId.get(id)).filter(e => e && e.activa)
+  }
+  const chipsEtiquetas = (telefono) => etiquetasDe(telefono)
+    .map(e => ({ key: `et${e.id}`, texto: e.nombre, color: e.color, titulo: `Etiqueta: ${e.nombre}` }))
+  const fijarEtiquetasLocal = (telefono, ids) => {
+    etiquetasLocalRef.current[telefono] = { ids, hasta: Date.now() + 20000 }
+    setEtiquetasChat(prev => {
+      const n = { ...prev }
+      if (ids.length) n[telefono] = ids; else delete n[telefono]
+      return n
+    })
+  }
+  const alternarEtiqueta = async (telefono, e, poner) => {
+    const antes = etiquetasChat[telefono] || []
+    fijarEtiquetasLocal(telefono, poner ? [...new Set([...antes, e.id])] : antes.filter(id => id !== e.id))
+    setEtiquetaOcupada(e.id)
+    const r = poner ? await ponerEtiquetaApi(telefono, e.id) : await quitarEtiquetaApi(telefono, e.id)
+    setEtiquetaOcupada(null)
+    if (!r.ok) { fijarEtiquetasLocal(telefono, antes); avisarEtiqueta(`✗ No se pudo ${poner ? 'poner' : 'quitar'} la etiqueta — ${r.error || 'reintenta'}`) }
+  }
+  const recargarEtiquetas = async () => {
+    const l = await fetchEtiquetas()
+    if (l) { etiquetasRef.current = l; setEtiquetas(l) }
+  }
+  // En AdminEtiquetas el error se muestra en la misma ventana: por eso estas sí lanzan.
+  const crearEtiqueta = async ({ nombre, color }) => {
+    const r = await crearEtiquetaApi(nombre, color)
+    if (!r.ok) throw new Error(r.error)
+    await recargarEtiquetas()
+  }
+  const editarEtiqueta = async (id, cambios) => {
+    const r = await editarEtiquetaApi(id, cambios)
+    if (!r.ok) throw new Error(r.error)
+    await recargarEtiquetas()
+  }
+  // Si la etiqueta del filtro se desactiva, su chip desaparece y no habría cómo
+  // apagar el filtro: la bandeja quedaría vacía sin explicación. Se suelta solo.
+  useEffect(() => {
+    if (filtro.etiqueta && etiquetas.length && !etiquetas.some(e => e.id === filtro.etiqueta && e.activa)) {
+      setFiltro(f => ({ ...f, etiqueta: 0 }))
+    }
+  }, [filtro.etiqueta, etiquetas])
   const cambiarTipoContacto = (telefono) => {
     const tipo = contacts[telefono]?.tipoContacto === 'interno' ? 'cliente' : 'interno'
     cambiarCampos(telefono, { tipoContacto: tipo }, () => updateTipoContacto(telefono, tipo), 'No se pudo cambiar el tipo de contacto')
@@ -2025,6 +2104,29 @@ export default function App() {
     setTogglingIA(false)
   }
 
+  // ── 🛍️ Enviar carrusel de productos (port desde MANDI) ────────────
+  // El canal es el de la conversación (o la pestaña): en IND el catálogo es POR
+  // número y el 9804 no tiene uno. Devuelve el resultado a CarruselModal, que
+  // muestra el error ahí mismo sin perder lo que el vendedor eligió.
+  const canalCarrusel = () => activeConv?.phoneId || getCanalActivo()
+  const handleSendCarrusel = async (texto, productos) => {
+    if (!activeConv) return { ok: false, error: 'No hay chat abierto' }
+    const telefono = activeConv.telefono
+    const nombre   = activeConv.nombre
+    const canal    = canalCarrusel()
+    const estadoDestino = estadoAlResponder(currentStatus)
+    const result = await sendCarrusel(telefono, nombre, texto, productos, canal)
+    if (result.ok) {
+      const tmpMsg = { id: result.wamid || 'tmp_' + Date.now(), telefono, nombre, tipo: 'carrusel', mensaje: texto, botones: guardadoCarrusel(productos, ''), direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+      setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+      pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
+      setToast({ ok: true, msg: '🛍️ Carrusel enviado' }); setTimeout(() => setToast(null), 3000)
+      await changeStatus(telefono, estadoDestino)
+      setTimeout(load, 3000)
+    }
+    return result
+  }
+
   const handleSendButtons = async () => {
     if (!activeConv || !input.trim()) return
     const validBtns = btnTexts.map((t,i) => ({ id:`btn_${i+1}`, title:t.trim() })).filter(b=>b.title)
@@ -2218,7 +2320,8 @@ export default function App() {
                 ))}
               </div>
               {/* ── Filtros combinables (diseño 2026-09-22 §4) ── */}
-              <FiltrosLista filtro={filtro} conteos={counts} onCambiar={cambiarFiltro} />
+              <FiltrosLista filtro={filtro} conteos={counts} onCambiar={cambiarFiltro}
+                etiquetas={etiquetas.filter(e => e.activa)} onAdministrarEtiquetas={() => setAdminEtiquetas(true)} />
               {/* ⇅ Orden de 🔴 (lib/filtro-chats.js) — solo en esa bandeja */}
               {filtro.bandeja === 'pendiente' && !isSearching && (
                 <button onClick={alternarOrdenPend} title="Cambiar el orden de Pendientes"
@@ -2254,7 +2357,7 @@ export default function App() {
                   const canalDistinto = isSearching && canalLabel !== null && canalDePhoneId(contacts[conv.telefono]?.phoneId) !== canal
                   return (
                     <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono), username: contacts[conv.telefono]?.username || '' }} isActive={active===conv.telefono} onClick={() => irAResultadoBusqueda(conv.telefono)}
-                      search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} chips={chipsDeChat(datosGestion(conv.telefono), ahora)} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
+                      search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} chips={[...chipsDeChat(datosGestion(conv.telefono), ahora), ...chipsEtiquetas(conv.telefono)]} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
                       canalLabel={canalLabel} canalDistinto={canalDistinto} />
                   )
                 })}
@@ -2322,6 +2425,11 @@ export default function App() {
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontWeight:800, color:C.cream, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:160 }}>{displayName(activeConv.telefono)}</div>
                     <div style={{ fontSize:12, fontWeight:600, color:C.creamDim, whiteSpace:'nowrap', userSelect:'text' }}>{etiquetaTelefono(activeConv.telefono, contacts[activeConv.telefono]?.username)}</div>
+                    {etiquetasDe(activeConv.telefono).length > 0 && (
+                      <div onClick={() => setMenuEtiquetas(true)} title="Cambiar etiquetas" style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:3, cursor:'pointer' }}>
+                        {etiquetasDe(activeConv.telefono).map(e => <ChipEtiqueta key={e.id} e={e} chico />)}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="chat-actions" style={{ display:'flex', alignItems:'center', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
@@ -2380,6 +2488,8 @@ export default function App() {
                         <BotonEje on={ct.tipoContacto === 'interno'} color={C.creamDim} icon="🏷️" label="Interno"
                           title={ct.tipoContacto === 'interno' ? 'Contacto interno o proveedor — clic para volverlo cliente' : 'Marcar como contacto interno o proveedor'}
                           onClick={() => cambiarTipoContacto(activeConv.telefono)} />
+                        <BotonEje on={etiquetasDe(activeConv.telefono).length > 0} color={C.cream} icon="🔖" label="Etiquetas"
+                          title="Poner o quitar etiquetas" onClick={() => setMenuEtiquetas(true)} />
                       </>
                     )
                   })()}
@@ -2626,6 +2736,8 @@ export default function App() {
                     📎
                     {imgFiles.length > 0 && <span style={{ position:'absolute', top:-4, right:-4, width:16, height:16, borderRadius:'50%', background:C.cream, color:C.bg, fontSize:8, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>{imgFiles.length}</span>}
                   </button>
+                  <button onClick={() => setShowCarrusel(true)} title="Enviar productos del catálogo (carrusel)"
+                    style={{ width:42, height:42, flexShrink:0, background:C.surface2, border:`1px solid ${C.border}`, borderRadius:11, cursor:'pointer', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center', color:C.creamDim, transition:'all .15s' }}>🛍️</button>
                   <button onClick={() => setShowBtnPanel(p=>!p)} title="Botones interactivos"
                     style={{ width:42, height:42, flexShrink:0, background:showBtnPanel?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${showBtnPanel?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', color:showBtnPanel?C.cream:C.creamDim, transition:'all .15s' }}>🔘</button>
                   <button onClick={() => { setShowEmoji(p=>!p); setShowBtnPanel(false) }} title="Emojis"
@@ -2741,7 +2853,23 @@ export default function App() {
           nombre={activeConv.nombre}
           onClose={() => setShowTplModal(false)}
           flash={(m) => { setTplToast(m); setTimeout(() => setTplToast(null), 3000) }}
+          onCarrusel={() => setShowCarrusel(true)}
         />
+      )}
+      {showCarrusel && activeConv && (
+        <CarruselModal nombreCliente={displayName(activeConv.telefono)} onEnviar={handleSendCarrusel}
+          ventanaCerrada={!windowOpen} canal={canalCarrusel()} onCerrar={() => setShowCarrusel(false)} />
+      )}
+      {menuEtiquetas && activeConv && (
+        <MenuEtiquetas etiquetas={etiquetas} puestas={etiquetasChat[activeConv.telefono] || []}
+          ocupado={etiquetaOcupada}
+          onAlternar={(e, poner) => alternarEtiqueta(activeConv.telefono, e, poner)}
+          onAdministrar={() => { setMenuEtiquetas(false); setAdminEtiquetas(true) }}
+          onCerrar={() => setMenuEtiquetas(false)} />
+      )}
+      {adminEtiquetas && (
+        <AdminEtiquetas etiquetas={etiquetas} onCrear={crearEtiqueta} onEditar={editarEtiqueta}
+          onCerrar={() => setAdminEtiquetas(false)} />
       )}
       {tplToast && (
         <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:C.surface2, border:`1px solid ${C.border2}`, color:C.cream, padding:'10px 18px', borderRadius:10, fontSize:13, fontWeight:700, zIndex:600, boxShadow:'0 8px 30px rgba(0,0,0,.6)', maxWidth:'86vw', textAlign:'center' }}>{tplToast}</div>

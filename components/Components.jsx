@@ -6,6 +6,7 @@ import { resumenDeLista } from '@/lib/resumen-lista'
 import { puedeReenviar } from '@/lib/reenvio'
 import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
 import { EMOJIS_REACCION } from '@/lib/reacciones'
+import { leerCarrusel } from '@/lib/carrusel'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -576,6 +577,47 @@ function TextoConEnlaces({ texto }) {
 // ☠️ Una línea que NO se pudo resolver muestra su id, NO se esconde. Siete ids de
 // IND no tienen cómo resolverse todavía (sus catálogos no pertenecen a "Mandarina
 // Lab"): si se filtraran, un pedido de 2 artículos se vería como de 1.
+// 🛍️ El carrusel que mandamos (lib/carrusel.js, port desde MANDI 13-oct-2026): las
+// tarjetas tal como las vio el cliente, en fila deslizable. Viajan en `botones`.
+function CarruselCards({ c }) {
+  return (
+    <div style={{ marginTop: 7 }}>
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, maxWidth: 330, scrollbarWidth: 'thin', scrollbarColor: `${C.border2} transparent` }}>
+        {c.carrusel.map((p) => (
+          <div key={p.retailerId} title={p.nombre} style={{ flex: '0 0 104px', borderRadius: 9, overflow: 'hidden', background: C.surface, border: `1px solid ${C.border2}` }}>
+            {p.foto
+              ? <img src={p.foto} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+              : <div style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>🛍️</div>}
+            <div style={{ padding: '4px 5px' }}>
+              <div style={{ fontSize: 10.5, color: C.cream, lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.nombre || p.retailerId}</div>
+              {p.precio && <div style={{ fontSize: 10.5, color: C.cream, fontWeight: 800 }}>{p.precio}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: C.creamDim, marginTop: 2 }}>
+        🛍️ Carrusel · {c.carrusel.length} productos{c.via === 'plantilla' ? ' · por plantilla' : ''}
+      </div>
+    </div>
+  )
+}
+
+// El cliente escribió DESDE una tarjeta del catálogo ("¿hay en M?" sobre un producto):
+// Meta manda el producto en `context.referred_product`. Se resuelve al leer el hilo.
+function ProductoReferido({ p }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, padding: 5, borderRadius: 8, background: C.surface, borderLeft: `3px solid ${C.cream}` }}>
+      {p.imagen
+        ? <img src={p.imagen} alt="" style={{ width: 38, height: 38, objectFit: 'cover', borderRadius: 6 }} />
+        : <span style={{ fontSize: 20 }}>🛍️</span>}
+      <div style={{ fontSize: 11.5, color: C.cream, minWidth: 0 }}>
+        <div style={{ fontSize: 9.5, color: C.creamDim, fontWeight: 800 }}>PREGUNTA POR</div>
+        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>{p.nombre || `Producto ${p.retailerId}`}</div>
+      </div>
+    </div>
+  )
+}
+
 function PedidoCard({ pedido }) {
   const money = (n) => `$${Number(n || 0).toFixed(2)}`
   return (
@@ -775,6 +817,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
         {/* La ubicación reemplaza al texto: el `mensaje` de esa fila SON las
             coordenadas, y la tarjeta ya las muestra. Nunca deja la burbuja
             vacía — si parseUbicacion no reconoce algo, cae al <p> de siempre. */}
+        {msg.productoReferido && <ProductoReferido p={msg.productoReferido} />}
         {msg.pedido
           ? <PedidoCard pedido={msg.pedido} />
           : msg.ubicacion
@@ -797,6 +840,8 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
               cursor: 'pointer', fontFamily: 'inherit',
             }}>↗ Revisar conversación en el número anterior</button>
         )}
+
+        {msg.tipo === 'carrusel' && leerCarrusel(msg.botones) && <CarruselCards c={leerCarrusel(msg.botones)} />}
 
         {/* Botones interactivos enviados por nosotros */}
         {isMe && msg.botones && (() => {
