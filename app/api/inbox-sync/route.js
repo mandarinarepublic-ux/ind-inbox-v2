@@ -3,6 +3,7 @@ import { getLista, getMensajes } from '@/lib/mensajes'
 import { getContactos } from '@/lib/contactos'
 import { contarPendientesPorCanalSupabase, versionInboxSupabase } from '@/lib/inbox-supabase'
 import { etagDe, sinCambios } from '@/lib/version-inbox'
+import { mapaEtiquetasChats } from '@/lib/etiquetas'
 
 // Sync unificado del inbox: UNA sola función en vez de 3 (/api/lista +
 // /api/mensajes + /api/contactos) por cada ciclo de polling → 1/3 de las
@@ -69,7 +70,7 @@ export async function GET(req) {
       })
     }
 
-    const [lista, rows, contactos, pendientes] = await Promise.all([
+    const [lista, rows, contactos, pendientes, etiquetasCompacto] = await Promise.all([
       getLista(canal),
       getMensajes(canal),
       // Contactos SIN filtro de canal, a proposito. El estado (pendiente, atendido,
@@ -84,9 +85,14 @@ export async function GET(req) {
       // De TODOS los canales, no solo del activo: es lo que alimenta el contador
       // del botón de la otra bandeja.
       contarPendientesPorCanalSupabase().catch(() => ({})),
+      // 🔖 { etiqueta_id: "tel,tel" } — compacto (lib/etiquetas-mapa.js, port desde
+      // MANDI 13-oct-2026). Poner/quitar una toca `conversaciones.updated_at`
+      // (trigger), así que el ETag de arriba se mueve. `null` si falla → la pantalla
+      // se queda con las que tenía, no las borra.
+      mapaEtiquetasChats().catch(e => { console.error('[/api/inbox-sync] etiquetas:', e.message); return null }),
     ])
     // `v` va en el cuerpo: es de donde el cliente la toma para la próxima vuelta.
-    return NextResponse.json({ lista, rows, contactos, pendientes, v: etagActual, build: process.env.VERCEL_GIT_COMMIT_SHA || '' }, {
+    return NextResponse.json({ lista, rows, contactos, pendientes, etiquetasCompacto, v: etagActual, build: process.env.VERCEL_GIT_COMMIT_SHA || '' }, {
       // Cache COMPARTIDO en el edge: varias pestañas que pollean dentro de la misma
       // ventana comparten UNA ejecución de origen. El caché se indexa por URL, y
       // `canal` va en la query, así que cada bandeja tiene su entrada y no se pisan.

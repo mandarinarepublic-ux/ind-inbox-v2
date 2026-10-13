@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getWabaId, GRAPH } from '@/lib/whatsapp'
+import { wabaIdDePhoneId } from '@/lib/canales'
+import { payloadCrearPlantillaCarrusel } from '@/lib/carrusel'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -36,6 +38,9 @@ function simplificar(t) {
     bodyVars: contarVars(body?.text),       // cuántas variables {{n}} pedir al usuario
     footerText: footer?.text || '',
     buttons: Array.isArray(btns?.buttons) ? btns.buttons.map((b) => b.text || '') : [],
+    // 🛍️ Carrusel de productos: no se manda desde este selector (pide productos),
+    // sino desde el 🛍️ del chat. Ver lib/carrusel.js.
+    carrusel: comps.some((c) => String(c.type).toUpperCase() === 'CAROUSEL'),
   }
 }
 
@@ -60,5 +65,37 @@ export async function GET() {
   } catch (err) {
     console.error('[/api/plantillas]', err.message)
     return NextResponse.json({ ok: false, error: err.message, templates: [] }, { status: 500 })
+  }
+}
+
+// POST /api/plantillas { canal, tipo: 'carrusel_productos' } → crea la plantilla de
+// carrusel (lib/carrusel.js) en la WABA de ESE número. Solo ese tipo: IND no crea
+// otras plantillas desde el inbox. ☠️ Sin caída a la WABA del token: una plantilla
+// en la WABA equivocada no se ve en el canal que la necesita y no se puede mover.
+export async function POST(req) {
+  if (!META_TOKEN) return NextResponse.json({ ok: false, error: 'META_TOKEN no está configurado' }, { status: 500 })
+  const datos = await req.json().catch(() => ({}))
+  if (datos.tipo !== 'carrusel_productos') return NextResponse.json({ ok: false, error: 'Solo se puede crear la plantilla de carrusel' }, { status: 400 })
+  const wabaId = wabaIdDePhoneId(datos.canal || '')
+  if (!wabaId) return NextResponse.json({ ok: false, error: `Canal desconocido: ${datos.canal || '(vacío)'}` }, { status: 400 })
+  const payload = payloadCrearPlantillaCarrusel()
+  try {
+    const res = await fetch(`${GRAPH}/${wabaId}/message_templates`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${META_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const e = data?.error || {}
+      const msg = e.error_user_msg || e.message || `HTTP ${res.status}`
+      console.error('[/api/plantillas POST] Meta:', msg, e.code, e.error_subcode)
+      return NextResponse.json({ ok: false, error: msg, code: e.code, subcode: e.error_subcode }, { status: 502 })
+    }
+    return NextResponse.json({ ok: true, wabaId, nombre: payload.name, ...data })
+  } catch (err) {
+    console.error('[/api/plantillas POST]', err.message)
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 })
   }
 }
