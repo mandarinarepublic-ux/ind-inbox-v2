@@ -1,11 +1,12 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { Avatar } from '@/components/Components'
-import { fetchRepliesFromSheet, writeReply, reorderReplies, addNota, setIdVenta, fetchProductos, generarLinkPago , subirAudioNota, subirDocumento } from '@/lib/api-client'
+import { getCanalActivo, fetchRepliesFromSheet, writeReply, reorderReplies, addNota, setIdVenta, fetchProductos, generarLinkPago , subirAudioNota, subirDocumento } from '@/lib/api-client'
 import { esAudio as esAudioArchivo } from '@/lib/audio-nota-voz'
 import { esDocumento as esDocumentoArchivo } from '@/lib/adjuntos'
 import { adjuntosDeRespuesta, moverAdjunto } from '@/lib/adjuntos-respuesta'
 import Notas from './Notas'
+import CarruselModal from './CarruselModal'
 import PedidoManual from './PedidoManual'
 import VerPedido from './VerPedido'
 import EnviarHojaOculta from './EnviarHojaOculta'
@@ -311,6 +312,32 @@ function MultiImgEditor({ urls, onChange }) {
   )
 }
 
+// ── 🛍️ Productos del carrusel de una respuesta rápida (lib/carrusel.js) ──
+// Productos O botones, nunca los dos: Meta no deja botones en un carrusel.
+function CarruselEditor({ productos, hayBotones, onElegir, onQuitar }) {
+  if (hayBotones) {
+    return <p style={{ fontSize:9, color:C.creamDim, margin:'6px 0 0' }}>🛍️ Para mandar un carrusel de productos, quita primero los botones.</p>
+  }
+  return (
+    <div style={{ marginTop:6 }}>
+      <p style={{ fontSize:9, color:C.cream, margin:'0 0 3px', fontWeight:600 }}>🛍️ Carrusel de productos (opcional · 2 a 10 · el texto va encima · solo por el 3326)</p>
+      {productos.length > 0 && (
+        <div style={{ display:'flex', gap:4, overflowX:'auto', marginBottom:4 }}>
+          {productos.map(p => (
+            <img key={p.retailerId} src={p.foto} alt="" title={p.nombre} style={{ width:38, height:38, objectFit:'cover', borderRadius:6, border:`1px solid ${C.border}`, flexShrink:0 }} />
+          ))}
+        </div>
+      )}
+      <div style={{ display:'flex', gap:4 }}>
+        <button type="button" onClick={onElegir} style={{ flex:1, padding:'5px', background:'rgba(244,241,236,.06)', border:`1px solid ${C.border2}`, color:C.cream, borderRadius:6, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>
+          {productos.length ? `🛍️ Cambiar productos (${productos.length})` : '🛍️ Elegir productos'}
+        </button>
+        {productos.length > 0 && <button type="button" onClick={onQuitar} style={{ padding:'5px 8px', background:'transparent', border:`1px solid ${C.border}`, color:C.creamDim, borderRadius:6, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>quitar</button>}
+      </div>
+    </div>
+  )
+}
+
 // ── Editor de 3 botones interactivos para una respuesta rápida ──
 // Elegir el grupo de UNA respuesta (al crearla o editarla).
 function GrupoSelector({ grupo, onChange }) {
@@ -439,6 +466,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [newImgUrls,    setNewImgUrls]    = useState([])
   const [editBotones,   setEditBotones]   = useState(['', '', ''])
   const [newBotones,    setNewBotones]    = useState(['', '', ''])
+  // 🛍️ Productos del carrusel de la respuesta que se edita / de la nueva, y para cuál
+  // está abierto el buscador ('edit' | 'new' | null).
+  const [editCarrusel,  setEditCarrusel]  = useState([])
+  const [newCarrusel,   setNewCarrusel]   = useState([])
+  const [eligiendo,     setEligiendo]     = useState(null)
   // 📋🛍️📐 Botón de grupo activo y grupo de la respuesta que se edita / crea.
   const [grupoFiltro,   setGrupoFiltroEstado] = useState(TODAS)
   useEffect(() => { setGrupoFiltroEstado(leerGrupoGuardado()) }, [])
@@ -660,9 +692,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     setEditImgUrls(getImgUrls(replies[idx]))
     const b = replies[idx].botones || []
     setEditBotones([b[0] || '', b[1] || '', b[2] || ''])
+    setEditCarrusel(Array.isArray(replies[idx].carrusel) ? replies[idx].carrusel : [])
     setEditGrupo(normalizarGrupo(replies[idx].grupo))
   }
-  const clearEdit = () => { setEditingId(null); setEditText(''); setEditImgUrls([]); setEditBotones(['', '', '']) }
+  const clearEdit = () => { setEditingId(null); setEditText(''); setEditImgUrls([]); setEditBotones(['', '', '']); setEditCarrusel([]) }
   const saveEdit = async () => {
     if (!editText.trim()) return
     // Se busca la fila por ID en el momento de GUARDAR (no se reutiliza el índice
@@ -679,7 +712,8 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
       return
     }
     const botones = editBotones.map(s => s.trim()).filter(Boolean).slice(0, 3)
-    const updated = { ...actual, text: editText.trim(), ...urlsToReply(editImgUrls), botones, grupo: normalizarGrupo(editGrupo) }
+    // Con productos no hay botones (Meta no los deja en un carrusel).
+    const updated = { ...actual, text: editText.trim(), ...urlsToReply(editImgUrls), botones: editCarrusel.length ? [] : botones, carrusel: editCarrusel, grupo: normalizarGrupo(editGrupo) }
     setReplies(prev => prev.map(r => r.id === editingId ? updated : r))
     clearEdit()
     await writeReply('actualizar', updated)
@@ -726,14 +760,14 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const addReply = async () => {
     if (!newText.trim()) return
     const botones = newBotones.map(s => s.trim()).filter(Boolean).slice(0, 3)
-    const nr = { id: crypto.randomUUID(), text: newText.trim(), ...urlsToReply(newImgUrls), botones, grupo: normalizarGrupo(newGrupo) }
+    const nr = { id: crypto.randomUUID(), text: newText.trim(), ...urlsToReply(newImgUrls), botones: newCarrusel.length ? [] : botones, carrusel: newCarrusel, grupo: normalizarGrupo(newGrupo) }
     setReplies(prev => [nr, ...prev])   // la nueva entra PRIMERA, igual que en la base
     // Se marca como "guardando" mientras el POST de alta sigue en vuelo. addReply
     // mete la respuesta en el estado ANTES de esperar la confirmación del servidor,
     // así que si se editara/reordenara en esa ventana la corrección se perdería o
     // se le mandaría al servidor un id que todavía no existe. Ver reordenar().
     setSavingIds(prev => new Set(prev).add(nr.id))
-    setNewText(''); setNewImgUrls([]); setNewBotones(['', '', ''])
+    setNewText(''); setNewImgUrls([]); setNewBotones(['', '', '']); setNewCarrusel([])
     await writeReply('agregar', nr)
     setSavingIds(prev => { const n = new Set(prev); n.delete(nr.id); return n })
   }
@@ -932,7 +966,8 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                           style={{ width:'100%', ...inputBase, border:`1px solid ${C.cream}`, resize:'vertical', marginBottom:5, whiteSpace:'pre-wrap', minHeight:80 }} />
                         <p style={{ fontSize:9, color:C.creamFaint, marginBottom:3 }}>Adjuntos ({editImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
                         <MultiImgEditor urls={editImgUrls} onChange={setEditImgUrls} />
-                        <BotonesEditor botones={editBotones} onChange={setEditBotones} />
+                        {editCarrusel.length === 0 && <BotonesEditor botones={editBotones} onChange={setEditBotones} />}
+                        <CarruselEditor productos={editCarrusel} hayBotones={editBotones.some(b => b.trim())} onElegir={() => setEligiendo('edit')} onQuitar={() => setEditCarrusel([])} />
                         <GrupoSelector grupo={editGrupo} onChange={setEditGrupo} />
                         <div style={{ display:'flex', gap:3, marginTop:7 }}>
                           <button onClick={saveEdit} style={{ ...btnBase, flex:1, padding:'5px', background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.25)`, color:C.cream, borderRadius:6, fontSize:10 }}>✓ Guardar</button>
@@ -976,7 +1011,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                         )}
                         <div style={{ padding:'5px 7px', display:'flex', alignItems:'flex-start', gap:3 }}>
                           <span style={{ flex:1, fontSize:11, color:C.creamDim, lineHeight:1.35, overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>
-                            {imgs.filter(a=>a.tipo!=='audio').length>0&&`🖼×${imgs.filter(a=>a.tipo!=='audio').length} `}{imgs.filter(a=>a.tipo==='audio').length>0&&`🎤×${imgs.filter(a=>a.tipo==='audio').length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{(grupoFiltro || TODAS) === TODAS && GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)) ? `${GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)).emoji} ` : ''}{reply.text}
+                            {imgs.filter(a=>a.tipo!=='audio').length>0&&`🖼×${imgs.filter(a=>a.tipo!=='audio').length} `}{imgs.filter(a=>a.tipo==='audio').length>0&&`🎤×${imgs.filter(a=>a.tipo==='audio').length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{reply.carrusel?.length>0&&<span style={{ color:C.cream, fontWeight:700 }}>{`🛍️×${reply.carrusel.length} `}</span>}{(grupoFiltro || TODAS) === TODAS && GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)) ? `${GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)).emoji} ` : ''}{reply.text}
                           </span>
                           <div style={{ display:'flex', gap:2, flexShrink:0 }}>
                             <button onClick={() => reordenar(idx, arriba)} disabled={arriba < 0 || hayAltaPendiente}
@@ -1014,13 +1049,22 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 onFocus={e=>e.target.style.borderColor=C.cream} onBlur={e=>e.target.style.borderColor=C.border} />
               <p style={{ fontSize:9, color:C.creamFaint, marginBottom:3 }}>Adjuntos ({newImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
               <MultiImgEditor urls={newImgUrls} onChange={setNewImgUrls} />
-              <BotonesEditor botones={newBotones} onChange={setNewBotones} />
+              {newCarrusel.length === 0 && <BotonesEditor botones={newBotones} onChange={setNewBotones} />}
+              <CarruselEditor productos={newCarrusel} hayBotones={newBotones.some(b => b.trim())} onElegir={() => setEligiendo('new')} onQuitar={() => setNewCarrusel([])} />
               <GrupoSelector grupo={newGrupo} onChange={setNewGrupo} />
               <button onClick={addReply} disabled={!newText.trim()}
                 style={{ ...btnBase, width:'100%', marginTop:7, padding:'6px', background:newText.trim()?`rgba(244,241,236,.1)`:'transparent', border:`1px solid ${newText.trim()?'rgba(244,241,236,.25)':C.border}`, color:newText.trim()?C.cream:C.creamFaint, borderRadius:7, fontSize:11, fontWeight:600, cursor:newText.trim()?'pointer':'default' }}>
                 + Agregar
               </button>
             </div>
+            {/* 🛍️ Buscador del catálogo para la respuesta que se edita O la nueva. En IND
+                el catálogo es POR número: se usa el de la pestaña (solo el 3326 tiene). */}
+            {eligiendo && (
+              <CarruselModal modoElegir canal={getCanalActivo()}
+                inicial={eligiendo === 'edit' ? editCarrusel : newCarrusel}
+                onEnviar={async (_, productos) => { (eligiendo === 'edit' ? setEditCarrusel : setNewCarrusel)(productos); return { ok: true } }}
+                onCerrar={() => setEligiendo(null)} />
+            )}
           </>
         )}
 

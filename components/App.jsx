@@ -1929,13 +1929,33 @@ export default function App() {
 
     // Toda la respuesta rápida es UNA tarea: nada puede meterse entre su texto y
     // sus fotos, ni entre una foto y la siguiente.
+    // 🛍️ El canal del carrusel se congela acá (el vendedor puede cambiar de chat
+    // mientras la respuesta espera turno): en IND el catálogo es POR número.
+    const canalRapida = activeConv?.phoneId || getCanalActivo()
     return encolar(telefono, async () => {
       // Si CUALQUIER pieza de la respuesta rápida falla, el chat no puede quedar
       // como atendido: al cliente le llegó media respuesta o ninguna.
       let todoOk = true
+      let motivoFallo = ''   // el porqué concreto, si lo hay, para el aviso final
       try {
         const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
-        if (botones.length && reply.text) {
+        const carrusel = Array.isArray(reply.carrusel) ? reply.carrusel : []
+        if (carrusel.length >= 2 && reply.text) {
+          // 🛍️ Respuesta rápida CON productos → carrusel con el texto encima (lib/carrusel.js).
+          // El servidor decide interactivo o plantilla. Productos O botones.
+          const r = await sendCarrusel(telefono, nombre, reply.text, carrusel, canalRapida).catch(e => ({ ok: false, error: e.message }))
+          if (r?.ok) {
+            const tmpMsg = { id: r.wamid || 'tmp_' + Date.now(), telefono, nombre, tipo: 'carrusel', mensaje: reply.text, botones: guardadoCarrusel(carrusel, ''), direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+            setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+            pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
+          } else {
+            todoOk = false
+            // Dice POR QUÉ (producto que no está en el catálogo, el 9804 sin catálogo,
+            // ventana cerrada sin plantilla…): sin esto solo se vería "no salió completa".
+            motivoFallo = `🛍️ El carrusel no salió: ${r?.error || 'error al enviar'}`
+          }
+          avanzar()
+        } else if (botones.length && reply.text) {
           // Respuesta rápida CON botones interactivos
           const validBtns = botones.map((t, i) => ({ id: `btn_${i + 1}`, title: t }))
           // El servidor guarda SOLO el cuerpo en `mensaje`; los botones van aparte en `botones`
@@ -1983,7 +2003,7 @@ export default function App() {
         }
 
         if (todoOk) changeStatus(telefono, estadoDestino)
-        else { setToast({ ok: false, error: 'La respuesta rápida no salió completa' }); setTimeout(() => setToast(null), 4000) }
+        else { setToast({ ok: false, error: motivoFallo || 'La respuesta rápida no salió completa' }); setTimeout(() => setToast(null), motivoFallo ? 7000 : 4000) }
         setTimeout(load, 4000)
       } catch (e) {
         todoOk = false
