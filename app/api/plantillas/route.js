@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getWabaId, GRAPH } from '@/lib/whatsapp'
 import { wabaIdDePhoneId } from '@/lib/canales'
 import { payloadCrearPlantillaCarrusel } from '@/lib/carrusel'
+import { armarPlantilla } from '@/lib/plantilla-nueva'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -68,17 +69,23 @@ export async function GET() {
   }
 }
 
-// POST /api/plantillas { canal, tipo: 'carrusel_productos' } → crea la plantilla de
-// carrusel (lib/carrusel.js) en la WABA de ESE número. Solo ese tipo: IND no crea
-// otras plantillas desde el inbox. ☠️ Sin caída a la WABA del token: una plantilla
-// en la WABA equivocada no se ve en el canal que la necesita y no se puede mover.
+// POST /api/plantillas { canal, nombre, categoria, idioma, cuerpo, ejemplos[], pie, minutos }
+//   → crea la plantilla en la WABA DE ESE NÚMERO; Meta la deja PENDIENTE de revisión.
+// POST /api/plantillas { canal, tipo: 'carrusel_productos' } → la del carrusel (lib/carrusel.js).
+// Hasta el 14-oct-2026 IND solo creaba la del carrusel; ahora usa el mismo
+// armador que MANDI (lib/plantilla-nueva.js), con Autenticación para el club.
+// ☠️ Sin caída a la WABA del token: una plantilla en la WABA equivocada no se ve
+// en el canal que la necesita y no se puede mover.
 export async function POST(req) {
   if (!META_TOKEN) return NextResponse.json({ ok: false, error: 'META_TOKEN no está configurado' }, { status: 500 })
   const datos = await req.json().catch(() => ({}))
-  if (datos.tipo !== 'carrusel_productos') return NextResponse.json({ ok: false, error: 'Solo se puede crear la plantilla de carrusel' }, { status: 400 })
   const wabaId = wabaIdDePhoneId(datos.canal || '')
   if (!wabaId) return NextResponse.json({ ok: false, error: `Canal desconocido: ${datos.canal || '(vacío)'}` }, { status: 400 })
-  const payload = payloadCrearPlantillaCarrusel()
+  const armada = datos.tipo === 'carrusel_productos'
+    ? { ok: true, payload: payloadCrearPlantillaCarrusel() }
+    : armarPlantilla(datos)
+  if (!armada.ok) return NextResponse.json({ ok: false, errores: armada.errores }, { status: 400 })
+  const payload = armada.payload
   try {
     const res = await fetch(`${GRAPH}/${wabaId}/message_templates`, {
       method: 'POST',
