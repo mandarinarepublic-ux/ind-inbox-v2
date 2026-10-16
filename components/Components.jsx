@@ -7,6 +7,7 @@ import { puedeReenviar } from '@/lib/reenvio'
 import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
 import { EMOJIS_REACCION } from '@/lib/reacciones'
 import { leerCarrusel } from '@/lib/carrusel'
+import { urlDeDescarga, nombreDeDescarga } from '@/lib/descarga'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -353,7 +354,7 @@ function VisorFoto({ src, onCerrar }) {
   )
 }
 
-function MediaContent({ tipo, mediaUrl, mediaId }) {
+function MediaContent({ tipo, mediaUrl, mediaId, nombre = '' }) {
   // Va ANTES de cualquier return condicional: los hooks no pueden quedar
   // detrás de un if.
   const [verFoto, setVerFoto] = useState(false)
@@ -407,10 +408,13 @@ function MediaContent({ tipo, mediaUrl, mediaId }) {
       </a>
     </div>
   )
+  // Se DESCARGA con el nombre que puso el cliente: abrir la URL tal cual bajaba
+  // un `wamid….bin` que Illustrator/Photoshop no reconocen (lib/descarga.js).
   if (hasSrc && isDocument) return (
-    <a href={src} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
+    <a href={urlDeDescarga(src, nombre)} download={nombreDeDescarga(nombre) || true} target="_blank" rel="noreferrer" title="Descargar" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: `rgba(244,241,236,.06)`, border: `1px solid rgba(244,241,236,.15)`, borderRadius: 10, padding: '10px 14px', textDecoration: 'none' }}>
       <span style={{ fontSize: 22 }}>📄</span>
-      <span style={{ fontSize: 13, color: C.cream, fontWeight: 600 }}>Documento adjunto</span>
+      <span style={{ fontSize: 13, color: C.cream, fontWeight: 600, wordBreak: 'break-word' }}>{nombre || 'Documento adjunto'}</span>
+      <span style={{ fontSize: 12, color: C.creamDim, marginLeft: 'auto' }}>⬇</span>
     </a>
   )
   if (hasSrc && tipo && !['text', 'texto', 'reaction'].includes(tipo)) return (
@@ -813,7 +817,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
         )}
         {msg.referral && <ReferralCard referral={msg.referral} />}
         {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} esReaccion={msg.tipo === 'reaction'} />}
-        {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} />}
+        {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} nombre={['document', 'documento'].includes(msg.tipo) ? msg.mensaje : ''} />}
         {/* La ubicación reemplaza al texto: el `mensaje` de esa fila SON las
             coordenadas, y la tarjeta ya las muestra. Nunca deja la burbuja
             vacía — si parseUbicacion no reconoce algo, cae al <p> de siempre. */}
