@@ -73,7 +73,7 @@ for (const ruta of PROTEGIDAS) {
   })
 }
 
-test('las públicas son EXACTAMENTE siete', () => {
+test('las públicas son EXACTAMENTE ocho', () => {
   // Cada entrada de más es una puerta al internet entero. Que agregar una rompa
   // una prueba es justamente lo que se busca.
   //
@@ -85,9 +85,15 @@ test('las públicas son EXACTAMENTE siete', () => {
   //
   // La séptima, el 15-sep-2026: `/api/cron/flujos` (esperas de FLUJOS, cada 5
   // min). Mismo motivo y misma defensa (CRON_SECRET).
+  //
+  // La octava, el 15-oct-2026: `/api/codigo-acceso`, el código de acceso del club
+  // de premios. La llama el servidor del club, sin sesión. Se defiende con su propia
+  // llave (FIDELIDAD_OTP_TOKEN) y solo manda un código de 6 dígitos a un celular
+  // de Ecuador: con la llave robada no se puede mandar otro mensaje.
   assert.deepStrictEqual(RUTAS_PUBLICAS, [
     '/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes',
     '/api/cron/entregas', '/api/cron/pagos', '/api/cron/flujos', '/api/pago-dlocal',
+    '/api/codigo-acceso',
   ])
 })
 
