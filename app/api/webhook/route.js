@@ -10,7 +10,7 @@ import { getAutomatizaciones } from '@/lib/automatizaciones'
 import { decidirIA } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
 import { observarFirmaMeta, evaluarFirmaMeta, debeAvisar } from '@/lib/firma-meta'
-import { enviarTelegram, telegramConfigurado } from '@/lib/telegram'
+import { enviarAlerta, telegramConfigurado } from '@/lib/telegram'
 import { getMarcaAvisoFirmaSupabase, setMarcaAvisoFirmaSupabase } from '@/lib/inbox-supabase'
 import { extraerEchoes } from '@/lib/echoes'
 import { capturarCtwaClid, revisarLeadAutomatico, revisarVentaEnProceso } from '@/lib/capi'
@@ -244,7 +244,7 @@ export async function POST(req) {
             // ⚠️ Se registra el RESULTADO del envío. Un aviso que no se sabe si
             // llegó no es un aviso: el `TELEGRAM_BOT_TOKEN` de IND ya estuvo
             // vacío una vez y se dio por bueno solo porque la variable existía.
-            const envio = await enviarTelegram(
+            const envio = await enviarAlerta(
               `🔐 <b>IND · webhook sospechoso</b>
 
 ` +
@@ -388,7 +388,7 @@ export async function POST(req) {
         registrarPasos,
         setEtapa: (tel, etapa) => updateEtapa(tel, etapa, 'flujo', { soloSiVacia: true }),
         setDeuda: (tel, nota) => updateDeuda(tel, nota, 'auto', { noPisar: true }),
-        avisar: (texto) => enviarTelegram(texto),
+        avisar: (texto) => enviarAlerta(texto),
         ahora: () => new Date(),
         cuenta: CUENTA,
         log: console.log,

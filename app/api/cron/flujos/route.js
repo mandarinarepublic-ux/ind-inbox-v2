@@ -9,7 +9,7 @@ import { correrTanda } from '@/lib/flujo-motor'
 import { mandarEscribiendo } from '@/lib/escribiendo'
 import { enviarConMaquina } from '@/lib/auth-maquina'
 import { urlPropia } from '@/lib/url-propia'
-import { enviarTelegram } from '@/lib/telegram'
+import { enviarAlerta } from '@/lib/telegram'
 import { CUENTA } from '@/lib/supabase'
 import { autorizadoCron } from '@/lib/cron-auth'
 
@@ -62,7 +62,7 @@ export async function GET(req) {
     registrarPasos,
     setEtapa: (tel, etapa) => updateEtapa(tel, etapa, 'flujo', { soloSiVacia: true }),
     setDeuda: (tel, nota) => updateDeuda(tel, nota, 'auto', { noPisar: true }),
-    avisar: (texto) => enviarTelegram(texto),
+    avisar: (texto) => enviarAlerta(texto),
     ahora: () => new Date(),
     cuenta: CUENTA,
     log: console.log,
