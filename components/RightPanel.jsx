@@ -919,7 +919,8 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
         {/* ═══════════ RESPUESTAS RÁPIDAS ═══════════ */}
         {tab === 'respuestas' && (
           <>
-            <div style={{ padding:'10px 12px 6px' }}>
+            {/* Cabecera FIJA: se queda arriba mientras bajas por la lista. */}
+            <div style={{ position:'sticky', top:0, zIndex:2, padding:'10px 12px 8px', marginBottom:6, background:C.surface, borderBottom:`1px solid ${C.border}` }}>
               <p style={{ fontSize:10, color:C.creamFaint, fontWeight:700, letterSpacing:'.08em', display:'flex', alignItems:'center', gap:5, margin:0 }}>
                 ⚡ RESPUESTAS RÁPIDAS
                 {!repliesLoaded&&<span style={{ fontSize:9, color:C.creamFaint }}>cargando...</span>}
