@@ -1,7 +1,7 @@
 'use client'
 import React, { useState } from 'react'
 import { C, Card, Boton, Campo, Aviso, inputBase, enviar } from './comun'
-import { avisoVencida, fechaCorta, campoDelError } from '@/lib/indi-vista'
+import { avisoVencida, fechaCorta, campoDelError, dinero } from '@/lib/indi-vista'
 
 // Pestañas Precios y promos · Reglas · Preguntas fijas: las tres son filas de
 // inbox.indi_conocimiento, cambia solo el `tipo` (POST /api/indi/conocimiento).
@@ -17,12 +17,6 @@ function aFormulario(f) {
     id: f.id, tipo: f.tipo, titulo: f.titulo || '', contenido: f.contenido || '',
     precio: f.precio ?? '', vigente_hasta: f.vigente_hasta || '', activo: f.activo !== false, orden: f.orden ?? 0,
   }
-}
-
-function precioTexto(p) {
-  if (p === null || p === undefined || p === '') return ''
-  const n = Number(p)
-  return Number.isFinite(n) ? `$${n.toFixed(2)}` : String(p)
 }
 
 function Formulario({ inicial, onCancelar, onGuardado }) {
@@ -100,7 +94,7 @@ function FilaConocimiento({ fila, puedeEditar, onEditar, onBorrar }) {
           <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
             {fila.tipo === 'promo' && <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, letterSpacing: '1px' }}>PROMO</span>}
             <span style={{ fontWeight: 800, fontSize: 14, color: C.cream }}>{fila.titulo}</span>
-            {precioTexto(fila.precio) && <span style={{ fontWeight: 900, fontSize: 14, color: C.green }}>{precioTexto(fila.precio)}</span>}
+            {dinero(fila.precio) && <span style={{ fontWeight: 900, fontSize: 14, color: C.green }}>{dinero(fila.precio)}</span>}
           </div>
           {fila.contenido && (
             <div style={{ fontSize: 12.5, color: C.creamDim, marginTop: 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{fila.contenido}</div>

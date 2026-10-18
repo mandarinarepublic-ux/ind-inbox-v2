@@ -3,7 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert'
 import { permisoIndi } from '../lib/editor-indi.js'
-import { fechaCorta, avisoVencida, accionHistorial, nombreTabla, historialParaAgente, campoDelError, cambiosDeFila, tituloDeCambio, burbujasDeRespuesta } from '../lib/indi-vista.js'
+import { fechaCorta, avisoVencida, accionHistorial, nombreTabla, historialParaAgente, campoDelError, cambiosDeFila, tituloDeCambio, burbujasDeRespuesta, dinero } from '../lib/indi-vista.js'
 
 const AND = { id: 'AND', nombre: 'Andrés Admin', rol: 'ADMIN', tiendas: ['INDSTORE'], activo: true }
 
@@ -109,4 +109,22 @@ test('probar: sin texto ni fotos ni traspaso = error de "no contestó nada"', ()
   assert.deepStrictEqual(burbujasDeRespuesta(null), [
     { de: 'error', texto: 'Indi no contestó nada (en un chat real, pasaría a una persona).' },
   ])
+})
+
+test('dinero: formato de Ecuador, coma decimal y sin ",00" en enteros', () => {
+  assert.strictEqual(dinero(20), '$20')
+  assert.strictEqual(dinero('20.00'), '$20')
+  assert.strictEqual(dinero(3.5), '$3,50')
+  assert.strictEqual(dinero('3.5'), '$3,50')
+  assert.strictEqual(dinero(0.99), '$0,99')
+  assert.strictEqual(dinero(0), '$0')
+  assert.strictEqual(dinero(19.999), '$20')
+  assert.strictEqual(dinero(2.005), '$2,01')
+})
+
+test('dinero: vacío no pinta nada y lo que no es número sale tal cual', () => {
+  assert.strictEqual(dinero(null), '')
+  assert.strictEqual(dinero(undefined), '')
+  assert.strictEqual(dinero(''), '')
+  assert.strictEqual(dinero('consultar'), 'consultar')
 })

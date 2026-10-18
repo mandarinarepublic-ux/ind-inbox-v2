@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
 import { C, Card, Boton, Aviso, Cargando, leer, enviar } from './comun'
-import { accionHistorial, nombreTabla, cambiosDeFila, tituloDeCambio } from '@/lib/indi-vista'
+import { accionHistorial, nombreTabla, cambiosDeFila, tituloDeCambio, dinero } from '@/lib/indi-vista'
 import { operacionDeshacer } from '@/lib/indi-deshacer'
 
 // Los últimos 100 cambios (inbox.indi_historial, lo llena un trigger) con
@@ -15,8 +15,9 @@ function horaEcuador(iso) {
   } catch { return String(iso || '') }
 }
 
-function valorTexto(v) {
+function valorTexto(v, col) {
   if (v === null || v === undefined || v === '') return '—'
+  if (col === 'precio') return dinero(v)
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }
@@ -61,8 +62,8 @@ function FilaHistorial({ fila, puedeEditar, onDeshecho }) {
           {cambios.map((c) => (
             <div key={c.col} style={{ fontSize: 12, marginBottom: 6, wordBreak: 'break-word' }}>
               <div style={{ color: C.creamDim, fontWeight: 800, fontSize: 10.5, letterSpacing: '.5px' }}>{c.col.toUpperCase()}</div>
-              <div style={{ color: C.red, whiteSpace: 'pre-wrap' }}>− {valorTexto(c.antes)}</div>
-              <div style={{ color: C.green, whiteSpace: 'pre-wrap' }}>+ {valorTexto(c.despues)}</div>
+              <div style={{ color: C.red, whiteSpace: 'pre-wrap' }}>− {valorTexto(c.antes, c.col)}</div>
+              <div style={{ color: C.green, whiteSpace: 'pre-wrap' }}>+ {valorTexto(c.despues, c.col)}</div>
             </div>
           ))}
         </div>
