@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert'
-import { iaActivaEnCanal, decidirIA } from '../lib/ia-canal.js'
+import { iaActivaEnCanal, decidirIA, contactoCallado } from '../lib/ia-canal.js'
 
 // Los phone_id por defecto de lib/canales.js / lib/meta-ids.js (sin env en las pruebas).
 const PRINCIPAL  = '1153686904504422' // +593 99 995 3326
@@ -38,4 +38,17 @@ test('con el canal prendido manda el interruptor del chat', () => {
 test('contacto que no esta en la agenda: IA apagada', () => {
   const cfg = { ia: { principal: true } }
   assert.equal(decidirIA({ config: cfg, phoneId: PRINCIPAL, contacto: undefined }), false)
+})
+
+test('contactoCallado: internos y sin automaticos', () => {
+  assert.equal(contactoCallado({ tipoContacto: 'interno' }), true)
+  assert.equal(contactoCallado({ sinAutomaticos: true }), true)
+  assert.equal(contactoCallado({ tipoContacto: 'cliente' }), false)
+  assert.equal(contactoCallado(undefined), false)
+})
+
+test('un contacto interno o sin automaticos nunca recibe a Indi', () => {
+  const cfg = {}
+  assert.equal(decidirIA({ config: cfg, phoneId: '', contacto: { modoIA: true, tipoContacto: 'interno' } }), false)
+  assert.equal(decidirIA({ config: cfg, phoneId: '', contacto: { modoIA: true, sinAutomaticos: true } }), false)
 })

@@ -7,7 +7,7 @@ import { usaSupabaseLectura, CUENTA } from '@/lib/supabase'
 import { existeWamidSupabase, guardarMensajeSupabase, guardarEventoCrudoSupabase, actualizarEstadoEntregaSupabase, asegurarConversacionSalienteSupabase, getFlujosPublicadosSupabase } from '@/lib/inbox-supabase'
 import { archivarMedia } from '@/lib/media-archive'
 import { getAutomatizaciones } from '@/lib/automatizaciones'
-import { decidirIA } from '@/lib/ia-canal'
+import { decidirIA, contactoCallado } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
 import { observarFirmaMeta, evaluarFirmaMeta, debeAvisar } from '@/lib/firma-meta'
 import { enviarAlerta, telegramConfigurado } from '@/lib/telegram'
@@ -483,6 +483,8 @@ export async function POST(req) {
 
       // Flujo en curso → flujo nuevo → saludo. Nunca lanza.
       async function automaticosDe(m) {
+        // Internos y 🤫: ni flujo en curso, ni flujo nuevo, ni saludo.
+        if (contactoCallado(contactoDe(m.telefono))) return
         let conFlujo = await flujoEnCursoSiCorresponde(m)
           .catch(e => { console.error('[/api/webhook] flujo en curso:', e.message); return false })
         if (!conFlujo) {
