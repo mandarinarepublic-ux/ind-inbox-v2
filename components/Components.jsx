@@ -8,6 +8,7 @@ import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
 import { EMOJIS_REACCION } from '@/lib/reacciones'
 import { leerCarrusel } from '@/lib/carrusel'
 import { urlDeDescarga, nombreDeDescarga } from '@/lib/descarga'
+import { restoProductoTocado } from '@/lib/producto-tocado'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -487,7 +488,7 @@ function QuotedMessage({ contextoId, allMsgs, esReaccion = false }) {
 // ── REFERRAL / PAUTA (anuncio Click-to-WhatsApp) ─────────────────
 // Cuando un cliente entra desde un anuncio de Meta, el mensaje trae `referral`
 // con el anuncio del que vino. Lo mostramos para responder con contexto.
-function ReferralCard({ referral }) {
+function ReferralCard({ referral, texto = '' }) {
   let r = referral
   if (typeof r === 'string') { try { r = JSON.parse(r) } catch { return null } }
   if (!r || typeof r !== 'object') return null
@@ -495,6 +496,10 @@ function ReferralCard({ referral }) {
   const img = r.image_url || r.thumbnail_url || ''
   const proxied = img ? viaProxy(img) : ''
   if (!r.headline && !r.body && !proxied && !r.source_url) return null
+  // ☠️ El cliente pudo tocar OTRO producto del catálogo dentro del anuncio: Meta lo
+  // escribe en el texto ("Me interesa …") y el referral sigue diciendo el anuncio.
+  // Lo que TOCÓ va primero; el anuncio queda como "dentro de". Ver lib/producto-tocado.js.
+  const tocado = restoProductoTocado(texto).trim()
 
   return (
     <div style={{
@@ -512,8 +517,14 @@ function ReferralCard({ referral }) {
         />
       )}
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 10, fontWeight: 800, color: '#f59e0b', letterSpacing: '.03em', marginBottom: 2 }}>
-          📣 VINO DE {r.source_type === 'post' ? 'UNA PUBLICACIÓN' : 'UN ANUNCIO'}
+        {tocado && (
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: '#f59e0b', letterSpacing: '.03em' }}>🛍️ TOCÓ ESTE PRODUCTO</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.cream }}>{tocado}</div>
+          </div>
+        )}
+        <div style={{ fontSize: 10, fontWeight: 800, color: '#f59e0b', letterSpacing: '.03em', marginBottom: 2, opacity: tocado ? 0.75 : 1 }}>
+          📣 {tocado ? 'DENTRO DEL' : 'VINO DE'} {r.source_type === 'post' ? (tocado ? 'LA PUBLICACIÓN' : 'UNA PUBLICACIÓN') : (tocado ? 'ANUNCIO' : 'UN ANUNCIO')}
         </div>
         {r.headline && (
           <div style={{
@@ -815,7 +826,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
             ))}
           </div>
         )}
-        {msg.referral && <ReferralCard referral={msg.referral} />}
+        {msg.referral && <ReferralCard referral={msg.referral} texto={msg.mensaje} />}
         {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} esReaccion={msg.tipo === 'reaction'} />}
         {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} nombre={['document', 'documento'].includes(msg.tipo) ? msg.mensaje : ''} />}
         {/* La ubicación reemplaza al texto: el `mensaje` de esa fila SON las
