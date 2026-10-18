@@ -17,10 +17,14 @@ Diseño: `docs/superpowers/specs/2026-10-18-indi-entrenamiento-design.md` · Pla
 ## ⛔ Bloqueante para usarla
 **La cuenta de Anthropic no tiene crédito** (log 18-oct 08:39Z: "credit balance is too low"). Hasta recargar, "Probar a Indi" da "Error interno del agente" y, en un chat con IA prendida, el inbox pasa el chat a una persona (no queda mudo).
 
+## Corregido después (18-oct, con OK de Rodrigo)
+- Respuestas rápidas: Envíos, "¡Así quedaría tu prenda!" y "Pedido confirmado" → **4 días laborables**. Horario → Quito **todos los días (domingo incluido) 10:30–6 pm** · Ibarra L–S 10:30–7 pm, domingo cerrado.
+- Flujos publicados (ESTAMPADO GRATIS · NEURO, ALGO ÚNICO · NEURO, BUZOS BORDADOS · NEURO): "2 a 3" / "3 a 4 días" → **4 días laborables**; "anticipo del 50%" → "pago completo bajo $100 · 50% de anticipo desde $100" (grafo y grafo_vivo). Los flujos NO publicados no se tocaron.
+- Agente: ver `indx-agent/HANDOFF.md`.
+
 ## Pendientes
 - Recargar crédito de Anthropic → repetir la prueba del plan (Task 13 Step 4) en 🧠 INDI › Probar a Indi.
-- Rodrigo decide: 3 respuestas dicen "2 a 3 días" (regla = 4) y Horario dice fin de semana 5 pm (regla = 6 pm, falta Ibarra). NO se tocaron.
-- Link de Maps de Ibarra; texto para "¿sirve para la costa?"; feriados 2027 cuando salga el calendario oficial.
+- Link de Maps de Ibarra (no aparece en ningún mensaje enviado); texto para "¿sirve para la costa?"; feriados 2027 cuando salga el calendario oficial.
 - Dudosos de internos sin marcar: …9685, …5275.
 - Indi NO está prendida con clientes: `IA_AUTORESPUESTA`, cortafuegos y `modo_ia` siguen como estaban.
-- Menores diferidos (ver ledger en la revisión final): timeout propio al cargar pedidos, "probar" no muestra sinBase, 0 filas = ok, foto de la guía no se manda, test box sin pedidos, precios con punto ($20.00) en la pantalla.
+- Menores diferidos (ver ledger en la revisión final): timeout propio al cargar pedidos, "probar" no muestra sinBase, 0 filas = ok, foto de la guía no se manda. (Arreglados el 18-oct: tope de 8 s a pedidos, Probar muestra sinBase/traspaso, precios estilo Ecuador, 404/409, validación activo/orden, aviso de promo vencida — ver docs/superpowers/reports/2026-10-18-indi-menores.md.)
