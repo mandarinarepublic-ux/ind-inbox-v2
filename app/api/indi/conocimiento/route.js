@@ -43,8 +43,9 @@ export async function POST(req) {
       if (!body.id) return NextResponse.json({ error: 'Falta el id' }, { status: 400 })
       // El trigger toma `por` de `actualizado_por` de la fila; en un DELETE no hay
       // fila nueva, así que se deja constancia de quién borra con un update previo.
-      await sb.from('indi_conocimiento').update({ actualizado_por: usuario.nombre, actualizado_en: new Date().toISOString() })
+      const firma = await sb.from('indi_conocimiento').update({ actualizado_por: usuario.nombre, actualizado_en: new Date().toISOString() })
         .eq('cuenta', CUENTA_IND).eq('id', body.id)
+      if (firma.error) throw firma.error
       const { error } = await sb.from('indi_conocimiento').delete().eq('cuenta', CUENTA_IND).eq('id', body.id)
       if (error) throw error
       return NextResponse.json({ ok: true })

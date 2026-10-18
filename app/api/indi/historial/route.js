@@ -41,10 +41,17 @@ export async function POST(req) {
     const esConocimiento = op.tabla === 'indi_conocimiento'
     // `por` del historial sale de `actualizado_por`: así queda quién deshizo.
     const marca = esConocimiento ? { actualizado_por: usuario.nombre, actualizado_en: new Date().toISOString() } : {}
+    if (op.tipo === 'restaurar' && !Object.keys(op.datos).length) {
+      return NextResponse.json({ error: 'Ese cambio no tiene nada que deshacer' }, { status: 400 })
+    }
     let resultado
     if (op.tipo === 'borrar') {
-      // En un DELETE no hay fila nueva: se anota quién borra con un update previo.
-      if (esConocimiento) await sb.from(op.tabla).update(marca).eq('cuenta', CUENTA_IND).eq(col, val)
+      // En un DELETE no hay fila nueva: se anota quién borra con un update previo
+      // (el trigger no registra updates que solo cambian actualizado_por/en).
+      if (esConocimiento) {
+        const firma = await sb.from(op.tabla).update(marca).eq('cuenta', CUENTA_IND).eq(col, val)
+        if (firma.error) throw firma.error
+      }
       resultado = await sb.from(op.tabla).delete().eq('cuenta', CUENTA_IND).eq(col, val)
     } else if (op.tipo === 'reinsertar') {
       resultado = await sb.from(op.tabla).insert({ ...op.datos, cuenta: CUENTA_IND, ...marca })

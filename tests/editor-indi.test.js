@@ -48,8 +48,29 @@ test('respuestas rápidas: solo se restauran uso_ia y el contenido', () => {
   const antes = { id: 'r1', cuenta: 'IND', texto: 'hola', grupo: 'g', imagenes: 'u', uso_ia: true, orden: 3, actualizado_por: 'x' }
   const op = operacionDeshacer({ tabla: 'respuestas_rapidas', fila_id: 'r1', antes, despues: { ...antes, uso_ia: false } })
   assert.strictEqual(op.tipo, 'restaurar')
-  assert.deepStrictEqual(Object.keys(op.datos).sort(), ['grupo', 'imagenes', 'texto', 'uso_ia'])
-  assert.strictEqual(op.datos.uso_ia, true)
+  assert.deepStrictEqual(op.datos, { uso_ia: true })
+})
+test('deshacer no pisa ediciones posteriores: solo vuelve lo que ese cambio tocó', () => {
+  const antes = { id: 'r1', texto: 'hola', uso_ia: true, imagenes: ['a'] }
+  const despues = { ...antes, uso_ia: false, imagenes: ['a'] }
+  const op = operacionDeshacer({ tabla: 'respuestas_rapidas', fila_id: 'r1', antes, despues })
+  assert.deepStrictEqual(op.datos, { uso_ia: true })
+})
+test('arrays iguales (imagenes) cuentan como sin cambio; distintos, como cambio', () => {
+  const antes = { id: 'r1', texto: 't', uso_ia: true, imagenes: ['a', 'b'] }
+  assert.deepStrictEqual(operacionDeshacer({ tabla: 'respuestas_rapidas', fila_id: 'r1', antes, despues: { ...antes, imagenes: ['a', 'b'] } }).datos, {})
+  assert.deepStrictEqual(operacionDeshacer({ tabla: 'respuestas_rapidas', fila_id: 'r1', antes, despues: { ...antes, imagenes: ['a'] } }).datos, { imagenes: ['a', 'b'] })
+})
+test('conocimiento: solo restaura columnas cambiadas y de la lista blanca', () => {
+  const antes = { id: 'k', cuenta: 'IND', titulo: 'A', contenido: 'x', precio: 10, actualizado_por: 'AND' }
+  const despues = { ...antes, titulo: 'B', actualizado_por: 'XAV' }
+  const op = operacionDeshacer({ tabla: 'indi_conocimiento', fila_id: 'k', antes, despues })
+  assert.deepStrictEqual(op.datos, { titulo: 'A' })
+})
+test('un cambio que solo tocó actualizado_por no tiene nada que restaurar', () => {
+  const antes = { id: 'k', titulo: 'A', actualizado_por: 'AND' }
+  const op = operacionDeshacer({ tabla: 'indi_conocimiento', fila_id: 'k', antes, despues: { ...antes, actualizado_por: 'XAV' } })
+  assert.deepStrictEqual(op.datos, {})
 })
 test('respuestas rápidas: un alta o borrado no se deshace', () => {
   assert.strictEqual(operacionDeshacer({ tabla: 'respuestas_rapidas', fila_id: 'r1', antes: null, despues: { id: 'r1' } }), null)

@@ -68,3 +68,22 @@ alter table inbox.indi_historial enable row level security;
 revoke all on inbox.indi_conocimiento, inbox.indi_feriados, inbox.indi_historial from anon, authenticated;
 grant all on inbox.indi_conocimiento, inbox.indi_feriados, inbox.indi_historial to service_role;
 grant usage, select on sequence inbox.indi_historial_id_seq to service_role;
+
+-- 18-oct: indi_historial_quien_borra
+-- `por` sale también de la fila vieja (quién borra firma antes con un update) y
+-- un UPDATE que solo cambia actualizado_por/actualizado_en no se registra.
+create or replace function inbox.indi_registrar_cambio() returns trigger
+language plpgsql set search_path = inbox, pg_temp as $$
+declare
+  a jsonb := case when tg_op in ('UPDATE','DELETE') then to_jsonb(old) end;
+  d jsonb := case when tg_op in ('INSERT','UPDATE') then to_jsonb(new) end;
+  c text := coalesce(d->>'cuenta', a->>'cuenta');
+begin
+  if c is distinct from 'IND' then return null; end if;
+  if tg_op = 'UPDATE' and (a - 'actualizado_por' - 'actualizado_en') = (d - 'actualizado_por' - 'actualizado_en') then
+    return null;
+  end if;
+  insert into inbox.indi_historial (cuenta, tabla, fila_id, antes, despues, por)
+  values (c, tg_table_name, coalesce(d->>'id', a->>'id', d->>'fecha', a->>'fecha'), a, d, coalesce(d->>'actualizado_por', a->>'actualizado_por'));
+  return null;
+end $$;
