@@ -20,7 +20,7 @@ import { correrTanda } from '@/lib/flujo-motor'
 import { mandarEscribiendo } from '@/lib/escribiendo'
 import { getEstadoFlujo, guardarEstadoFlujo, borrarEstadoFlujo, registrarPasos } from '@/lib/flujos'
 import { getRespuestas } from '@/lib/respuestas'
-import { cargarPedidosParaIndi } from '@/lib/pedidos-indi'
+import { cargarPedidosParaIndi, conTope } from '@/lib/pedidos-indi'
 import { enviosDeRespuesta, pasarAPersona, traspasoPendiente } from '@/lib/respuesta-indi'
 import { identificadorEntrante, perfilesDeContactos } from '@/lib/cliente-sin-telefono'
 
@@ -108,12 +108,16 @@ async function enviarSaliente(origin, body) {
   return enviarConMaquina(`${origin}/api/saliente`, { ...body, auto: true }, 'saliente automático')
 }
 
+// Tope para leer los pedidos antes de llamar a Indi (el agente tiene sus 28 s aparte).
+const PEDIDOS_TOPE_MS = 8000
+
 async function responderConIA(origin, phone, name, message, canal, idVenta = '') {
   try {
-    // Pedidos del cliente para Indi. Si la lectura falla va `null` (no `[]`): "no
-    // pude leer" no puede parecer "no tiene pedidos". Nunca bloquea la respuesta.
+    // Pedidos del cliente para Indi. Si la lectura falla o se pasa del tope va
+    // `null` (no `[]`): "no pude leer" no puede parecer "no tiene pedidos". Nunca
+    // bloquea la respuesta ni se come el tiempo de la función.
     let pedidos = null
-    try { pedidos = await cargarPedidosParaIndi({ telefono: phone, idVenta }) }
+    try { pedidos = await conTope(cargarPedidosParaIndi({ telefono: phone, idVenta }), PEDIDOS_TOPE_MS, 'leer los pedidos') }
     catch (e) { console.error('[webhook IA] no pude leer los pedidos:', e.message) }
 
     // Si el agente no responde (error, caída, timeout o respuesta vacía) el cliente

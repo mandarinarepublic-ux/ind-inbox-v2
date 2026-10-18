@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { pedidoParaIndi, cargarPedidosParaIndi } from '../lib/pedidos-indi.js'
+import { pedidoParaIndi, cargarPedidosParaIndi, conTope } from '../lib/pedidos-indi.js'
 import { buscarPedidosCliente } from '../lib/pedidos-cliente.js'
 
 const base = (extra = {}) => ({
@@ -168,4 +168,14 @@ test('buscarPedidosCliente estricto: lanza si una consulta trae error; sin estri
   assert.deepEqual(r.pedidos, [])
   await assert.rejects(buscarPedidosCliente(crm, { telefono: '0991234567' }, { estricto: true }), /caído/)
   await assert.rejects(cargarPedidosParaIndi({ telefono: '0991234567' }, crm), /caído/)
+})
+
+test('conTope: si la promesa tarda más que el tope, rechaza con "tardó más de"', async () => {
+  const lenta = new Promise((ok) => setTimeout(() => ok('tarde'), 200))
+  await assert.rejects(conTope(lenta, 20, 'pedidos'), /pedidos tardó más de 20 ms/)
+})
+
+test('conTope: si llega antes, devuelve su valor y su error tal cual', async () => {
+  assert.deepEqual(await conTope(Promise.resolve([1]), 50, 'pedidos'), [1])
+  await assert.rejects(conTope(Promise.reject(new Error('base caída')), 50, 'pedidos'), /base caída/)
 })
