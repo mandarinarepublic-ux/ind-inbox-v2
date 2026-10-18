@@ -1,7 +1,8 @@
 'use client'
 import React, { useState } from 'react'
 import { C, Card, Boton, Campo, Aviso, inputBase, enviar } from './comun'
-import { avisoVencida, fechaCorta, campoDelError, dinero } from '@/lib/indi-vista'
+import { avisoVencida, fechaCorta, campoDelError, dinero, pistaPromoVencida } from '@/lib/indi-vista'
+import { hoyEcuador } from '@/lib/indi-validar'
 
 // Pestañas Precios y promos · Reglas · Preguntas fijas: las tres son filas de
 // inbox.indi_conocimiento, cambia solo el `tipo` (POST /api/indi/conocimiento).
@@ -27,6 +28,7 @@ function Formulario({ inicial, onCancelar, onGuardado }) {
   const conPrecio = f.tipo === 'precio' || f.tipo === 'promo'
   const esPromo = f.tipo === 'promo'
   const err = (campo) => (error?.campo === campo ? error.msg : null)
+  const pistaVencida = pistaPromoVencida(f, hoyEcuador())
 
   const guardar = async () => {
     setGuardando(true); setError(null)
@@ -66,6 +68,9 @@ function Formulario({ inicial, onCancelar, onGuardado }) {
           <Campo label="VALE HASTA (obligatorio)" error={err('vigente_hasta')} style={{ flex: '1 1 160px' }}>
             <input type="date" value={f.vigente_hasta} onChange={(e) => set('vigente_hasta', e.target.value)}
               style={{ ...inputBase, colorScheme: 'dark' }} />
+            {!err('vigente_hasta') && pistaVencida && (
+              <div style={{ fontSize: 12, color: C.amber, fontWeight: 700, marginTop: 4 }}>⌛ {pistaVencida}</div>
+            )}
           </Campo>
         )}
         <Campo label="ORDEN" error={err('orden')} style={{ flex: '0 1 90px' }}>

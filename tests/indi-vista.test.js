@@ -3,7 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert'
 import { permisoIndi } from '../lib/editor-indi.js'
-import { fechaCorta, avisoVencida, accionHistorial, nombreTabla, historialParaAgente, campoDelError, cambiosDeFila, tituloDeCambio, burbujasDeRespuesta, dinero } from '../lib/indi-vista.js'
+import { fechaCorta, avisoVencida, accionHistorial, nombreTabla, historialParaAgente, campoDelError, cambiosDeFila, tituloDeCambio, burbujasDeRespuesta, dinero, pistaPromoVencida } from '../lib/indi-vista.js'
 
 const AND = { id: 'AND', nombre: 'Andrés Admin', rol: 'ADMIN', tiendas: ['INDSTORE'], activo: true }
 
@@ -131,4 +131,13 @@ test('dinero: vacío no pinta nada y lo que no es número sale tal cual', () => 
 
 test('el error de orden va junto al campo ORDEN', () => {
   assert.strictEqual(campoDelError('El orden debe ser un número entero mayor o igual a 0'), 'orden')
+})
+
+test('formulario: promo con fecha pasada pide fecha nueva o borrarla; vigente o no promo, nada', () => {
+  const HOY = '2026-10-18'
+  const PISTA = 'Esta promo ya venció: ponle una fecha nueva o bórrala.'
+  assert.strictEqual(pistaPromoVencida({ tipo: 'promo', vigente_hasta: '2026-10-17' }, HOY), PISTA)
+  assert.strictEqual(pistaPromoVencida({ tipo: 'promo', vigente_hasta: '2026-10-18' }, HOY), '')
+  assert.strictEqual(pistaPromoVencida({ tipo: 'promo', vigente_hasta: '' }, HOY), '')
+  assert.strictEqual(pistaPromoVencida({ tipo: 'precio', vigente_hasta: '2026-01-01' }, HOY), '')
 })
