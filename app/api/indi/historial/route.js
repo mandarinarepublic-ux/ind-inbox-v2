@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { autorizar } from '@/lib/editor-indi'
 import { operacionDeshacer } from '@/lib/indi-deshacer'
+import { resultadoEscritura } from '@/lib/indi-validar'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -44,22 +45,25 @@ export async function POST(req) {
     if (op.tipo === 'restaurar' && !Object.keys(op.datos).length) {
       return NextResponse.json({ error: 'Ese cambio no tiene nada que deshacer' }, { status: 400 })
     }
+    // Todo con `.select(col)`: 0 filas tocadas = la fila ya no está (404, no "ok").
+    // Reponer una fila que ya existe (23505) es un 409 (ver resultadoEscritura).
+    const NO_HAY = 'La fila de ese cambio ya no existe: no hay nada que deshacer'
     let resultado
     if (op.tipo === 'borrar') {
       // En un DELETE no hay fila nueva: se anota quién borra con un update previo
       // (el trigger no registra updates que solo cambian actualizado_por/en).
       if (esConocimiento) {
-        const firma = await sb.from(op.tabla).update(marca).eq('cuenta', CUENTA_IND).eq(col, val)
-        if (firma.error) throw firma.error
+        const firma = resultadoEscritura(await sb.from(op.tabla).update(marca).eq('cuenta', CUENTA_IND).eq(col, val).select(col), NO_HAY)
+        if (firma.status !== 200) return NextResponse.json(firma.body, { status: firma.status })
       }
-      resultado = await sb.from(op.tabla).delete().eq('cuenta', CUENTA_IND).eq(col, val)
+      resultado = await sb.from(op.tabla).delete().eq('cuenta', CUENTA_IND).eq(col, val).select(col)
     } else if (op.tipo === 'reinsertar') {
-      resultado = await sb.from(op.tabla).insert({ ...op.datos, cuenta: CUENTA_IND, ...marca })
+      resultado = await sb.from(op.tabla).insert({ ...op.datos, cuenta: CUENTA_IND, ...marca }).select(col)
     } else {
-      resultado = await sb.from(op.tabla).update({ ...op.datos, ...marca }).eq('cuenta', CUENTA_IND).eq(col, val)
+      resultado = await sb.from(op.tabla).update({ ...op.datos, ...marca }).eq('cuenta', CUENTA_IND).eq(col, val).select(col)
     }
-    if (resultado.error) throw resultado.error
-    return NextResponse.json({ ok: true })
+    const r = resultadoEscritura(resultado, NO_HAY)
+    return NextResponse.json(r.body, { status: r.status })
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

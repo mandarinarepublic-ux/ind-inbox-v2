@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { autorizar } from '@/lib/editor-indi'
-import { validarFeriado, fechaReal } from '@/lib/indi-validar'
+import { validarFeriado, fechaReal, resultadoEscritura } from '@/lib/indi-validar'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -37,9 +37,11 @@ export async function POST(req) {
     }
     if (body.accion === 'borrar') {
       if (!fechaReal(body.fecha)) return NextResponse.json({ error: 'La fecha no es válida' }, { status: 400 })
-      const { error } = await sb.from('indi_feriados').delete().eq('cuenta', CUENTA_IND).eq('fecha', body.fecha)
-      if (error) throw error
-      return NextResponse.json({ ok: true })
+      // Con `.select` se sabe si borró algo: 0 filas = ya no estaba (404, no "ok").
+      const r = resultadoEscritura(
+        await sb.from('indi_feriados').delete().eq('cuenta', CUENTA_IND).eq('fecha', body.fecha).select('fecha'),
+        'Ese feriado ya no existe (quizá alguien lo borró antes)')
+      return NextResponse.json(r.body, { status: r.status })
     }
     return NextResponse.json({ error: `Acción desconocida: ${body.accion}` }, { status: 400 })
   } catch (err) {

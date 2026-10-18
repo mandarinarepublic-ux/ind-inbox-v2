@@ -34,7 +34,7 @@ function Formulario({ inicial, onCancelar, onGuardado }) {
       ...f,
       precio: f.precio === '' ? null : f.precio,
       vigente_hasta: f.vigente_hasta || null,
-      orden: Number(f.orden) || 0,
+      orden: f.orden, // lo valida el servidor: '' es 0 y 2,5 o -1 son error
     }
     const r = await enviar('/api/indi/conocimiento', { accion: 'guardar', fila })
     setGuardando(false)
@@ -68,7 +68,7 @@ function Formulario({ inicial, onCancelar, onGuardado }) {
               style={{ ...inputBase, colorScheme: 'dark' }} />
           </Campo>
         )}
-        <Campo label="ORDEN" style={{ flex: '0 1 90px' }}>
+        <Campo label="ORDEN" error={err('orden')} style={{ flex: '0 1 90px' }}>
           <input type="number" step="1" value={f.orden} onChange={(e) => set('orden', e.target.value)} style={inputBase} />
         </Campo>
       </div>

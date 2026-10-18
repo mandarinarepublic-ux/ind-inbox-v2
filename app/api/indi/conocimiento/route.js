@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { autorizar } from '@/lib/editor-indi'
-import { validarFila, hoyEcuador } from '@/lib/indi-validar'
+import { validarFila, hoyEcuador, resultadoEscritura } from '@/lib/indi-validar'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -43,12 +43,17 @@ export async function POST(req) {
       if (!body.id) return NextResponse.json({ error: 'Falta el id' }, { status: 400 })
       // El trigger toma `por` de `actualizado_por` de la fila; en un DELETE no hay
       // fila nueva, así que se deja constancia de quién borra con un update previo.
-      const firma = await sb.from('indi_conocimiento').update({ actualizado_por: usuario.nombre, actualizado_en: new Date().toISOString() })
-        .eq('cuenta', CUENTA_IND).eq('id', body.id)
-      if (firma.error) throw firma.error
-      const { error } = await sb.from('indi_conocimiento').delete().eq('cuenta', CUENTA_IND).eq('id', body.id)
-      if (error) throw error
-      return NextResponse.json({ ok: true })
+      // Con `.select` se sabe si tocó algo: 0 filas = ya no estaba (404, no "ok").
+      const NO_HAY = 'Eso ya no existe (quizá alguien lo borró antes)'
+      const firma = resultadoEscritura(
+        await sb.from('indi_conocimiento').update({ actualizado_por: usuario.nombre, actualizado_en: new Date().toISOString() })
+          .eq('cuenta', CUENTA_IND).eq('id', body.id).select('id'),
+        NO_HAY)
+      if (firma.status !== 200) return NextResponse.json(firma.body, { status: firma.status })
+      const r = resultadoEscritura(
+        await sb.from('indi_conocimiento').delete().eq('cuenta', CUENTA_IND).eq('id', body.id).select('id'),
+        NO_HAY)
+      return NextResponse.json(r.body, { status: r.status })
     }
     return NextResponse.json({ error: `Acción desconocida: ${body.accion}` }, { status: 400 })
   } catch (err) {

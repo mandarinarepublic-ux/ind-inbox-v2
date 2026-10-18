@@ -128,3 +128,7 @@ test('dinero: vacío no pinta nada y lo que no es número sale tal cual', () => 
   assert.strictEqual(dinero(''), '')
   assert.strictEqual(dinero('consultar'), 'consultar')
 })
+
+test('el error de orden va junto al campo ORDEN', () => {
+  assert.strictEqual(campoDelError('El orden debe ser un número entero mayor o igual a 0'), 'orden')
+})
