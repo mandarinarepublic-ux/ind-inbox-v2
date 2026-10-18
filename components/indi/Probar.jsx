@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react'
 import { C, Boton, inputBase, enviar } from './comun'
-import { historialParaAgente } from '@/lib/indi-vista'
+import { historialParaAgente, burbujasDeRespuesta } from '@/lib/indi-vista'
 
 // Chat de prueba: escribes como cliente y ves qué contestaría Indi con lo que
 // sabe HOY. No se manda nada a WhatsApp (POST /api/indi/probar). El historial
@@ -23,14 +23,7 @@ export default function Probar() {
     const r = await enviar('/api/indi/probar', { mensaje, historial })
     setEsperando(false)
     if (!r.ok) { setChat((prev) => [...prev, { de: 'error', texto: r.error }]); return }
-    setChat((prev) => {
-      const sig = [...prev]
-      const imagenes = Array.isArray(r.imagenes) ? r.imagenes : []
-      if (r.reply || imagenes.length) sig.push({ de: 'indi', texto: r.reply || '', imagenes })
-      if (r.escalado) sig.push({ de: 'aviso', texto: `Aquí Indi pasaría el chat a una persona: ${r.motivo || 'sin motivo'}` })
-      else if (!r.reply && !imagenes.length) sig.push({ de: 'error', texto: 'Indi no contestó nada (en un chat real, pasaría a una persona).' })
-      return sig
-    })
+    setChat((prev) => [...prev, ...burbujasDeRespuesta(r)])
   }
 
   const burbuja = (m, i) => {
@@ -71,6 +64,7 @@ export default function Probar() {
       <div style={{ fontSize: 12, color: C.creamDim, marginBottom: 12 }}>
         Escribe como si fueras un cliente. Indi contesta con lo que sabe ahora mismo (precios, promos, reglas y
         respuestas rápidas). No se manda nada a WhatsApp.
+        <div style={{ marginTop: 4, fontWeight: 700 }}>La prueba no ve pedidos de clientes reales.</div>
       </div>
       <div style={{
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 12,

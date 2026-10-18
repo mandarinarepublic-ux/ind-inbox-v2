@@ -31,6 +31,10 @@ export async function POST(req) {
     return NextResponse.json({
       reply: data.reply ?? '',
       imagenes: Array.isArray(data.imagenes) ? data.imagenes : [],
+      // sinBase: Indi no pudo leer su base. escalarPedido: pidió pasar el chat
+      // (escalado = además se hizo). La pantalla avisa de los dos.
+      sinBase: !!data.sinBase,
+      escalarPedido: !!data.escalarPedido,
       escalado: !!data.escalado,
       motivo: data.motivo ?? null,
     })

@@ -3,7 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert'
 import { permisoIndi } from '../lib/editor-indi.js'
-import { fechaCorta, avisoVencida, accionHistorial, nombreTabla, historialParaAgente, campoDelError, cambiosDeFila, tituloDeCambio } from '../lib/indi-vista.js'
+import { fechaCorta, avisoVencida, accionHistorial, nombreTabla, historialParaAgente, campoDelError, cambiosDeFila, tituloDeCambio, burbujasDeRespuesta } from '../lib/indi-vista.js'
 
 const AND = { id: 'AND', nombre: 'Andrés Admin', rol: 'ADMIN', tiendas: ['INDSTORE'], activo: true }
 
@@ -79,4 +79,34 @@ test('historial: de qué fila se habla', () => {
   assert.strictEqual(tituloDeCambio({ fila_id: '2026-12-25', despues: { fecha: '2026-12-25', nombre: 'Navidad' } }), 'Navidad (25 dic 2026)')
   assert.strictEqual(tituloDeCambio({ fila_id: 'r1', despues: { texto: 'Hola, estos son los precios de las camisetas' } }), 'Hola, estos son los precios de las camis…')
   assert.strictEqual(tituloDeCambio({ fila_id: 'r9', antes: null, despues: null }), 'r9')
+})
+
+test('probar: respuesta normal = burbuja de Indi con texto y fotos', () => {
+  assert.deepStrictEqual(burbujasDeRespuesta({ reply: 'Hola', imagenes: ['u1'] }), [
+    { de: 'indi', texto: 'Hola', imagenes: ['u1'] },
+  ])
+})
+
+test('probar: sinBase avisa que Indi no pudo leer su base (y no "no contestó nada")', () => {
+  assert.deepStrictEqual(burbujasDeRespuesta({ reply: '', imagenes: [], sinBase: true }), [
+    { de: 'error', texto: 'Indi no pudo leer su base: en un chat real, el chat pasaría a una persona.' },
+  ])
+})
+
+test('probar: escalarPedido o escalado muestran el traspaso con el motivo', () => {
+  const avisoCon = (m) => ({ de: 'aviso', texto: `Aquí Indi pasaría el chat a una persona: ${m}` })
+  assert.deepStrictEqual(burbujasDeRespuesta({ reply: 'Te paso con un asesor', escalarPedido: true, escalado: false, motivo: 'quiere factura' }), [
+    { de: 'indi', texto: 'Te paso con un asesor', imagenes: [] },
+    avisoCon('quiere factura'),
+  ])
+  assert.deepStrictEqual(burbujasDeRespuesta({ reply: '', escalado: true, motivo: '' }), [avisoCon('sin motivo')])
+})
+
+test('probar: sin texto ni fotos ni traspaso = error de "no contestó nada"', () => {
+  assert.deepStrictEqual(burbujasDeRespuesta({ reply: '', imagenes: [] }), [
+    { de: 'error', texto: 'Indi no contestó nada (en un chat real, pasaría a una persona).' },
+  ])
+  assert.deepStrictEqual(burbujasDeRespuesta(null), [
+    { de: 'error', texto: 'Indi no contestó nada (en un chat real, pasaría a una persona).' },
+  ])
 })
