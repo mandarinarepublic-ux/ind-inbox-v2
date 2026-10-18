@@ -26,6 +26,7 @@ import { Spinner, Avatar, ContactRow, MessageBubble, Toast } from '@/components/
 import RightPanel from '@/components/RightPanel'
 import Contactos, { PlantillaModal } from '@/components/Contactos'
 import Automatizaciones from '@/components/Automatizaciones'
+import Indi from '@/components/Indi'
 import PushToggle from '@/components/PushToggle'
 import AvisoSesion from '@/components/AvisoSesion'
 import { actualizarNoLeidos, notificar } from '@/lib/notif'
@@ -194,7 +195,7 @@ const loadSeen  = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)
 const saveSeen  = (m) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify(m)) } catch {} }
 
 export default function App() {
-  const [vista,        setVista]        = useState('CHAT') // 'CHAT' | 'CONTACTOS' | 'AUTO' | 'FLUJOS'
+  const [vista,        setVista]        = useState('CHAT') // 'CHAT' | 'CONTACTOS' | 'AUTO' | 'FLUJOS' | 'INDI'
   // ☠️ FLUJOS NO SE MONTA HASTA QUE ALGUIEN ENTRA, y una vez montado queda vivo
   // (oculto) al cambiar de pestaña: desmontarlo tiraría un flujo a medio dibujar.
   const [flujosVisitado, setFlujosVisitado] = useState(false)
@@ -2288,6 +2289,7 @@ export default function App() {
             { id:'CONTACTOS', label:'👥 CONTACTOS' },
             { id:'AUTO',      label:'⚙️ AUTOS' },
             { id:'FLUJOS',    label:'🧭 FLUJOS' },
+            { id:'INDI',      label:'🧠 INDI' },
           ].map(({ id, label }) => (
             <button key={id} onClick={() => setVista(id)} style={{
               padding:'4px 14px', border:'none', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, height:'100%',
@@ -2811,6 +2813,12 @@ export default function App() {
         {vista === 'AUTO' && (
           <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
             <Automatizaciones active={vista==='AUTO'} />
+          </div>
+        )}
+        {/* ══════ INDI ══════ — lo que sabe Indi, historial y chat de prueba */}
+        {vista === 'INDI' && (
+          <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
+            <Indi active={vista==='INDI'} />
           </div>
         )}
         {/* ══════ FLUJOS ══════ — el lienzo de nodos (ver flujosVisitado) */}
