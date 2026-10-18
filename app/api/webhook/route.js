@@ -20,6 +20,8 @@ import { correrTanda } from '@/lib/flujo-motor'
 import { mandarEscribiendo } from '@/lib/escribiendo'
 import { getEstadoFlujo, guardarEstadoFlujo, borrarEstadoFlujo, registrarPasos } from '@/lib/flujos'
 import { getRespuestas } from '@/lib/respuestas'
+import { cargarPedidosParaIndi } from '@/lib/pedidos-indi'
+import { enviosDeRespuesta } from '@/lib/respuesta-indi'
 import { identificadorEntrante, perfilesDeContactos } from '@/lib/cliente-sin-telefono'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
@@ -76,7 +78,6 @@ const AGENT_URL = process.env.INDX_AGENT_URL || 'https://indx-agent.vercel.app/a
 // Si la variable falta, el valor queda vacío y el agente responde 401: la IA deja
 // de contestar, pero NO se abre la puerta. Es la falla correcta de las dos.
 const AGENT_KEY = String(process.env.INDX_AGENT_KEY || '').replace(/[^\x21-\x7E]/g, '')
-const RE_IMG = /https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s)]*)?/gi
 
 // `auto: true` marca que el envío NO lo hizo un humano (IA, saludo automático).
 // /api/saliente lo usa para no reiniciar el enfriamiento del aviso push: si la IA
@@ -107,24 +108,31 @@ async function enviarSaliente(origin, body) {
   return enviarConMaquina(`${origin}/api/saliente`, { ...body, auto: true }, 'saliente automático')
 }
 
-async function responderConIA(origin, phone, name, message, canal) {
+async function responderConIA(origin, phone, name, message, canal, idVenta = '') {
   try {
+    // Pedidos del cliente para Indi. Si la lectura falla va `null` (no `[]`): "no
+    // pude leer" no puede parecer "no tiene pedidos". Nunca bloquea la respuesta.
+    let pedidos = null
+    try { pedidos = await cargarPedidosParaIndi({ telefono: phone, idVenta }) }
+    catch (e) { console.error('[webhook IA] no pude leer los pedidos:', e.message) }
+
     const r = await fetch(AGENT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-mandi-key': AGENT_KEY },
-      body: JSON.stringify({ phone, name: name || '', message, source: 'webhook' }),
+      body: JSON.stringify({ phone, name: name || '', message, source: 'webhook', pedidos }),
       signal: AbortSignal.timeout(28000),
     })
     const data = await r.json().catch(() => ({}))
     if (!r.ok) { console.error('[webhook IA] agente', r.status, data?.error || ''); return }
-    const reply = String(data?.reply_clean || data?.reply || '').trim()
-    if (!reply) return
 
-    // Las URLs de imagen que Indi incluyó se envían como FOTOS aparte.
-    const imagenes = [...new Set(reply.match(RE_IMG) || [])]
-    let texto = reply
-    for (const u of imagenes) texto = texto.split(u).join('')
-    texto = texto.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+    const { texto, imagenes, derivar } = enviosDeRespuesta(data)
+    if (derivar) {
+      // Primero se apaga la IA (que no vuelva a contestar), luego se avisa a una
+      // persona; cada paso con su catch para que uno que falle no salte al otro.
+      await updateModoIA(phone, 'HUMANO').catch(e => console.error('[webhook IA] no pude apagar la IA:', e.message))
+      await derivarAPersona(phone, '🧠 Indi no pudo leer su base').catch(e => console.error('[webhook IA] no pude derivar:', e.message))
+      return
+    }
 
     if (texto) await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: texto, Canal: canal })
     for (const url of imagenes) {
@@ -622,7 +630,7 @@ export async function POST(req) {
           const encendida = await getModoIA(m.telefono).catch(() => false)
           if (encendida) {
             // En segundo plano: Meta recibe su 200 al instante, la IA responde detrás.
-            waitUntil(responderConIA(origin, m.telefono, m.nombre, m.contenido, m.phoneId))
+            waitUntil(responderConIA(origin, m.telefono, m.nombre, m.contenido, m.phoneId, contactoDe(m.telefono)?.idVenta || ''))
           }
         }
 

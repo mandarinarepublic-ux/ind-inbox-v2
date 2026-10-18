@@ -160,3 +160,12 @@ test('buscarPedidosCliente da lo mismo que la ruta original', async () => {
     cantidad: Number(d.cantidad || 1) || 1, precio: Number(d.precio_unit || d.subtotal || 0) || 0 }))]))
   assert.deepEqual(mapa, v.items)
 })
+
+test('buscarPedidosCliente estricto: lanza si una consulta trae error; sin estricto lo ignora', async () => {
+  const crm = { from: () => { const api = { select: () => api, like: () => api, in: () => api, eq: () => api,
+    then: (res, rej) => Promise.resolve({ data: null, error: { message: 'caído' } }).then(res, rej) }; return api } }
+  const r = await buscarPedidosCliente(crm, { telefono: '0991234567' })
+  assert.deepEqual(r.pedidos, [])
+  await assert.rejects(buscarPedidosCliente(crm, { telefono: '0991234567' }, { estricto: true }), /caído/)
+  await assert.rejects(cargarPedidosParaIndi({ telefono: '0991234567' }, crm), /caído/)
+})
