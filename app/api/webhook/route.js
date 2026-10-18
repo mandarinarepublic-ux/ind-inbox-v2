@@ -21,7 +21,7 @@ import { mandarEscribiendo } from '@/lib/escribiendo'
 import { getEstadoFlujo, guardarEstadoFlujo, borrarEstadoFlujo, registrarPasos } from '@/lib/flujos'
 import { getRespuestas } from '@/lib/respuestas'
 import { cargarPedidosParaIndi } from '@/lib/pedidos-indi'
-import { enviosDeRespuesta } from '@/lib/respuesta-indi'
+import { enviosDeRespuesta, pasarAPersona } from '@/lib/respuesta-indi'
 import { identificadorEntrante, perfilesDeContactos } from '@/lib/cliente-sin-telefono'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
@@ -116,23 +116,28 @@ async function responderConIA(origin, phone, name, message, canal, idVenta = '')
     try { pedidos = await cargarPedidosParaIndi({ telefono: phone, idVenta }) }
     catch (e) { console.error('[webhook IA] no pude leer los pedidos:', e.message) }
 
-    const r = await fetch(AGENT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-mandi-key': AGENT_KEY },
-      body: JSON.stringify({ phone, name: name || '', message, source: 'webhook', pedidos }),
-      signal: AbortSignal.timeout(28000),
-    })
-    const data = await r.json().catch(() => ({}))
-    if (!r.ok) { console.error('[webhook IA] agente', r.status, data?.error || ''); return }
-
-    const { texto, imagenes, derivar } = enviosDeRespuesta(data)
-    if (derivar) {
-      // Primero se apaga la IA (que no vuelva a contestar), luego se avisa a una
-      // persona; cada paso con su catch para que uno que falle no salte al otro.
-      await updateModoIA(phone, 'HUMANO').catch(e => console.error('[webhook IA] no pude apagar la IA:', e.message))
-      await derivarAPersona(phone, '🧠 Indi no pudo leer su base').catch(e => console.error('[webhook IA] no pude derivar:', e.message))
+    // Si el agente no responde (error, caída, timeout o respuesta vacía) el cliente
+    // se quedaría sin respuesta con la IA prendida y nadie se enteraría: se pasa a una persona.
+    const pasar = (nota) => pasarAPersona({ telefono: phone, nota, updateModoIA, derivarAPersona })
+    let data
+    try {
+      const r = await fetch(AGENT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-mandi-key': AGENT_KEY },
+        body: JSON.stringify({ phone, name: name || '', message, source: 'webhook', pedidos }),
+        signal: AbortSignal.timeout(28000),
+      })
+      data = await r.json().catch(() => ({}))
+      if (!r.ok) { console.error('[webhook IA] agente', r.status, data?.error || ''); await pasar('🧠 Indi no pudo responder'); return }
+    } catch (e) {
+      console.error('[webhook IA] agente falló:', e.message)
+      await pasar('🧠 Indi no pudo responder')
       return
     }
+
+    const { texto, imagenes, derivar } = enviosDeRespuesta(data)
+    if (derivar) { await pasar('🧠 Indi no pudo leer su base'); return }
+    if (!texto && !imagenes.length) { await pasar('🧠 Indi no pudo responder'); return }
 
     if (texto) await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', Mensaje: texto, Canal: canal })
     for (const url of imagenes) {

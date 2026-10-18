@@ -32,3 +32,27 @@ test('agente viejo (sin imagenes): saca las fotos del texto', () => {
 test('respuesta vacía → nada que enviar', () => {
   assert.deepEqual(enviosDeRespuesta({}), { texto: '', imagenes: [], derivar: false })
 })
+
+import { pasarAPersona } from '../lib/respuesta-indi.js'
+
+test('pasarAPersona: apaga la IA primero y luego deriva', async () => {
+  const orden = []
+  await pasarAPersona({ telefono: '593', nota: 'n',
+    updateModoIA: async (t, m) => { orden.push(['modo', t, m]) },
+    derivarAPersona: async (t, n) => { orden.push(['derivar', t, n]) } })
+  assert.deepEqual(orden, [['modo', '593', 'HUMANO'], ['derivar', '593', 'n']])
+})
+
+test('pasarAPersona: si apagar la IA falla, igual deriva', async () => {
+  const orden = []; const logs = []
+  await pasarAPersona({ telefono: '593', nota: 'n', log: (...a) => logs.push(a),
+    updateModoIA: async () => { throw new Error('x') },
+    derivarAPersona: async () => { orden.push('derivar') } })
+  assert.deepEqual(orden, ['derivar'])
+  assert.equal(logs.length, 1)
+})
+
+test('pasarAPersona: si derivar falla no lanza', async () => {
+  await pasarAPersona({ telefono: '593', nota: 'n', log: () => {},
+    updateModoIA: async () => {}, derivarAPersona: async () => { throw new Error('y') } })
+})
