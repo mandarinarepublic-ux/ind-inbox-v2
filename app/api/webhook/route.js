@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { registrarContactoEntrante, getModoIA, getContactos, marcarPush, updateEtapa, updateDeuda, marcarReceta, derivarAPersona, updateModoIA } from '@/lib/contactos'
-import { esFotoParaVendedor } from '@/lib/foto-al-vendedor'
+import { medioParaVendedor } from '@/lib/foto-al-vendedor'
 import { enviarPush, avisoDeEntrante } from '@/lib/push'
 import { enviarConMaquina } from '@/lib/auth-maquina'
 import { usaSupabaseLectura, CUENTA } from '@/lib/supabase'
@@ -21,7 +21,7 @@ import { mandarEscribiendo } from '@/lib/escribiendo'
 import { getEstadoFlujo, guardarEstadoFlujo, borrarEstadoFlujo, registrarPasos } from '@/lib/flujos'
 import { getRespuestas } from '@/lib/respuestas'
 import { cargarPedidosParaIndi } from '@/lib/pedidos-indi'
-import { enviosDeRespuesta, pasarAPersona } from '@/lib/respuesta-indi'
+import { enviosDeRespuesta, pasarAPersona, traspasoPendiente } from '@/lib/respuesta-indi'
 import { identificadorEntrante, perfilesDeContactos } from '@/lib/cliente-sin-telefono'
 
 const tail9 = (s) => String(s || '').replace(/\D/g, '').slice(-9)
@@ -143,6 +143,11 @@ async function responderConIA(origin, phone, name, message, canal, idVenta = '')
     for (const url of imagenes) {
       await enviarSaliente(origin, { Telefono: phone, Nombre: name || '', ImagenURL: url, Canal: canal })
     }
+
+    // Indi pidió pasar el chat pero su traspaso no se hizo (p. ej. 401 del inbox):
+    // sin esto el cliente queda con el "te confirmo enseguida" y nadie lo sigue.
+    const notaTraspaso = traspasoPendiente(data)
+    if (notaTraspaso) await pasar(notaTraspaso)
   } catch (e) {
     console.error('[webhook IA] agente falló:', e.message)
   }
@@ -639,17 +644,15 @@ export async function POST(req) {
           }
         }
 
-        // ── Foto del cliente con Indi prendida → pasa al vendedor ──
-        // Indi no comenta fotos. Misma estructura que arriba: `agenteResponde`
-        // primero y `getModoIA` como segundo candado. Nunca lanza (.catch).
-        if (agenteResponde(m.telefono, m.phoneId) && esFotoParaVendedor(m)) {
+        // ── Foto, audio, video o documento con Indi prendida → pasa al vendedor ──
+        // Indi no procesa medios. Misma estructura que arriba: `agenteResponde`
+        // primero y `getModoIA` como segundo candado. pasarAPersona apaga la IA
+        // PRIMERO y luego deriva, cada paso con su catch: nunca lanza.
+        const notaMedio = medioParaVendedor(m)
+        if (notaMedio && agenteResponde(m.telefono, m.phoneId)) {
           const encendida = await getModoIA(m.telefono).catch(() => false)
           if (encendida) {
-            waitUntil(
-              derivarAPersona(m.telefono, '📷 Mandó una foto')
-                .then(() => updateModoIA(m.telefono, 'HUMANO'))
-                .catch(e => console.error('[webhook] foto → vendedor', e))
-            )
+            waitUntil(pasarAPersona({ telefono: m.telefono, nota: notaMedio, updateModoIA, derivarAPersona }))
           }
         }
       }

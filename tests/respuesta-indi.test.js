@@ -56,3 +56,26 @@ test('pasarAPersona: si derivar falla no lanza', async () => {
   await pasarAPersona({ telefono: '593', nota: 'n', log: () => {},
     updateModoIA: async () => {}, derivarAPersona: async () => { throw new Error('y') } })
 })
+
+import { traspasoPendiente } from '../lib/respuesta-indi.js'
+
+test('traspasoPendiente: Indi pidió escalar y el traspaso no se hizo → nota con el motivo', () => {
+  assert.equal(traspasoPendiente({ escalarPedido: true, escalado: false, motivo: 'pregunta por devolución' }),
+    '🧠 pregunta por devolución')
+})
+
+test('traspasoPendiente: sin motivo usa la nota genérica', () => {
+  assert.equal(traspasoPendiente({ escalarPedido: true, escalado: false, motivo: '' }), '🧠 Indi pidió pasar el chat')
+  assert.equal(traspasoPendiente({ escalarPedido: true }), '🧠 Indi pidió pasar el chat')
+})
+
+test('traspasoPendiente: un motivo sin escalarPedido también cuenta (agente viejo)', () => {
+  assert.equal(traspasoPendiente({ escalado: false, motivo: 'reclamo' }), '🧠 reclamo')
+})
+
+test('traspasoPendiente: si el agente ya traspasó, o no pidió nada → null', () => {
+  assert.equal(traspasoPendiente({ escalarPedido: true, escalado: true, motivo: 'x' }), null)
+  assert.equal(traspasoPendiente({ escalarPedido: false, escalado: false }), null)
+  assert.equal(traspasoPendiente({ motivo: '   ' }), null)
+  assert.equal(traspasoPendiente(null), null)
+})
