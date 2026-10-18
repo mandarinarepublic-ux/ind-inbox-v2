@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
-import { registrarContactoEntrante, getModoIA, getContactos, marcarPush, updateEtapa, updateDeuda, marcarReceta } from '@/lib/contactos'
+import { registrarContactoEntrante, getModoIA, getContactos, marcarPush, updateEtapa, updateDeuda, marcarReceta, derivarAPersona, updateModoIA } from '@/lib/contactos'
+import { esFotoParaVendedor } from '@/lib/foto-al-vendedor'
 import { enviarPush, avisoDeEntrante } from '@/lib/push'
 import { enviarConMaquina } from '@/lib/auth-maquina'
 import { usaSupabaseLectura, CUENTA } from '@/lib/supabase'
@@ -622,6 +623,20 @@ export async function POST(req) {
           if (encendida) {
             // En segundo plano: Meta recibe su 200 al instante, la IA responde detrás.
             waitUntil(responderConIA(origin, m.telefono, m.nombre, m.contenido, m.phoneId))
+          }
+        }
+
+        // ── Foto del cliente con Indi prendida → pasa al vendedor ──
+        // Indi no comenta fotos. Misma estructura que arriba: `agenteResponde`
+        // primero y `getModoIA` como segundo candado. Nunca lanza (.catch).
+        if (agenteResponde(m.telefono, m.phoneId) && esFotoParaVendedor(m)) {
+          const encendida = await getModoIA(m.telefono).catch(() => false)
+          if (encendida) {
+            waitUntil(
+              derivarAPersona(m.telefono, '📷 Mandó una foto')
+                .then(() => updateModoIA(m.telefono, 'HUMANO'))
+                .catch(e => console.error('[webhook] foto → vendedor', e))
+            )
           }
         }
       }
