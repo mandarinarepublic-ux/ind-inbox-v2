@@ -18,6 +18,7 @@ import { claveRespuesta, decidirRespuestaRapida, haceTexto } from '@/lib/respues
 import { debePausar, hayNovedad, EVENTOS_ACTIVIDAD } from '@/lib/inactividad'
 import { pestanaGuardada } from '@/lib/pestana'
 import { fusionarHilo } from '@/lib/hilo-historico'
+import { pedidosPorResolver } from '@/lib/pedido-en-vivo'
 import { estadoVisible } from '@/lib/bandeja'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { pautaAbierta, etiquetaVencePauta } from '@/lib/bandeja'
@@ -1040,6 +1041,20 @@ export default function App() {
       return merged ? { ...c, msgs: merged.msgs, last: merged.last } : c
     }))
   }, [])
+
+  // 📦 Un pedido del catálogo que llega con el chat ABIERTO entra por el poll, que
+  // no trae el crudo de Meta: sin esto se quedaba "1 × $35.00 (8063557763165)"
+  // hasta refrescar. Se vuelve a leer el hilo, que es quien le pone nombre y foto.
+  // Cada pedido se pide UNA vez (pedidosPedidosRef) aunque no se pueda resolver.
+  const pedidosPedidosRef = useRef(new Set())
+  useEffect(() => {
+    if (!active) return
+    const conv = convs.find(c => c.telefono === active)
+    const ids = pedidosPorResolver(conv?.msgs, pedidosPedidosRef.current)
+    if (!ids.length) return
+    ids.forEach(id => pedidosPedidosRef.current.add(id))
+    cargarHilo(active)
+  }, [active, convs, cargarHilo])
 
   // Teléfono que quedó esperando a que su canal termine de cargar, para
   // abrirlo apenas aparezca en `convs`. Lo usa SOLO el salto desde un
