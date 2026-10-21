@@ -33,6 +33,7 @@ export async function GET(req) {
         return cel === phone || cel.endsWith(phone.slice(-9)) || phone.endsWith(cel.slice(-9))
       })
       .filter(m => String(m.mensaje || '').trim()) // el agente razona sobre texto
+      .filter(m => m.direccion !== 'INTERNO') // aviso del CRM: no es del cliente
       .sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp))
 
     const turnos = []

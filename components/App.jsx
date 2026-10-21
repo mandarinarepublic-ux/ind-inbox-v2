@@ -2646,7 +2646,10 @@ export default function App() {
                     🎯 Ventana de pauta — puedes escribirle gratis hasta el <b>{etiquetaVencePauta(activeConv?.pautaVenceEn)}</b>
                   </div>
                 )}
-                {!windowOpen && lastIncoming && (
+                {/* Con CUALQUIER mensaje, no solo uno del cliente: el chat que crea
+                    el CRM por un pedido web sin pagar nace sin ningún entrante, y
+                    justo ahí la plantilla es la única forma de escribirle. */}
+                {!windowOpen && activeConv?.msgs?.length > 0 && (
                   <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)', borderRadius:8, fontSize:11, color:'#fbbf24', display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexWrap:'wrap' }}>
                     <span>⚠️ Ventana de 24h cerrada — solo plantilla</span>
                     <button onClick={() => setShowTplModal(true)} style={{ background:C.cream, border:'none', color:C.bg, fontWeight:800, fontSize:11, padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>📋 Enviar plantilla</button>
