@@ -103,7 +103,12 @@ function BotonEje({ on, color, onClick, title, icon, label }) {
       boxShadow: on ? `0 0 8px ${color}44` : 'none',
     }}>
       <span className="hide-mobile" style={{ fontSize:10 }}>{icon} {label}</span>
-      <span className="show-mobile" style={{ fontSize:14 }}>{icon}</span>
+      {/* En el celular no hay "pasar el mouse" para ver el title: el nombre va
+          debajo del emoji, si no hay que saberse los botones de memoria. */}
+      <span className="show-mobile eje-mob">
+        <span style={{ fontSize:15, lineHeight:1 }}>{icon}</span>
+        <span className="eje-mob-lbl">{label}</span>
+      </span>
     </button>
   )
 }
@@ -304,6 +309,17 @@ export default function App() {
   const pollRef    = useRef(null)
   const fileRef    = useRef(null)
   const msgsRef    = useRef(null)
+  // 📱 Mismo corte que el CSS (767px). Solo para textos que el CSS no puede
+  // cambiar, como el placeholder: el diseño de celular vive en el <style>.
+  const [esCelular, setEsCelular] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia?.('(max-width: 767px)')
+    if (!mq) return
+    const alCambiar = () => setEsCelular(mq.matches)
+    alCambiar()
+    mq.addEventListener?.('change', alCambiar)
+    return () => mq.removeEventListener?.('change', alCambiar)
+  }, [])
   const autoScroll = useRef(true)
   const prevMsgLen = useRef(0)
   const avisoRef   = useRef(null)  // temporizador del aviso de adjuntos
@@ -433,9 +449,16 @@ export default function App() {
     setRightWidth(w => Math.min(ANCHO_MAX, w))
   }, [])
 
+  // 📱 En el celular el cajón derecho mide 300 px: el formulario del CRM ahí no
+  // entra. Con algo del CRM abierto EN EL CAJÓN, el cajón pasa a pantalla completa.
+  const [crmEnCajon, setCrmEnCajon] = useState(false)
+  const recalcularCrmEnCajon = () => setCrmEnCajon(!!(manualesRef.current.cajon || veresRef.current.cajon))
+
   const alPedidoManual = useCallback((donde, abierto) => {
     anotarManuales({ ...manualesRef.current, [donde]: abierto })
     ajustarAnchoDelCrm(abierto)
+    recalcularCrmEnCajon()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anotarManuales, ajustarAnchoDelCrm])
 
   // El camino de VER PEDIDO: ensancha igual y no toca `manualesRef`, o sea que
@@ -443,6 +466,8 @@ export default function App() {
   const alVerPedido = useCallback((donde, abierto) => {
     anotarVeres({ ...veresRef.current, [donde]: abierto })
     ajustarAnchoDelCrm(abierto)
+    recalcularCrmEnCajon()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anotarVeres, ajustarAnchoDelCrm])
 
   // Una por instancia, y ESTABLES: `RightPanel` las tiene como dependencia de un
@@ -2303,10 +2328,14 @@ export default function App() {
         .hide-mobile{ display:inline !important; }
         .show-mobile{ display:none !important; }
         .overlay    { display:none; }
+        .filtros-toggle{ display:none !important; }
+        .panel-mob  { display:none !important; }
         @media (max-width:767px){
-          .sidebar{ position:fixed !important; left:0; top:0; bottom:0; z-index:100; width:88% !important; max-width:310px; box-shadow:4px 0 32px rgba(0,0,0,.8); transform:translateX(-100%); transition:transform .25s ease; }
+          /* Los cajones arrancan DEBAJO de la barra de pestañas (42px, z-index 200):
+             con top:0 la barra tapaba la cabecera de la lista (logo, "En vivo"). */
+          .sidebar{ position:fixed !important; left:0; top:calc(42px + env(safe-area-inset-top, 0px)); bottom:0; z-index:100; width:88% !important; max-width:310px; box-shadow:4px 0 32px rgba(0,0,0,.8); transform:translateX(-100%); transition:transform .25s ease; }
           .sidebar.open{ transform:translateX(0); }
-          .right-col{ position:fixed !important; right:0; top:0; bottom:0; z-index:100; width:88% !important; max-width:300px; box-shadow:-4px 0 32px rgba(0,0,0,.8); animation:slideR .25s ease; }
+          .right-col{ position:fixed !important; right:0; top:calc(42px + env(safe-area-inset-top, 0px)); bottom:0; z-index:100; width:88% !important; max-width:300px; box-shadow:-4px 0 32px rgba(0,0,0,.8); animation:slideR .25s ease; }
           .desktop-right{ display:none !important; }
           .mob-ham{ display:flex !important; }
           .mob-refresh{ display:flex !important; }
@@ -2321,6 +2350,33 @@ export default function App() {
           .chat-actions{ flex:1 1 100% !important; flex-wrap:nowrap !important; overflow-x:auto; justify-content:flex-start !important; padding-bottom:2px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
           .chat-actions::-webkit-scrollbar{ display:none; }
           .chat-actions > *{ flex-shrink:0 !important; }
+          /* Pestañas: sin el logo y repartidas en partes iguales, ícono arriba y
+             nombre abajo, contador en la esquina. Así entran todas sin scroll. */
+          .tab-selector{ gap:0 !important; overflow-x:hidden !important; }
+          .tab-logo{ display:none !important; }
+          .tab-selector > button{ flex:1 1 0 !important; min-width:0 !important; padding:3px 2px !important; position:relative; justify-content:center; letter-spacing:0 !important; }
+          .tab-par{ display:flex; flex-direction:column; align-items:center; line-height:1.15; min-width:0; max-width:100%; }
+          .tab-ico{ font-size:15px; }
+          .tab-lbl{ font-size:8.5px; letter-spacing:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+          .tab-badge{ position:absolute; top:2px; right:3px; min-width:14px !important; height:14px !important; font-size:8px !important; padding:0 3px !important; }
+          /* ☰ volver a la lista: medía 22×20. */
+          .chat-header .mob-ham{ min-width:40px; min-height:40px; font-size:24px !important; align-items:center; justify-content:center; }
+          .panel-mob{ display:flex !important; }
+          /* Botones de la cabecera del chat: emoji + nombre debajo, 40px de alto. */
+          .chat-actions > button{ min-height:40px; }
+          .eje-mob{ display:inline-flex !important; flex-direction:column; align-items:center; gap:2px; }
+          .eje-mob-lbl{ font-size:8.5px; font-weight:700; white-space:nowrap; max-width:60px; overflow:hidden; text-overflow:ellipsis; }
+          /* Filtros: en la compu se ven todos; en el celular, detrás de un botón. */
+          .filtros-toggle{ display:flex !important; }
+          .filtros-extra{ display:none; }
+          .filtros-extra.abiertos{ display:block; }
+          /* Respuestas rápidas: botones de 20px → 34px, debajo del texto, 🗑 apartado. */
+          .rr-fila{ flex-direction:column; align-items:stretch !important; }
+          .rr-acciones{ gap:6px !important; justify-content:flex-end; }
+          .rr-acciones > button{ min-height:34px; min-width:34px; font-size:13px !important; border:1px solid ${C.border2} !important; border-radius:5px; }
+          .rr-acciones > .rr-borrar{ margin-left:8px; }
+          /* El formulario del CRM no entra en 300px: pantalla completa. */
+          .right-col.crm-abierto{ width:100% !important; max-width:100% !important; }
         }
       `}</style>
 
@@ -2342,8 +2398,11 @@ export default function App() {
       <div style={{ display:'flex', flexDirection:'column', height:'100dvh', overflow:'hidden' }}>
 
         {/* ══════ HEADER + PESTAÑAS ══════ */}
-        <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:12, flexShrink:0, height:42, background:C.bg, borderBottom:`1px solid ${C.border}`, zIndex:200, overflowX:'auto' }}>
-          <div style={{ width:26, height:26, background:C.cream, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:900, color:C.bg, letterSpacing:'-0.5px', flexShrink:0 }}>IND</div>
+        {/* ☠️ 'safe center' y no 'center': con 'center', si las pestañas no entran
+            (celular) se cortan POR LOS DOS LADOS y lo de la izquierda queda fuera de
+            alcance — el logo y el 3326 quedaban en x = -94, imposibles de tocar. */}
+        <div className="tab-selector" style={{ display:'flex', justifyContent:'safe center', alignItems:'center', gap:12, flexShrink:0, height:42, background:C.bg, borderBottom:`1px solid ${C.border}`, zIndex:200, overflowX:'auto' }}>
+          <div className="tab-logo" style={{ width:26, height:26, background:C.cream, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:900, color:C.bg, letterSpacing:'-0.5px', flexShrink:0 }}>IND</div>
           {/* Un botón por número + las vistas de siempre. El chat NO se duplica:
               es el mismo panel, solo cambia el canal que se está atendiendo. */}
           {CANALES.map((c) => {
@@ -2358,11 +2417,13 @@ export default function App() {
                 borderBottom: activo ? `2px solid ${C.cream}` : '2px solid transparent',
                 color: activo ? C.cream : C.creamFaint, fontWeight:800, fontSize:11, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
               }}>
-                💬 {c.etiqueta}
+                {/* Ícono y nombre por separado: en el celular van uno ENCIMA del
+                    otro y el contador flota en la esquina (ver CSS .tab-ico). */}
+                <span className="tab-par"><span className="tab-ico">💬</span> <span className="tab-lbl">{c.etiqueta}</span></span>
                 {/* El contador es lo que impide que la bandeja que no miras se
                     vuelva invisible y se pierdan clientes ahí dentro. */}
                 {n > 0 && (
-                  <span style={{
+                  <span className="tab-badge" style={{
                     background:'#f87171', color:'#fff', borderRadius:9, minWidth:17, height:17,
                     display:'inline-flex', alignItems:'center', justifyContent:'center',
                     fontSize:9.5, fontWeight:900, padding:'0 5px', letterSpacing:0,
@@ -2372,18 +2433,18 @@ export default function App() {
             )
           })}
           {[
-            { id:'CONTACTOS', label:'👥 CONTACTOS' },
-            { id:'AUTO',      label:'⚙️ AUTOS' },
-            { id:'FLUJOS',    label:'🧭 FLUJOS' },
-            { id:'INDI',      label:'🧠 INDI' },
-          ].map(({ id, label }) => (
+            { id:'CONTACTOS', icon:'👥', label:'CONTACTOS' },
+            { id:'AUTO',      icon:'⚙️', label:'AUTOS' },
+            { id:'FLUJOS',    icon:'🧭', label:'FLUJOS' },
+            { id:'INDI',      icon:'🧠', label:'INDI' },
+          ].map(({ id, icon, label }) => (
             <button key={id} onClick={() => setVista(id)} style={{
               padding:'4px 14px', border:'none', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, height:'100%',
               background: vista===id ? 'rgba(244,241,236,.1)' : 'transparent',
               borderTop:'2px solid transparent',
               borderBottom: vista===id ? `2px solid ${C.cream}` : '2px solid transparent',
               color: vista===id ? C.cream : C.creamFaint, fontWeight:800, fontSize:11, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
-            }}>{label}</button>
+            }}><span className="tab-par"><span className="tab-ico">{icon}</span> <span className="tab-lbl">{label}</span></span></button>
           ))}
         </div>
 
@@ -2539,6 +2600,13 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                  {/* ⚡ Respuestas rápidas + pedido (solo celular). Antes era un ⚡ sin
+                      nombre al FINAL de la tira que scrollea: había que arrastrar
+                      para encontrar la puerta a las respuestas y al pedido. */}
+                  <button onClick={() => setShowRight(r=>!r)} className="panel-mob" title="Respuestas rápidas y pedido"
+                    style={{ alignItems:'center', gap:5, padding:'8px 12px', borderRadius:20, border:`1px solid ${C.border2}`, background: showRight ? 'rgba(244,241,236,.14)' : C.surface2, color:C.cream, fontSize:12, fontWeight:800, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, marginLeft:'auto', fontFamily:'inherit' }}>
+                    ⚡ Panel
+                  </button>
                 </div>
                 <div className="chat-actions" style={{ display:'flex', alignItems:'center', gap:4, flexWrap:'wrap', flex:1, justifyContent:'flex-end' }}>
                   {/* Refrescar, SOLO en movil. El boton de siempre vive al fondo
@@ -2601,7 +2669,6 @@ export default function App() {
                       </>
                     )
                   })()}
-                  <button onClick={() => setShowRight(r=>!r)} className="mob-ham" style={{ background:showRight?`rgba(244,241,236,.1)`:'rgba(255,255,255,.04)', border:`1px solid ${showRight?'rgba(244,241,236,.3)':C.border2}`, color:showRight?C.cream:C.creamFaint, borderRadius:8, width:30, height:28, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>⚡</button>
 
                   {/* Toggle IA */}
                   {(() => {
@@ -2831,7 +2898,7 @@ export default function App() {
                     )}
                     <textarea ref={taRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
                       onPaste={handlePaste}
-                      placeholder={getModoIA(activeConv?.telefono) ? '🤖 IA respondiendo automáticamente...' : 'Escribe un mensaje... (Ctrl+Enter para enviar)'}
+                      placeholder={getModoIA(activeConv?.telefono) ? '🤖 IA respondiendo automáticamente...' : esCelular ? 'Escribe un mensaje...' : 'Escribe un mensaje... (Ctrl+Enter para enviar)'}
                       rows={2}
                       style={{ width:'100%', background:'transparent', border:'none', outline:'none', color:C.cream, fontSize:14, resize:'none', lineHeight:1.5, minHeight:44, maxHeight:120, overflowY:'auto' }} />
                   </div>
@@ -2906,7 +2973,7 @@ export default function App() {
             </div>
           )}
           {showRight && activeConv && (
-            <div className="right-col">
+            <div className={`right-col${crmEnCajon ? ' crm-abierto' : ''}`}>
               <div style={{ display:'flex', justifyContent:'flex-end', padding:'10px 10px 0' }}>
                 <button onClick={cerrarCajonDerecho} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:17 }}>✕</button>
               </div>
