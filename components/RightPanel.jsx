@@ -719,7 +719,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     await writeReply('actualizar', updated)
   }
   const deleteReply = async (idx) => {
-    const r = replies[idx]; setReplies(prev => prev.filter((_,i) => i!==idx))
+    const r = replies[idx]
+    // Borrar no se deshace, y en el celular el 🗑 queda a un dedo de "Enviar".
+    const vista = String(r?.text || '').trim().slice(0, 60) || 'esta respuesta (solo adjuntos)'
+    if (!window.confirm(`¿Borrar la respuesta rápida?\n\n«${vista}»\n\nNo se puede deshacer.`)) return
+    setReplies(prev => prev.filter((_,i) => i!==idx))
     await writeReply('eliminar', r)
   }
 
