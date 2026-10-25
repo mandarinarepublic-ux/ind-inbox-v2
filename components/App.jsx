@@ -20,6 +20,7 @@ import { pestanaGuardada } from '@/lib/pestana'
 import { fusionarHilo } from '@/lib/hilo-historico'
 import { pedidosPorResolver } from '@/lib/pedido-en-vivo'
 import { tramosPorMes } from '@/lib/meses-chat'
+import { claveSalto, tramoDelCitado, estaCargado } from '@/lib/ir-a-cita'
 import { estadoVisible } from '@/lib/bandeja'
 import { buildConvs, fmtDate, parseDate as _parseDate } from '@/lib/utils'
 import { pautaAbierta, etiquetaVencePauta } from '@/lib/bandeja'
@@ -1147,6 +1148,62 @@ export default function App() {
 
   const activeConv     = convs.find(c => c.telefono === active) || null
   const totalUnread    = convs.reduce((s, c) => s + c.unread, 0)
+
+  // ── ↩️ Tocar una cita lleva al mensaje original (lib/ir-a-cita.js) ─────────
+  // Primero se asegura que el original esté DESCARGADO (si es viejo, se traen
+  // páginas de historial como al subir con el scroll) y después el efecto de abajo
+  // abre su mes si estaba plegado, baja hasta él y lo hace brillar un momento.
+  // ⚠️ Acá el caché del hilo va por TELÉFONO solo (en MANDI es `tel|canal`).
+  const [saltoA, setSaltoA] = useState(null)   // contextoId del original
+  const buscandoCitaRef = useRef(false)
+  const avisarCita = (msg) => { setToast({ ok: false, msg }); setTimeout(() => setToast(null), 4000) }
+  const irACita = async (contextoId) => {
+    if (estaCargado(activeConv?.msgs, contextoId)) { setSaltoA(contextoId); return }
+    const tel = activeRef.current
+    if (!tel || buscandoCitaRef.current) return
+    const canal = getCanalActivo()
+    buscandoCitaRef.current = true
+    try {
+      // Tope: 15 páginas de 800. Una cita más vieja que eso no justifica bajar
+      // el chat entero de golpe.
+      for (let i = 0; i < 15; i++) {
+        if (activeRef.current !== tel || getCanalActivo() !== canal) return   // cambió de chat a mitad
+        if (estaCargado(hilosRef.current[tel], contextoId)) { setSaltoA(contextoId); return }
+        if (sinMasRef.current[tel]) break
+        if (cargandoMasRef.current) { await new Promise(r => setTimeout(r, 300)); continue }
+        const antes = (hilosRef.current[tel] || []).length
+        await cargarMasHistorial()
+        // No creció y tampoco se acabó el historial = la petición falló: no insistir.
+        if ((hilosRef.current[tel] || []).length <= antes && !sinMasRef.current[tel]) break
+      }
+      avisarCita('No encontré el mensaje original en el historial de este chat')
+    } finally { buscandoCitaRef.current = false }
+  }
+
+  useEffect(() => {
+    if (!saltoA) return
+    if (!activeConv) { setSaltoA(null); return }
+    // Los tramos se arman IGUAL que al pintar el hilo, para que el mes coincida.
+    const ids = new Set(activeConv.msgs.map(m => String(m.id)))
+    const visibles = activeConv.msgs.filter(m => seMuestraComoBurbuja(m, ids))
+    const tramo = tramoDelCitado(tramosPorMes(visibles, m => _parseDate(m.timestamp)), saltoA)
+    if (!tramo) { setSaltoA(null); avisarCita('Ese mensaje no se puede mostrar en el hilo'); return }
+    const claveMesChat = `${activeConv.telefono}|${getCanalActivo() || ''}|${tramo.clave}`
+    if (!tramo.siempreAbierto && !mesesAbiertos[claveMesChat]) {
+      // Al pintarse el mes este efecto vuelve a correr y ahí sí encuentra la burbuja.
+      setMesesAbiertos(prev => ({ ...prev, [claveMesChat]: true }))
+      return
+    }
+    const el = msgsRef.current?.querySelector(`[data-salto="${CSS.escape(claveSalto(saltoA))}"]`)
+    setSaltoA(null)
+    if (!el) return
+    autoScroll.current = false   // que un poll no lo devuelva al final mientras lee
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.querySelector('[data-burbuja]')?.animate(
+      [{ boxShadow: '0 0 0 3px rgba(244,241,236,.85)' }, { boxShadow: '0 0 0 0 rgba(244,241,236,0)' }],
+      { duration: 2000, delay: 300, easing: 'ease-out' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saltoA, activeConv, mesesAbiertos])
   // ── El estado de bandeja, POR NÚMERO ────────────────────────────────────
   // Viene PEGADO a la fila de la lista (`estadoBandeja`, vista inbox.lista_bandeja),
   // no en una lectura aparte: si se leyera por separado, el mapa arrancaría vacío
@@ -2598,7 +2655,7 @@ export default function App() {
                       {estaAbierto && t.msgs.map((msg, idx) => {
                   const showDate = idx===0 || _parseDate(msg.timestamp).toDateString() !== _parseDate(t.msgs[idx-1].timestamp).toDateString()
                   return (
-                    <div key={msg.id}>
+                    <div key={msg.id} data-salto={claveSalto(msg.id)}>
                       {showDate && (
                         <div style={{ display:'flex', justifyContent:'center', margin:'12px 0 8px' }}>
                           <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:11, color:C.creamFaint }}>{fmtDate(msg.timestamp)}</span>
@@ -2606,7 +2663,8 @@ export default function App() {
                       )}
                       <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={responderA} onAbrirChat={openConv} onReenviar={setReenviando}
                         reaccion={mias.get(String(msg.id)) || ''}
-                        onReaccionar={windowOpen && puedeReaccionar(msg) ? (emoji) => reaccionar(msg, emoji) : null} />
+                        onReaccionar={windowOpen && puedeReaccionar(msg) ? (emoji) => reaccionar(msg, emoji) : null}
+                        onIrACita={irACita} />
                     </div>
                   )
                       })}

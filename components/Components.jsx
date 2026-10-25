@@ -431,7 +431,9 @@ function MediaContent({ tipo, mediaUrl, mediaId, nombre = '' }) {
 // Si el mensaje citado quedó fuera de lo que hay cargado, se pide por API; y si aun
 // así no aparece, se muestra un aviso en vez de NADA (antes desaparecía en silencio
 // y parecía que el cliente no había citado nada).
-function QuotedMessage({ contextoId, allMsgs, esReaccion = false }) {
+// `onIrA` (opcional): tocar la cita sube el hilo hasta el mensaje original, como en
+// WhatsApp. Solo cuando la cita se resolvió: si no tenemos el original, no hay a dónde ir.
+function QuotedMessage({ contextoId, allMsgs, esReaccion = false, onIrA = null }) {
   const [fetched, setFetched] = useState(null)
   const valid    = !!contextoId && contextoId.startsWith('wamid.')
   // Comparar por HASH del wamid (el envoltorio difiere aunque sea el mismo mensaje)
@@ -466,8 +468,12 @@ function QuotedMessage({ contextoId, allMsgs, esReaccion = false }) {
 
   const isImage = ['image','sticker','imagen','foto'].includes(cited.tipo) || !!cited.mediaUrl?.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i)
   const citedSrc = viaProxy(cited.mediaUrl, cited.mediaId)
+  // El stopPropagation evita que el mismo clic abra el "↩ Responder" de la burbuja.
   return (
-    <div style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, overflow: 'hidden' }}>
+    <div
+      onClick={onIrA ? (e) => { e.stopPropagation(); onIrA(contextoId) } : undefined}
+      title={onIrA ? 'Ir al mensaje original' : undefined}
+      style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, overflow: 'hidden', cursor: onIrA ? 'pointer' : 'inherit' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: C.cream, marginBottom: 2 }}>
         {cited.direccion === 'SALIENTE' ? 'Tú' : cited.nombre || cited.telefono}
       </div>
@@ -817,7 +823,7 @@ export function AvisoInterno({ msg }) {
   )
 }
 
-export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenviar, reaccion = '', onReaccionar = null }) {
+export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenviar, reaccion = '', onReaccionar = null, onIrACita = null }) {
   const [accion, setAccion] = useState(false)
   const [hover, setHover] = useState(false)
   // Después de los hooks: un return antes rompería el orden de los useState.
@@ -870,7 +876,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
       onMouseLeave={() => setHover(false)}
       style={{ display: 'flex', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: 4, animation: 'up .2s ease' }}>
       {isMe && botonReenviar}
-      <div
+      <div data-burbuja
         onClick={alTocar}
         title={onResponder ? 'Toca para responder a este mensaje' : undefined}
         style={{
@@ -902,7 +908,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
           </div>
         )}
         {msg.referral && <ReferralCard referral={msg.referral} texto={msg.mensaje} />}
-        {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} esReaccion={msg.tipo === 'reaction'} />}
+        {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} esReaccion={msg.tipo === 'reaction'} onIrA={onIrACita} />}
         {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} nombre={['document', 'documento'].includes(msg.tipo) ? msg.mensaje : ''} />}
         {/* La ubicación reemplaza al texto: el `mensaje` de esa fila SON las
             coordenadas, y la tarjeta ya las muestra. Nunca deja la burbuja
