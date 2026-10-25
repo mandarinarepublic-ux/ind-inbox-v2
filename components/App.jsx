@@ -2373,7 +2373,7 @@ export default function App() {
           /* Respuestas rápidas: botones de 20px → 34px, debajo del texto, 🗑 apartado. */
           .rr-fila{ flex-direction:column; align-items:stretch !important; }
           .rr-acciones{ gap:6px !important; justify-content:flex-end; }
-          .rr-acciones > button{ min-height:34px; min-width:34px; font-size:13px !important; border:1px solid ${C.border2} !important; border-radius:5px; }
+          .rr-acciones > button{ min-height:34px !important; min-width:34px !important; font-size:13px !important; border:1px solid ${C.border2} !important; border-radius:5px; }
           .rr-acciones > .rr-borrar{ margin-left:8px; }
           /* El formulario del CRM no entra en 300px: pantalla completa. */
           .right-col.crm-abierto{ width:100% !important; max-width:100% !important; }
