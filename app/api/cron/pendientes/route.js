@@ -13,6 +13,9 @@ import { autorizadoCron } from '@/lib/cron-auth'
 // Si te lo perdiste, se perdió. Esto avisa de un ESTADO (hay gente esperando) e
 // insiste cada 30 min hasta que la bandeja quede vacía.
 //
+// ⛔ APAGADO el 25-oct-2026: Rodrigo pidió el resumen de pendientes solo de MANDI.
+// Se sacó de vercel.json; la ruta queda por si se quiere volver (agregar el cron).
+//
 // Sin TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID no manda nada y no rompe nada.
 
 export const dynamic = 'force-dynamic'
