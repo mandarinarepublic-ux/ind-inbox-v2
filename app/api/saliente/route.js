@@ -8,6 +8,7 @@ import { borrarEstadoFlujo } from '@/lib/flujos'
 import { resolverMediaId, invalidarMediaId, esErrorDeMediaId, urlLiviana, META_PHONE_ID } from '@/lib/media-id'
 import { CANALES, catalogoDeCanal } from '@/lib/canales'
 import { destinoMeta, esBsuid } from '@/lib/cliente-sin-telefono'
+import { registrarBloqueo } from '@/lib/bloqueo-cuenta'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -434,6 +435,8 @@ export async function POST(req) {
         `type=${e.type} msg=${msg} details=${e.error_data?.details || '—'} title=${e.error_user_title || '—'} ` +
         `user_msg=${e.error_user_msg || '—'} fbtrace=${e.fbtrace_id || '—'} | tipo=${payload.type} to=${payload.to}`
       )
+      // Un token vencido (190) se rechaza aquí mismo y nunca llega por el webhook.
+      waitUntil(registrarBloqueo(e.code))
       return NextResponse.json({ ok: false, error: msg, code: e.code, subcode: e.error_subcode }, { status: 502 })
     }
 

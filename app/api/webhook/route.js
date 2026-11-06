@@ -13,6 +13,7 @@ import { decidirIA, contactoCallado } from '@/lib/ia-canal'
 import { extraer } from '@/lib/wa-mensaje'
 import { observarFirmaMeta, evaluarFirmaMeta, debeAvisar } from '@/lib/firma-meta'
 import { enviarAlerta, telegramConfigurado } from '@/lib/telegram'
+import { procesarEstadosCuenta } from '@/lib/bloqueo-cuenta'
 import { getMarcaAvisoFirmaSupabase, setMarcaAvisoFirmaSupabase } from '@/lib/inbox-supabase'
 import { extraerEchoes } from '@/lib/echoes'
 import { capturarCtwaClid, revisarLeadAutomatico, revisarVentaEnProceso } from '@/lib/capi'
@@ -322,6 +323,7 @@ export async function POST(req) {
     // Recolecta los mensajes entrantes + los statuses de entrega (✓✓)
     const nuevos = []
     const statuses = [] // read receipts: {wamid, estado}
+    const estadosCrudos = [] // tal como los manda Meta: traen el código de error y la hora
     const echoes = []
     const rechazados = [] // archivos del cliente que Meta no pudo entregar (131052)
     for (const entry of entries) {
@@ -350,6 +352,7 @@ export async function POST(req) {
         // Estados de entrega (✓✓) de mensajes que ENVIAMOS.
         for (const st of value?.statuses || []) {
           if (st?.id && st?.status) statuses.push({ wamid: String(st.id), estado: String(st.status).toLowerCase() })
+          estadosCrudos.push(st)
           // 📎 Un `failed` 131052 NO es de algo nuestro: es un archivo que el CLIENTE
           // mandó y Meta no pudo bajar (p. ej. >100 MB). Ver lib/archivo-rechazado.js.
           const rechazado = archivoRechazadoDeEstado(st, phoneId)
@@ -691,6 +694,8 @@ export async function POST(req) {
 
     // Read receipts (✓✓): actualizar estado de entrega en background.
     if (statuses.length) waitUntil(procesarStatuses(statuses))
+    // ¿Meta frenó toda la cuenta, o ya volvió? No espera al cron de cada 30 min.
+    if (estadosCrudos.length) waitUntil(procesarEstadosCuenta(estadosCrudos))
     // Echoes (respuesta desde el celular): guardar + archivar medio, en background.
     if (echoes.length && usaSupabaseLectura()) waitUntil(procesarEchoes(echoes))
     // Archivo del cliente que WhatsApp no entregó: aviso en el chat + push.
