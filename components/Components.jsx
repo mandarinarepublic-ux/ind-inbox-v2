@@ -9,6 +9,7 @@ import { EMOJIS_REACCION } from '@/lib/reacciones'
 import { leerCarrusel } from '@/lib/carrusel'
 import { urlDeDescarga, nombreDeDescarga } from '@/lib/descarga'
 import { restoProductoTocado } from '@/lib/producto-tocado'
+import TranscribirNota from '@/components/TranscribirNota'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -355,7 +356,7 @@ function VisorFoto({ src, onCerrar }) {
   )
 }
 
-function MediaContent({ tipo, mediaUrl, mediaId, nombre = '' }) {
+function MediaContent({ tipo, mediaUrl, mediaId, nombre = '', mensajeId = '', transcripcion = '' }) {
   // Va ANTES de cualquier return condicional: los hooks no pueden quedar
   // detrás de un if.
   const [verFoto, setVerFoto] = useState(false)
@@ -397,6 +398,7 @@ function MediaContent({ tipo, mediaUrl, mediaId, nombre = '' }) {
         <a href={src} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 11, color: C.cream, textDecoration: 'none', fontWeight: 600 }}>
           🎧 Abrir audio ↗
         </a>
+        {mensajeId && <TranscribirNota src={src} mensajeId={mensajeId} transcripcion={transcripcion} />}
       </div>
     )
   }
@@ -909,7 +911,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
         )}
         {msg.referral && <ReferralCard referral={msg.referral} texto={msg.mensaje} />}
         {msg.contextoId && <QuotedMessage contextoId={msg.contextoId} allMsgs={allMsgs} esReaccion={msg.tipo === 'reaction'} onIrA={onIrACita} />}
-        {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} nombre={['document', 'documento'].includes(msg.tipo) ? msg.mensaje : ''} />}
+        {hasMedia && <MediaContent tipo={msg.tipo} mediaUrl={msg.mediaUrl} mediaId={msg.mediaId} mensajeId={msg.id} transcripcion={msg.transcripcion} nombre={['document', 'documento'].includes(msg.tipo) ? msg.mensaje : ''} />}
         {/* La ubicación reemplaza al texto: el `mensaje` de esa fila SON las
             coordenadas, y la tarjeta ya las muestra. Nunca deja la burbuja
             vacía — si parseUbicacion no reconoce algo, cae al <p> de siempre. */}
