@@ -514,6 +514,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [montoLink,     setMontoLink]     = useState('')
   const [generandoLink, setGenerandoLink] = useState(false)
   const [linkPagoError, setLinkPagoError] = useState('')
+  // Con quién se cobra: 'payphone' | 'dlocal'. SIEMPRE arranca en Payphone
+  // (pedido de Rodrigo, 10-nov-2026, igual que en MANDI: ≈ 5,75 % contra
+  // ≈ 8,9 % de dLocal). dLocal se elige para un link puntual y no se recuerda.
+  const [proveedorLink, setProveedorLink] = useState('payphone')
 
   // ── PEDIDO MANUAL: el formulario del CRM dentro de este panel ──
   const [manualAbierto, setManualAbierto] = useState(false)
@@ -580,14 +584,14 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
 
   // Mismo motivo que arriba: el link generado es del chat anterior, no de este.
   useEffect(() => {
-    setMontoLink(''); setLinkPagoError('')
+    setMontoLink(''); setLinkPagoError(''); setProveedorLink('payphone')
   }, [activeConv?.telefono])
 
   async function generarLink() {
     if (generandoLink || !activeConv) return
     setGenerandoLink(true); setLinkPagoError('')
     try {
-      await generarLinkPago(activeConv.telefono, Number(montoLink))
+      await generarLinkPago(activeConv.telefono, Number(montoLink), proveedorLink)
       // El texto completo ya quedó guardado como nota en el servidor (con su
       // propio botón de copiar) — acá solo se limpia el monto para dejar el
       // panel listo si toca generar otro, sin nada que reconstruir.
@@ -1248,6 +1252,16 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 💳 LINK PAGO
               </p>
               <div style={{ display:'flex', gap:6 }}>
+                {/* Con quién se cobra. Payphone ≈ 5,75 % de comisión; dLocal ≈ 8,9 %. */}
+                <select
+                  value={proveedorLink}
+                  onChange={e => setProveedorLink(e.target.value)}
+                  disabled={generandoLink}
+                  aria-label="Proveedor del link de pago"
+                  style={{ flexShrink:0, background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, color:C.cream, fontSize:11, padding:'6px 4px', outline:'none', fontFamily:'inherit', cursor:'pointer' }}>
+                  <option value="payphone">Link Payphone</option>
+                  <option value="dlocal">Link dLocal</option>
+                </select>
                 <input
                   type="number"
                   inputMode="decimal"

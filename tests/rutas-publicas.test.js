@@ -38,6 +38,7 @@ const PUBLICAS = [
   '/api/cron/entregas',      // cron de Vercel, cada 30 min — aviso de entregas fallidas
   '/api/cron/flujos',        // cron de Vercel, cada 5 min — esperas de los FLUJOS
   '/api/pago-dlocal',        // dLocal Go, notification_url — secreto en la URL
+  '/api/pago-payphone',      // Payphone (10-nov-2026): secreto en la URL + re-consulta de la transacción
 ]
 
 // Las otras 32 rutas del repo: todas son del navegador y van protegidas.
@@ -55,10 +56,18 @@ const PROTEGIDAS = [
   '/', '/inbox', '/dashboard',
 ]
 
-test('las 38 rutas del repo están cubiertas por esta prueba', () => {
-  // 6 públicas + 32 protegidas = las 38 que devuelve `find app/api -name route.js`.
+test('las 39 rutas del repo están cubiertas por esta prueba', () => {
+  // 7 públicas + 32 protegidas = las 39 que devuelve `find app/api -name route.js`.
   // Si mañana alguien agrega una ruta nueva y no la suma acá, este número canta.
-  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 38)
+  // La 39 es /api/pago-payphone (10-nov-2026).
+  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 39)
+})
+
+test('Payphone puede avisar con o sin el /NotificacionPago al final', () => {
+  // La ruta es atrapa-todo ([[...ruta]]): la doc de Payphone no aclara si
+  // agregan ese pedazo a la URL que se les da.
+  assert.strictEqual(esRutaPublica('/api/pago-payphone/NotificacionPago'), true)
+  assert.strictEqual(esRutaPublica('/api/pago-payphone-falso'), false)
 })
 
 for (const ruta of PUBLICAS) {
@@ -73,7 +82,7 @@ for (const ruta of PROTEGIDAS) {
   })
 }
 
-test('las públicas son EXACTAMENTE ocho', () => {
+test('las públicas son EXACTAMENTE nueve', () => {
   // Cada entrada de más es una puerta al internet entero. Que agregar una rompa
   // una prueba es justamente lo que se busca.
   //
@@ -90,10 +99,14 @@ test('las públicas son EXACTAMENTE ocho', () => {
   // de premios. La llama el servidor del club, sin sesión. Se defiende con su propia
   // llave (FIDELIDAD_OTP_TOKEN) y solo manda un código de 6 dígitos a un celular
   // de Ecuador: con la llave robada no se puede mandar otro mensaje.
+  //
+  // La novena, el 10-nov-2026: `/api/pago-payphone`, el aviso de pago aprobado de
+  // Payphone. Sin PAYPHONE_NOTIFY_SECRET rechaza todo, y aun con la llave no le
+  // cree al aviso: re-consulta la transacción a Payphone antes de marcar nada.
   assert.deepStrictEqual(RUTAS_PUBLICAS, [
     '/api/webhook', '/api/cron/seguimientos', '/api/cron/pendientes',
     '/api/cron/entregas', '/api/cron/pagos', '/api/cron/flujos', '/api/pago-dlocal',
-    '/api/codigo-acceso',
+    '/api/pago-payphone', '/api/codigo-acceso',
   ])
 })
 
