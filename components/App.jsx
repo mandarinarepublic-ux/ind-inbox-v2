@@ -1,4 +1,5 @@
 'use client'
+import { imagenParaWhatsapp } from '@/lib/imagen-whatsapp'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { sendReaction, fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva, fetchEtiquetas, crearEtiquetaApi, editarEtiquetaApi, ponerEtiquetaApi, quitarEtiquetaApi, sendCarrusel } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
@@ -2160,7 +2161,7 @@ export default function App() {
       if (modo === 'info') {
         await enviarTextoSuelto(telefono, nombre, `${p.title}${p.price ? ` — $${p.price}` : ''}`)
       }
-      const ok = await sendImageUrl(telefono, nombre, p.image)
+      const ok = await sendImageUrl(telefono, nombre, imagenParaWhatsapp(p.image))
       if (ok) changeStatus(telefono, estadoDestino)
       setTimeout(load, 4000)
     })
