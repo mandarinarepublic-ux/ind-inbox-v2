@@ -311,3 +311,18 @@ test('si no escribió por NINGUNO, no hay preseleccionado', () => {
 test('sin canales configurados devuelve lista vacía, no inventa uno', () => {
   assert.deepEqual(opcionesDeCanal([{ phone_id: N3326, ultimo_entrante_at: '2026-08-27T04:15:19Z' }], [], Date.now()), [])
 })
+
+// ── Cambio de número → ARCHIVADO (regla de Rodrigo, 12-nov-2026) ─────────────
+// El aviso no lo escribe el cliente: no hay nada que contestar. Va a ARCHIVADO,
+// en el chat viejo (aviso de Meta) y en el nuevo (nuestra nota).
+test('el aviso de CAMBIO DE NÚMERO va a ARCHIVADO, no a PENDIENTE (los dos lados)', () => {
+  for (const type of ['user_changed_number', 'numero_anterior']) {
+    const { bandeja } = patchesDeMensaje({ direccion: 'ENTRANTE', phone_id: N3326, fecha: '2026-11-12T16:00:00Z', raw: { type: 'system', system: { type } } })
+    assert.equal(bandeja.estado, 'ARCHIVADO', type)
+  }
+})
+
+test('otro mensaje system cualquiera sigue yendo a PENDIENTE', () => {
+  const { bandeja } = patchesDeMensaje({ direccion: 'ENTRANTE', phone_id: N3326, fecha: '2026-11-12T16:00:00Z', raw: { type: 'system', system: { type: 'customer_identity_changed' } } })
+  assert.equal(bandeja.estado, 'PENDIENTE')
+})
