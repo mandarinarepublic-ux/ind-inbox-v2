@@ -3,6 +3,8 @@ import { mensajeLinkPago, validarMonto } from '@/lib/dlocal'
 import { crearLink, normalizarProveedor, proveedorPorDefecto } from '@/lib/linkpago'
 import { crearNota } from '@/lib/notas'
 import { soloDigitos } from '@/lib/supabase'
+import { usuarioDeCookie } from '@/lib/acceso'
+import { secretoSesion } from '@/lib/sesion'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -42,7 +44,9 @@ export async function POST(req) {
 
     let link
     try {
-      link = await crearLink(proveedor, monto, soloDigitos(telefono))
+      // Quién lo genera, de la cookie firmada: va al reporte de pagos del CRM.
+      const usuarioId = await usuarioDeCookie(req.headers.get('cookie'), secretoSesion())
+      link = await crearLink(proveedor, monto, soloDigitos(telefono), { usuarioId })
     } catch (e) {
       console.error(`[/api/linkpago] ${proveedor} falló:`, e.message)
       return NextResponse.json(
