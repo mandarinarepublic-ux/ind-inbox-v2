@@ -428,7 +428,7 @@ const TABS = [
 // Etiqueta del catálogo online en el selector de la pestaña Tienda (este inbox = INDLOVERS).
 const CATALOGO_LABEL = 'INDLOVERS'
 
-export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, ventanaPautaHasta = null, onPedidoManual, onVerPedido, onEnviarHojaPedido, onEnviandoHoja }) {
+export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, ventanaPautaHasta = null, prefillPedido = null, onPedidoManual, onVerPedido, onEnviarHojaPedido, onEnviandoHoja }) {
   const [tab, setTab] = useState('respuestas')
   const [countdown, setCountdown] = useState('')
 
@@ -514,6 +514,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [montoLink,     setMontoLink]     = useState('')
   const [generandoLink, setGenerandoLink] = useState(false)
   const [linkPagoError, setLinkPagoError] = useState('')
+  // 📤 El último link generado, con su texto, para mandarlo al chat con un clic
+  // (pedido de Rodrigo, 14-nov-2026: "hoy estoy dando clic en copiar y luego lo
+  // pego"). Sigue quedando la nota; esto solo ahorra el copiar y pegar.
+  // estado: '' | 'enviando' | 'enviado' | 'error'.
+  const [linkListo, setLinkListo] = useState(null)
   // Con quién se cobra: 'payphone' | 'dlocal'. SIEMPRE arranca en Payphone
   // (pedido de Rodrigo, 10-nov-2026, igual que en MANDI: ≈ 5,75 % contra
   // ≈ 8,9 % de dLocal). dLocal se elige para un link puntual y no se recuerda.
@@ -521,6 +526,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
 
   // ── PEDIDO MANUAL: el formulario del CRM dentro de este panel ──
   const [manualAbierto, setManualAbierto] = useState(false)
+  // 🧾 Datos del formulario de WhatsApp para precargar el PEDIDO MANUAL (botón
+  // "Crear pedido" de la burbuja, lib/formularios.js). `manualKey` remonta el
+  // formulario en cada clic: su URL se congela al montar (ver ☠️ más abajo).
+  const [prefillManual, setPrefillManual] = useState(null)
+  const [manualKey, setManualKey] = useState(0)
 
   // ── VER PEDIDO: un pedido del CRM, de solo lectura, en este mismo panel ──
   // Guarda el NÚMERO del pedido que se está mirando (null = ninguno). El número
@@ -584,14 +594,25 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
 
   // Mismo motivo que arriba: el link generado es del chat anterior, no de este.
   useEffect(() => {
-    setMontoLink(''); setLinkPagoError(''); setProveedorLink('payphone')
+    setMontoLink(''); setLinkPagoError(''); setProveedorLink('payphone'); setLinkListo(null)
   }, [activeConv?.telefono])
+
+  // 📤 ENVIAR: el texto del link sale al chat por el mismo camino que un mensaje
+  // escrito (fila por cliente). Solo si el link es de ESTE chat.
+  async function enviarLinkListo() {
+    if (!linkListo || !onSendText || linkListo.estado === 'enviando') return
+    if (linkListo.telefono !== activeConv?.telefono) { setLinkListo(null); return }
+    setLinkListo(l => ({ ...l, estado: 'enviando' }))
+    const r = await Promise.resolve(onSendText(linkListo.texto)).catch(() => ({ ok: false }))
+    setLinkListo(l => l && ({ ...l, estado: (!r || r.ok === false) ? 'error' : 'enviado' }))
+  }
 
   async function generarLink() {
     if (generandoLink || !activeConv) return
     setGenerandoLink(true); setLinkPagoError('')
     try {
-      await generarLinkPago(activeConv.telefono, Number(montoLink), proveedorLink)
+      const d = await generarLinkPago(activeConv.telefono, Number(montoLink), proveedorLink)
+      if (d?.texto) setLinkListo({ texto: d.texto, telefono: activeConv.telefono, estado: '' })
       // El texto completo ya quedó guardado como nota en el servidor (con su
       // propio botón de copiar) — acá solo se limpia el monto para dejar el
       // panel listo si toca generar otro, sin nada que reconstruir.
@@ -625,7 +646,21 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   // componente se MONTA de nuevo. Esta línea es lo único que fuerza ese
   // desmontaje. Sin ella, la URL conserva el teléfono del cliente anterior y el
   // siguiente pedido sale a nombre equivocado, sin ningún error a la vista.
-  useEffect(() => { setManualAbierto(false) }, [activeConv?.telefono])
+  useEffect(() => { setManualAbierto(false); setPrefillManual(null) }, [activeConv?.telefono])
+
+  // 🧾 "Crear pedido" desde la burbuja del formulario. Solo si es de ESTE chat y
+  // reciente: el cajón del celular se monta DESPUÉS del clic (por eso no basta con
+  // mirar cambios) y sin el tope de tiempo, cada vez que se abriera el cajón
+  // volvería a abrir el formulario.
+  useEffect(() => {
+    const p = prefillPedido
+    if (!p || p.telefono !== activeConv?.telefono || Date.now() - p.n > 8000) return
+    setVerPedidoId(null)
+    setTab('ventas')
+    setPrefillManual(p.datos)
+    setManualKey(p.n)
+    setManualAbierto(true)
+  }, [prefillPedido?.n])
 
   // Avisarle al padre cuando se abre o se cierra VER PEDIDO: con eso ensancha el
   // panel, que es lo ÚNICO que comparte con el formulario. NO toca el guard.
@@ -1105,9 +1140,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
               // queda de red por si el 100% no resolviera: nunca invisible.
               <div style={{ height:'100%', minHeight:380 }}>
                 <PedidoManual
+                  key={manualKey}
                   telefono={activeConv.telefono}
                   nombre={contactName}
-                  onCerrar={() => setManualAbierto(false)}
+                  prefill={prefillManual}
+                  onCerrar={() => { setManualAbierto(false); setPrefillManual(null) }}
                   onCreado={(aviso) => {
                     // Deja la nota fechada con el link y marca la venta. El texto
                     // lo arma `textoNotaPedido` porque el monto y el link son
@@ -1123,6 +1160,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                     // y el CRM todavía no lo haya enlazado a este teléfono.
                     loadHistorial(activeConv.telefono, aviso.pedidoId)
                     setPedidoRes({ ok: true, pedidoId: aviso.pedidoId, montoTotal: aviso.montoTotal, url: aviso.url })
+                    setPrefillManual(null)
                     // Cerrar el formulario: el aviso "✅ Pedido creado" se pinta
                     // DEBAJO del iframe y, si no, hay que bajar para verlo —
                     // parecería que apretaste y no pasó nada.
@@ -1293,6 +1331,40 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                   teléfono que no sonaba (ver aviso de sesión de IND). */}
               {linkPagoError && (
                 <div style={{ marginTop:6, fontSize:11, color:'#f87171' }}>⚠️ {linkPagoError}</div>
+              )}
+
+              {/* 📤 El link recién generado, listo para mandarlo sin copiar/pegar. */}
+              {linkListo && linkListo.telefono === activeConv.telefono && (
+                <div style={{ marginTop:8, background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:8 }}>
+                  <div style={{ fontSize:11, color:C.cream, whiteSpace:'pre-wrap', wordBreak:'break-word', maxHeight:110, overflowY:'auto', lineHeight:1.4 }}>
+                    {linkListo.texto}
+                  </div>
+                  <div style={{ display:'flex', gap:6, marginTop:8 }}>
+                    <button
+                      onClick={enviarLinkListo}
+                      disabled={!windowOpen || linkListo.estado === 'enviando' || linkListo.estado === 'enviado'}
+                      title={windowOpen ? 'Mandar este mensaje al cliente' : 'La ventana de 24 h está cerrada: solo se puede con plantilla'}
+                      style={{
+                        flex:1, padding:'7px', borderRadius:7, fontSize:11, fontWeight:800, fontFamily:'inherit',
+                        background: linkListo.estado === 'enviado' ? C.surface : C.cream,
+                        border:`1px solid ${C.cream}`, color: linkListo.estado === 'enviado' ? C.cream : '#0A0A0A',
+                        cursor: !windowOpen || linkListo.estado ? 'default' : 'pointer',
+                        opacity: !windowOpen ? .45 : 1,
+                      }}>
+                      {linkListo.estado === 'enviando' ? '⏳ Enviando…' : linkListo.estado === 'enviado' ? '✅ Enviado' : linkListo.estado === 'error' ? '↻ Reintentar ENVIAR' : '📤 ENVIAR'}
+                    </button>
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText(linkListo.texto).catch(() => {}) }}
+                      title="Copiar el texto"
+                      style={{ flexShrink:0, padding:'7px 10px', borderRadius:7, fontSize:11, fontWeight:700, fontFamily:'inherit', background:'transparent', border:`1px solid ${C.border}`, color:C.creamDim, cursor:'pointer' }}>
+                      📋 Copiar
+                    </button>
+                    <button onClick={() => setLinkListo(null)} title="Cerrar"
+                      style={{ flexShrink:0, padding:'7px 8px', borderRadius:7, fontSize:11, background:'transparent', border:`1px solid ${C.border}`, color:C.creamDim, cursor:'pointer' }}>✕</button>
+                  </div>
+                  {!windowOpen && <div style={{ marginTop:6, fontSize:10, color:'#f59e0b' }}>Ventana de 24 h cerrada: este texto no se puede mandar suelto.</div>}
+                  {linkListo.estado === 'error' && <div style={{ marginTop:6, fontSize:10, color:'#f87171' }}>⚠️ No salió. Reintenta o cópialo.</div>}
+                </div>
               )}
             </div>
 

@@ -1,7 +1,8 @@
 'use client'
 import { imagenParaWhatsapp } from '@/lib/imagen-whatsapp'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { sendReaction, fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva, fetchEtiquetas, crearEtiquetaApi, editarEtiquetaApi, ponerEtiquetaApi, quitarEtiquetaApi, sendCarrusel } from '@/lib/api-client'
+import { prefillPedido as prefillDeFormulario } from '@/lib/formularios'
+import { sendReaction, fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, sendFormulario, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva, fetchEtiquetas, crearEtiquetaApi, editarEtiquetaApi, ponerEtiquetaApi, quitarEtiquetaApi, sendCarrusel } from '@/lib/api-client'
 import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
 import { ETAPAS, chipsDeChat, alertaVentanaCierra, necesitaConfirmarAtendido } from '@/lib/gestion'
 import { FILTRO_INICIAL, prepararVista, alternar, pasaFiltro, conteos, compararEspera, compararEsperaNuevos } from '@/lib/filtro-chats'
@@ -263,6 +264,10 @@ export default function App() {
   const etiquetasRef = useRef([])
   const [showSidebar,  setShowSidebar]  = useState(true)
   const [showRight,    setShowRight]    = useState(false)
+  // 🧾 "Crear pedido" desde la respuesta de un formulario de WhatsApp: el panel
+  // derecho (escritorio o cajón) abre el PEDIDO MANUAL con estos datos.
+  // { telefono, datos: prefillPedido(...), n: marca de tiempo del clic }.
+  const [prefillPedido, setPrefillPedido] = useState(null)
   const [rightWidth,   setRightWidth]   = useState(300) // ancho del panel derecho (px), redimensionable
   const [imgFiles,     setImgFiles]     = useState([]) // array de { file, preview }
   const [imgUploading, setImgUploading] = useState(false)
@@ -1635,6 +1640,8 @@ export default function App() {
         setTimeout(() => setToast(null), 4000)
       }
       setTimeout(load, 4000)
+      // Lo usa el 📤 ENVIAR del link de pago para decir si salió.
+      return result || { ok: false }
     })
   }
 
@@ -2054,7 +2061,21 @@ export default function App() {
       try {
         const botones = (reply.botones || []).filter(Boolean).slice(0, 3)
         const carrusel = Array.isArray(reply.carrusel) ? reply.carrusel : []
-        if (carrusel.length >= 2 && reply.text) {
+        if (reply.formulario && reply.text) {
+          // 📝 Respuesta rápida que abre un FORMULARIO de WhatsApp (lib/formularios.js):
+          // el texto sale con el botón "Llenar mis datos". Va primero: el formulario
+          // reemplaza a los botones y al carrusel.
+          const r = await sendFormulario(telefono, nombre, reply.text, reply.formulario, canalRapida, tomarCita()).catch(e => ({ ok: false, error: e.message }))
+          if (r?.ok === false) {
+            todoOk = false
+            motivoFallo = `📝 El formulario no salió: ${r?.error || 'error al enviar'}`
+          } else {
+            const tmpMsg = { id: r?.wamid || 'tmp_' + Date.now(), telefono, nombre, mensaje: reply.text, botones: [{ id: 'flow', title: '📝 Llenar mis datos' }], direccion: 'SALIENTE', timestamp: new Date().toISOString(), estado: 'enviado', _pendingAt: Date.now() }
+            setConvs(prev => prev.map(c => c.telefono === telefono ? { ...c, msgs: [...c.msgs, tmpMsg], last: tmpMsg } : c))
+            pendingRef.current[telefono] = [ ...(pendingRef.current[telefono] || []), tmpMsg ]
+          }
+          avanzar()
+        } else if (carrusel.length >= 2 && reply.text) {
           // 🛍️ Respuesta rápida CON productos → carrusel con el texto encima (lib/carrusel.js).
           // El servidor decide interactivo o plantilla. Productos O botones.
           const r = await sendCarrusel(telefono, nombre, reply.text, carrusel, canalRapida).catch(e => ({ ok: false, error: e.message }))
@@ -2734,7 +2755,11 @@ export default function App() {
                       <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={responderA} onAbrirChat={openConv} onReenviar={setReenviando}
                         reaccion={mias.get(String(msg.id)) || ''}
                         onReaccionar={windowOpen && puedeReaccionar(msg) ? (emoji) => reaccionar(msg, emoji) : null}
-                        onIrACita={irACita} />
+                        onIrACita={irACita}
+                        onCrearPedido={(datos) => {
+                          setPrefillPedido({ telefono: activeConv.telefono, datos: prefillDeFormulario(datos), n: Date.now() })
+                          if (window.matchMedia?.('(max-width: 767px)').matches) setShowRight(true)
+                        }} />
                     </div>
                   )
                       })}
@@ -2971,7 +2996,7 @@ export default function App() {
                 onMouseLeave={e => e.currentTarget.style.background = C.border}
               />
               <div className="right-col" style={{ width:'auto', flex:1, borderLeft:'none' }}>
-                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} onPedidoManual={alPedidoManualEscritorio} onVerPedido={alVerPedidoEscritorio} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={setHojaEnviando} />
+                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} prefillPedido={prefillPedido} onPedidoManual={alPedidoManualEscritorio} onVerPedido={alVerPedidoEscritorio} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={setHojaEnviando} />
               </div>
             </div>
           )}
@@ -2980,7 +3005,7 @@ export default function App() {
               <div style={{ display:'flex', justifyContent:'flex-end', padding:'10px 10px 0' }}>
                 <button onClick={cerrarCajonDerecho} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:17 }}>✕</button>
               </div>
-              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={setHojaEnviando} />
+              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} prefillPedido={prefillPedido} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={setHojaEnviando} />
             </div>
           )}
 
