@@ -2,12 +2,13 @@
 import { imagenParaWhatsapp } from '@/lib/imagen-whatsapp'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { prefillPedido as prefillDeFormulario } from '@/lib/formularios'
-import { sendReaction, fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, sendFormulario, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva, fetchEtiquetas, crearEtiquetaApi, editarEtiquetaApi, ponerEtiquetaApi, quitarEtiquetaApi, sendCarrusel } from '@/lib/api-client'
-import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId } from '@/lib/canales'
+import { sendReaction, fetchInboxSync, fetchHilo, buscarEnMensajes, sendReply, sendImageUrl as sendImageUrlApi, updateContact, updateEtapa, updateDeuda, updateSinAutomaticos, updateTipoContacto, fetchPedidosChat, isDemo, sendInteractiveButtons, sendFormulario, toggleIAMode, sendVideo, sendDocumento, sendAudio, enviarAudioUrl, enviarDocumentoUrl, sendImageFile, precacheMedia, setCanalActivo, getCanalActivo, reenviarPieza, hayVersionNueva, fetchEtiquetas, crearEtiquetaApi, editarEtiquetaApi, ponerEtiquetaApi, quitarEtiquetaApi, sendCarrusel, getAutomatizaciones } from '@/lib/api-client'
+import { CANALES, CANAL_POR_DEFECTO, canalDePhoneId, phoneIdDeCanal } from '@/lib/canales'
 import { ETAPAS, chipsDeChat, alertaVentanaCierra, necesitaConfirmarAtendido } from '@/lib/gestion'
 import { FILTRO_INICIAL, prepararVista, alternar, pasaFiltro, conteos, compararEspera, compararEsperaNuevos } from '@/lib/filtro-chats'
 import { sumarOverride, aplicarOverrides } from '@/lib/overrides'
 import FiltrosLista from '@/components/FiltrosLista'
+import { motivoIASinResponder } from '@/lib/ia-motivo'
 import { MenuEtiquetas, AdminEtiquetas, ChipEtiqueta } from '@/components/Etiquetas'
 import { expandirEtiquetas } from '@/lib/etiquetas-mapa'
 import CarruselModal from '@/components/CarruselModal'
@@ -1273,6 +1274,11 @@ export default function App() {
   }, [])
   // Etiqueta CRM (🏭 📦 🚚 💳): se pide al cargar y cada 5 min, fuera de la ruta caliente.
   const [pedidosChat, setPedidosChat] = useState({})
+  // 🤖 Config de AUTOS + interruptor general, para el aviso "por qué no responde la
+  // IA" (lib/ia-motivo.js). Al cargar, al cambiar de pestaña (volver de AUTOS) y cada
+  // 5 min. `iaMaestro` null = no se sabe → no se avisa.
+  const [cfgAuto, setCfgAuto] = useState(null)
+  const [iaMaestro, setIaMaestro] = useState(null)
   useEffect(() => {
     let vivo = true
     const traer = () => fetchPedidosChat().then(p => { if (vivo && p) setPedidosChat(p) })
@@ -1281,6 +1287,17 @@ export default function App() {
     const id = setInterval(traer, 5 * 60 * 1000)
     return () => { vivo = false; clearInterval(id) }
   }, [])
+  useEffect(() => {
+    let vivo = true
+    const traer = () => getAutomatizaciones().then(r => {
+      if (!vivo || !r?.ok) return
+      if (r.config) setCfgAuto(r.config)
+      if (typeof r.iaMaestro === 'boolean') setIaMaestro(r.iaMaestro)
+    })
+    traer()
+    const id = setInterval(traer, 5 * 60 * 1000)
+    return () => { vivo = false; clearInterval(id) }
+  }, [canal])
   const datosGestion = (tel) => {
     const ct = contacts[tel] || {}
     const pedido = pedidosChat[tail9(tel)] || null
@@ -2310,6 +2327,11 @@ export default function App() {
   const enFila             = activeConv ? (colaLen[activeConv.telefono] || 0) : 0
   const currentStatus      = currentContact?.estado || 'pendiente'
   const currentStatusView  = activeConv ? getStatus(activeConv.telefono) : 'pendiente'
+  const motivoIA = activeConv ? motivoIASinResponder({
+    iaChat: getModoIA(activeConv.telefono), maestro: iaMaestro, config: cfgAuto,
+    phoneId: phoneIdDeCanal(canal), etiquetaCanal: CANALES.find(c => c.id === canal)?.etiqueta || '',
+    contacto: contacts[activeConv.telefono],
+  }) : null
   // El fallback a contacts[tel]?.nombre hace falta para los resultados de OTRO
   // canal: no están en `convs` (que solo trae el canal activo), así que
   // `convs.find` nunca los encuentra y sin esto se veía el teléfono pelado.
@@ -2636,10 +2658,10 @@ export default function App() {
                     const iaOn = getModoIA(activeConv.telefono)
                     return (
                       <button className="ia-toggle" onClick={handleToggleIA} disabled={togglingIA} aria-pressed={iaOn}
-                        title={iaOn ? 'La IA está respondiendo este chat — toca para APAGARLA' : 'La IA no responde este chat — toca para PRENDERLA'}
-                        style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, padding:'6px 11px', borderRadius:20, cursor: togglingIA ? 'default' : 'pointer', fontFamily:'inherit', fontWeight:800, fontSize:11, whiteSpace:'nowrap', border:`2px solid ${iaOn ? '#f59e0b' : C.creamFaint}`, background: iaOn ? 'rgba(245,158,11,.16)' : 'rgba(244,241,236,.06)', color: iaOn ? '#fbbf24' : C.cream, boxShadow: iaOn ? '0 0 10px rgba(245,158,11,.3)' : 'none', transition:'all .2s', opacity: togglingIA ? .6 : 1, marginLeft:'auto' }}>
+                        title={motivoIA ? `${motivoIA.largo} (toca para apagarla en este chat)` : iaOn ? 'La IA está respondiendo este chat — toca para APAGARLA' : 'La IA no responde este chat — toca para PRENDERLA'}
+                        style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, padding:'6px 11px', borderRadius:20, cursor: togglingIA ? 'default' : 'pointer', fontFamily:'inherit', fontWeight:800, fontSize:11, whiteSpace:'nowrap', border:`2px ${motivoIA ? 'dashed' : 'solid'} ${iaOn ? '#f59e0b' : C.creamFaint}`, background: iaOn ? 'rgba(245,158,11,.16)' : 'rgba(244,241,236,.06)', color: iaOn ? '#fbbf24' : C.cream, boxShadow: iaOn ? '0 0 10px rgba(245,158,11,.3)' : 'none', transition:'all .2s', opacity: togglingIA ? .6 : 1, marginLeft:'auto' }}>
                         <span style={{ width:9, height:9, borderRadius:'50%', flexShrink:0, background: iaOn ? '#f59e0b' : C.creamDim, animation: iaOn ? 'pulse 2s infinite' : 'none' }}/>
-                        <span>🤖 {togglingIA ? '…' : iaOn ? <>IA <b>PRENDIDA</b></> : <>IA <b>APAGADA</b></>}</span>
+                        <span>🤖 {togglingIA ? '…' : iaOn ? <>IA <b>PRENDIDA</b>{motivoIA ? ' ⚠️' : ''}</> : <>IA <b>APAGADA</b></>}</span>
                       </button>
                     )
                   })()}
@@ -2715,6 +2737,13 @@ export default function App() {
 
                 </div>
               </div>
+
+              {/* 🤖⚠️ El chat dice IA PRENDIDA pero otra reja la bloquea (lib/ia-motivo.js) */}
+              {motivoIA && (
+                <div role="status" style={{ padding:'7px 14px', background:'rgba(245,158,11,.1)', borderBottom:'1px solid rgba(245,158,11,.35)', color:'#fbbf24', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', gap:8, flexWrap:'wrap', textAlign:'center', flexShrink:0 }}>
+                  <span>🤖⚠️ {motivoIA.largo}</span>
+                </div>
+              )}
 
               {/* Mensajes */}
               <div ref={msgsRef} className="msgs-scroll" onScroll={handleMsgsScroll} style={{ background:`radial-gradient(ellipse at 20% 10%, rgba(244,241,236,.015) 0%, transparent 60%)` }}>
