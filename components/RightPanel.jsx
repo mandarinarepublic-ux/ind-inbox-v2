@@ -529,6 +529,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
 
   // ── PEDIDO MANUAL: el formulario del CRM dentro de este panel ──
   const [manualAbierto, setManualAbierto] = useState(false)
+  // 💳 LINK DE PAGO en vista propia (port de MANDI, 19-nov-2026): ocupa toda la
+  // pestaña, como el pedido manual, para que la consulta a Payphone y la vista
+  // previa tengan espacio.
+  const [linkAbierto, setLinkAbierto] = useState(false)
+  useEffect(() => { setLinkAbierto(false) }, [activeConv?.telefono])
   // 🧾 Datos del formulario de WhatsApp para precargar el PEDIDO MANUAL (botón
   // "Crear pedido" de la burbuja, lib/formularios.js). `manualKey` remonta el
   // formulario en cada clic: su URL se congela al montar (ver ☠️ más abajo).
@@ -1200,15 +1205,26 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                   onEnviarHoja={onEnviarHojaPedido}
                 />
               </div>
+            ) : linkAbierto ? (
+              <div style={{ padding:'10px 12px 0' }}>
+                <button onClick={() => setLinkAbierto(false)}
+                  style={{ ...btnBase, padding:'5px 10px', background:'transparent', border:`1px solid ${C.border}`, color:C.creamDim, borderRadius:6, fontSize:11, fontWeight:700 }}>
+                  ← Volver
+                </button>
+              </div>
             ) : (
-            <div style={{ padding:'12px 12px 4px' }}>
+            <div style={{ padding:'12px 12px 4px', display:'flex', gap:6 }}>
               {/* PEDIDO MANUAL, el ÚNICO camino para crear un pedido: abre la
                   pantalla real de pedidos del CRM acá dentro, precargada con el
                   teléfono y el nombre del chat. El pedido queda firmado por la
                   persona que lo hizo, no por un fantasma. */}
               <button onClick={() => setManualAbierto(true)}
-                style={{ ...btnBase, width:'100%', padding:'9px', background:'linear-gradient(135deg,#10b981,#059669)', border:'1px solid rgba(16,185,129,.4)', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, letterSpacing:'.03em' }}>
+                style={{ ...btnBase, flex:1, padding:'9px', background:'linear-gradient(135deg,#10b981,#059669)', border:'1px solid rgba(16,185,129,.4)', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, letterSpacing:'.03em' }}>
                 🧾 PEDIDO MANUAL
+              </button>
+              <button onClick={() => setLinkAbierto(true)}
+                style={{ ...btnBase, flex:1, padding:'9px', background:'transparent', border:'1px solid rgba(16,185,129,.5)', color:'#10b981', borderRadius:8, fontSize:12, fontWeight:800, letterSpacing:'.03em' }}>
+                💳 LINK DE PAGO
               </button>
             </div>
             )}
@@ -1295,6 +1311,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 abierto mientras lees su pedido vale más que esos 90 px. */}
             <div style={{ display: (manualAbierto || verPedidoId != null) ? 'none' : 'contents' }}>
 
+            {linkAbierto ? (<>
             {/* LINK PAGO — arma el link dLocal y el texto listo para copiar.
                 A propósito NO manda nada al chat: el vendedor lo copia y decide
                 cuándo y cómo mandarlo. Portado desde MANDI el 15-ago-2026
@@ -1412,19 +1429,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
               )}
             </div>
 
-            {/* NOTAS — varias por chat, cada una con su fecha */}
-            <div style={{ padding:'10px 12px', borderTop:`1px solid ${C.border}`, marginTop:8, background:C.bg }}>
-              <p style={{ fontSize:10, color:'#f59e0b', fontWeight:700, letterSpacing:'.08em', marginBottom:6 }}>
-                📝 NOTAS
-              </p>
-              {/* El "📄 Ver pedido" de una nota abre el pedido acá mismo, por
-                  el MISMO camino que el "Ver →" del historial: antes era un
-                  enlace y te sacaba del inbox a otra pestaña. */}
-              <Notas telefono={activeConv.telefono} refrescar={notasRefrescar} onVerPedido={setVerPedidoId} />
-            </div>
-
-            {/* HISTORIAL DE PEDIDOS */}
-            <div style={{ padding:'10px 12px 16px', borderTop:`1px solid ${C.border}`, background:C.bg }}>
+            </>) : (<>
+            {/* HISTORIAL DE PEDIDOS (primero, como en MANDI desde el 17-nov) */}
+            <div style={{ padding:'10px 12px', borderTop:`1px solid ${C.border}`, background:C.bg }}>
               <div style={{ display:'flex', alignItems:'center', gap:5 }}>
                 <p style={{ fontSize:10, color:'#60a5fa', fontWeight:700, letterSpacing:'.08em', margin:0, display:'flex', alignItems:'center', gap:6 }}>
                   📦 HISTORIAL DE PEDIDOS
@@ -1470,6 +1477,19 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 )}
               </div>
             </div>
+
+            {/* NOTAS — varias por chat, cada una con su fecha (al final) */}
+            <div style={{ padding:'10px 12px 16px', borderTop:`1px solid ${C.border}`, marginTop:8, background:C.bg }}>
+              <p style={{ fontSize:10, color:'#f59e0b', fontWeight:700, letterSpacing:'.08em', marginBottom:6 }}>
+                📝 NOTAS
+              </p>
+              {/* El "📄 Ver pedido" de una nota abre el pedido acá mismo, por
+                  el MISMO camino que el "Ver →" del historial: antes era un
+                  enlace y te sacaba del inbox a otra pestaña. */}
+              <Notas telefono={activeConv.telefono} refrescar={notasRefrescar} onVerPedido={setVerPedidoId} />
+            </div>
+
+            </>)}
 
             </div>{/* fin del envoltorio que se esconde con el manual abierto */}
           </div>
