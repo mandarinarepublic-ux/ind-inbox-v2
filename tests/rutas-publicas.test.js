@@ -45,7 +45,7 @@ const PUBLICAS = [
 const PROTEGIDAS = [
   '/api/admin/meta-waba', '/api/automatizaciones', '/api/buscar', '/api/capi/diag',
   '/api/cliente-pedidos', '/api/contactos', '/api/contactos/estado', '/api/conversacion',
-  '/api/dashboard', '/api/directorio', '/api/hilo', '/api/inbox-sync', '/api/linkpago',
+  '/api/dashboard', '/api/directorio', '/api/hilo', '/api/inbox-sync', '/api/linkpago', '/api/linkpago/consultar',
   '/api/lista', '/api/media', '/api/media/precache', '/api/mensaje', '/api/mensajes',
   '/api/notas', '/api/plantillas', '/api/push/subscribe', '/api/push/test',
   '/api/respuestas', '/api/saliente', '/api/tienda', '/api/upload-foto',
@@ -59,8 +59,8 @@ const PROTEGIDAS = [
 test('las 39 rutas del repo están cubiertas por esta prueba', () => {
   // 7 públicas + 32 protegidas = las 39 que devuelve `find app/api -name route.js`.
   // Si mañana alguien agrega una ruta nueva y no la suma acá, este número canta.
-  // La 39 es /api/pago-payphone (10-nov-2026).
-  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 39)
+  // La 39 es /api/pago-payphone (10-nov-2026); la 40, /api/linkpago/consultar (19-nov-2026, protegida).
+  assert.strictEqual(PUBLICAS.length + (PROTEGIDAS.length - 3), 40)
 })
 
 test('Payphone puede avisar con o sin el /NotificacionPago al final', () => {
