@@ -2963,7 +2963,7 @@ export default function App() {
                     )}
                     <textarea ref={taRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
                       onPaste={handlePaste}
-                      placeholder={getModoIA(activeConv?.telefono) ? '🤖 IA respondiendo automáticamente...' : esCelular ? 'Escribe un mensaje...' : 'Escribe un mensaje... (Ctrl+Enter para enviar)'}
+                      placeholder={getModoIA(activeConv?.telefono) && !motivoIA ? '🤖 IA respondiendo automáticamente...' : esCelular ? 'Escribe un mensaje...' : 'Escribe un mensaje... (Ctrl+Enter para enviar)'}
                       rows={2}
                       style={{ width:'100%', background:'transparent', border:'none', outline:'none', color:C.cream, fontSize:14, resize:'none', lineHeight:1.5, minHeight:44, maxHeight:120, overflowY:'auto' }} />
                   </div>
