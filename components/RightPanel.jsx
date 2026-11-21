@@ -1099,7 +1099,8 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                               title={hayAltaPendiente ? 'Espera a que se confirme el alta pendiente' : 'Bajar'}
                               style={{ background:'transparent', border:`1px solid ${C.border}`, color: (abajo < 0 || hayAltaPendiente) ? C.creamMuted : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:11, cursor: (abajo < 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↓</button>
                             <button onClick={()=>handleSendQuick(idx)} disabled={!!sending[idx]||!windowOpen}
-                              style={{ ...btnBase, background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.2)`, color:C.cream, borderRadius:5, minWidth:20, height:20, padding:'0 3px', cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                              style={{ ...btnBase, background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.2)`, color:C.cream, borderRadius:5, minWidth:20, height:20, padding:'0 3px', cursor: windowOpen ? 'pointer' : 'not-allowed', opacity: windowOpen ? 1 : .4, fontSize:11, display:'flex', alignItems:'center', justifyContent:'center' }}
+                              title={windowOpen ? 'Enviar' : 'Ventana cerrada: no se puede enviar texto libre'}>
                               {sending[idx] || '➤'}
                             </button>
                             <button onClick={()=>startEdit(idx)} disabled={guardando} title={guardando ? 'Espera a que se confirme el alta' : undefined} style={{ background:'transparent', border:'none', color:C.creamMuted, cursor: guardando ? 'default' : 'pointer', fontSize:11, padding:'0 2px' }}>✏️</button>

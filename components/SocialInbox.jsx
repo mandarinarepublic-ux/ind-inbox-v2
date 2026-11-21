@@ -211,11 +211,31 @@ export default function SocialInbox({ active: isVisible }) {
     return () => clearInterval(pollRef.current)
   }, [isVisible, load])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [selected, convs])
-
   const selectedConv = convs.find(c => c.sender_id === selected) || null
+
+  // ☠️ Antes dependía de [selected, convs]: el sondeo cambia `convs` SIEMPRE, así
+  // que el hilo bajaba solo al fondo en cada consulta y quien leía mensajes viejos
+  // perdía el lugar (revisión web-design-guidelines, 21-nov-2026). Ahora:
+  //   · al ABRIR un hilo → al fondo, sin animación;
+  //   · solo con un mensaje NUEVO y si ya estabas abajo → al fondo, suave.
+  const ultimoMsgSel = selectedConv?.messages?.[selectedConv.messages.length - 1]
+  const ultimoIdSel = ultimoMsgSel ? String(ultimoMsgSel.id || ultimoMsgSel.timestamp || selectedConv.messages.length) : ''
+  const ultimoIdVistoRef = useRef('')
+  useEffect(() => {
+    ultimoIdVistoRef.current = ''
+    bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+  }, [selected])
+  useEffect(() => {
+    if (!ultimoIdSel) return
+    const antes = ultimoIdVistoRef.current
+    ultimoIdVistoRef.current = ultimoIdSel
+    if (!antes) { bottomRef.current?.scrollIntoView({ behavior: 'auto' }); return }   // primera carga del hilo
+    if (antes === ultimoIdSel) return
+    let el = bottomRef.current?.parentElement
+    while (el && !/(auto|scroll)/.test(getComputedStyle(el).overflowY)) el = el.parentElement
+    const abajo = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 160
+    if (abajo) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [ultimoIdSel])
 
   const filtered = convs.filter(c => {
     if (filter === 'FB') return c.canal === 'FB'

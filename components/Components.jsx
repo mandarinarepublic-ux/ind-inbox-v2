@@ -996,7 +996,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
           if (isNaN(d)) return ''
           if (isToday) return timeStr
           if (isYesterday) return `Ayer ${timeStr}`
-            return `${d.getDate()}${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][d.getMonth()]} ${timeStr}`
+            return `${d.getDate()} ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][d.getMonth()]} ${timeStr}`
             })()} 
           </span>
           {isMe && <Ticks estado={msg.estadoEntrega} />}
@@ -1047,10 +1047,12 @@ export function Toast({ result }) {
   // Si trae `msg`, se muestra ese texto tal cual (p. ej. "enviado, pero sin la cita").
   const custom = typeof result.msg === 'string' ? result.msg : null
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8, animation: 'up .2s ease' }}>
+    // 📌 sticky: queda pegado al borde de abajo de lo que se VE del hilo. Antes salía
+    // debajo del último mensaje y, con el hilo subido, «No se pudo enviar» no se veía.
+    <div role="status" aria-live="polite" style={{ display: 'flex', justifyContent: 'center', marginTop: 8, animation: 'up .2s ease', position: 'sticky', bottom: 8, zIndex: 5, pointerEvents: 'none' }}>
       <span style={{
         fontSize: 12, padding: '5px 16px', borderRadius: 20,
-        background: result.ok ? 'rgba(244,241,236,.08)' : 'rgba(239,68,68,.1)',
+        background: result.ok ? '#1c1b19' : '#2a0f12',   // sólido: va encima de los mensajes
         color: result.ok ? C.cream : '#f87171',
         border: `1px solid ${result.ok ? 'rgba(244,241,236,.2)' : 'rgba(239,68,68,.2)'}`,
       }}>
