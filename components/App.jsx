@@ -50,6 +50,14 @@ import { etiquetaTelefono } from '@/lib/cliente-sin-telefono'
 // nunca abra la pestaña. (Puerto desde MANDI, 15-sep-2026.)
 const Flujos = nextDynamic(() => import('@/components/flujos/Flujos'), { ssr: false })
 
+// ⚡ Las pestañas ocultas (Contactos, Autos, INDI, Flujos) viven SIEMPRE montadas y se
+// redibujaban con cada letra de la caja de texto (port de MANDI 1c23d78). Con memo solo
+// se redibujan si cambian sus propiedades: `active` y funciones estables.
+const ContactosMemo = React.memo(Contactos)
+const AutomatizacionesMemo = React.memo(Automatizaciones)
+const IndiMemo = React.memo(Indi)
+const FlujosMemo = React.memo(Flujos)
+
 // ── Ancho del panel derecho: UNA sola fuente ──────────────────────
 // Lo usan el asa de arrastre, la restauración de localStorage y el ensanchado
 // automático del PEDIDO MANUAL. Tienen que salir del mismo lado: si el máximo
@@ -363,6 +371,12 @@ export default function App() {
   }, [])
   const autoScroll = useRef(true)
   const prevMsgLen = useRef(0)
+  // ⚡ Las funciones MÁS RECIENTES para filas y burbujas memorizadas (ver el final de
+  // components/Components.jsx): una fila que no se redibujó llama por acá, nunca a una
+  // versión vieja con otro chat en su cierre.
+  const ultimasRef = useRef({})
+  // Estable para ContactosMemo: abrir un chat desde el directorio es un clic inmediato.
+  const abrirDesdeContactos = useCallback((tel) => ultimasRef.current.abrirChatDesdeContactos?.(tel), [])
   const avisoRef   = useRef(null)  // temporizador del aviso de adjuntos
   const taRef      = useRef(null)  // caja de texto del compositor (para enfocarla al citar)
   // Mensaje que se está citando al responder (null = ninguno).
@@ -2408,6 +2422,14 @@ export default function App() {
   // `convs.find` nunca los encuentra y sin esto se veía el teléfono pelado.
   const displayName        = (tel) => contacts[tel]?.alias || convs.find(c=>c.telefono===tel)?.nombre || contacts[tel]?.nombre || tel
 
+  ultimasRef.current = {
+    openConv, responderA, irACita, reaccionar, setReenviando, irAResultadoBusqueda, abrirChatDesdeContactos,
+    crearPedidoDesde: (datos) => {
+      setPrefillPedido({ telefono: activeConv?.telefono, datos: prefillDeFormulario(datos), n: Date.now() })
+      if (window.matchMedia?.('(max-width: 767px)').matches) setShowRight(true)
+    },
+  }
+
   return (
     <>
       {/* Va lo primero y fuera de todo layout: es fixed y tiene que verse aunque
@@ -2673,7 +2695,7 @@ export default function App() {
                   const canalLabel    = isSearching ? canalEtiquetaDe(conv.telefono) : null
                   const canalDistinto = isSearching && canalLabel !== null && canalDePhoneId(contacts[conv.telefono]?.phoneId) !== canal
                   return (
-                    <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono), username: contacts[conv.telefono]?.username || '' }} isActive={active===conv.telefono} onClick={() => irAResultadoBusqueda(conv.telefono)}
+                    <ContactRow key={conv.telefono} conv={{ ...conv, nombre: displayName(conv.telefono), username: contacts[conv.telefono]?.username || '' }} isActive={active===conv.telefono} onClick={() => ultimasRef.current.irAResultadoBusqueda(conv.telefono)}
                       search={search} estado={getStatus(conv.telefono)} modoIA={getModoIA(conv.telefono)} chips={[...chipsDeChat(datosGestion(conv.telefono), ahora), ...chipsEtiquetas(conv.telefono)]} msgSnippet={searchingMsgs ? matchSnippet(conv) : null}
                       canalLabel={canalLabel} canalDistinto={canalDistinto} />
                   )
@@ -2898,15 +2920,15 @@ export default function App() {
                           <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:12, color:C.creamMuted }}>{fmtDate(msg.timestamp)}</span>
                         </div>
                       )}
-                      <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={responderA} onAbrirChat={openConv} onReenviar={setReenviando}
+                      <MessageBubble msg={msg} allMsgs={activeConv.msgs}
+                        onResponder={(m) => ultimasRef.current.responderA(m)}
+                        onAbrirChat={(...a) => ultimasRef.current.openConv(...a)}
+                        onReenviar={(m) => ultimasRef.current.setReenviando(m)}
                         reaccion={mias.get(String(msg.id)) || ''}
                         reaccionCliente={suyas.get(String(msg.id)) || ''}
-                        onReaccionar={windowOpen && puedeReaccionar(msg) ? (emoji) => reaccionar(msg, emoji) : null}
-                        onIrACita={irACita}
-                        onCrearPedido={(datos) => {
-                          setPrefillPedido({ telefono: activeConv.telefono, datos: prefillDeFormulario(datos), n: Date.now() })
-                          if (window.matchMedia?.('(max-width: 767px)').matches) setShowRight(true)
-                        }} />
+                        onReaccionar={windowOpen && puedeReaccionar(msg) ? (emoji) => ultimasRef.current.reaccionar(msg, emoji) : null}
+                        onIrACita={(id) => ultimasRef.current.irACita(id)}
+                        onCrearPedido={(datos) => ultimasRef.current.crearPedidoDesde(datos)} />
                     </div>
                   )
                       })}
@@ -3164,24 +3186,24 @@ export default function App() {
         {/* ══════ CONTACTOS ══════ */}
         {vista === 'CONTACTOS' && (
           <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
-            <Contactos active={vista==='CONTACTOS'} onOpenChat={abrirChatDesdeContactos} />
+            <ContactosMemo active={vista==='CONTACTOS'} onOpenChat={abrirDesdeContactos} />
           </div>
         )}
         {/* ══════ AUTOMATIZACIONES ══════ */}
         {vista === 'AUTO' && (
           <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
-            <Automatizaciones active={vista==='AUTO'} />
+            <AutomatizacionesMemo active={vista==='AUTO'} />
           </div>
         )}
         {/* ══════ INDI ══════ — lo que sabe Indi, historial y chat de prueba */}
         {vista === 'INDI' && (
           <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
-            <Indi active={vista==='INDI'} />
+            <IndiMemo active={vista==='INDI'} />
           </div>
         )}
         {/* ══════ FLUJOS ══════ — el lienzo de nodos (ver flujosVisitado) */}
         <div style={{ flex:1, minHeight:0, display: vista === 'FLUJOS' ? 'flex' : 'none', overflow:'hidden' }}>
-          {flujosVisitado && <Flujos active={vista === 'FLUJOS'} />}
+          {flujosVisitado && <FlujosMemo active={vista === 'FLUJOS'} />}
         </div>
       </div>
 

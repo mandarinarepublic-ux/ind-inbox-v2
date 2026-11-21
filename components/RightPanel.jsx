@@ -428,14 +428,14 @@ const TABS = [
 // Etiqueta del catálogo online en el selector de la pestaña Tienda (este inbox = INDLOVERS).
 const CATALOGO_LABEL = 'INDLOVERS'
 
-export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, ventanaPautaHasta = null, prefillPedido = null, onPedidoManual, onVerPedido, onEnviarHojaPedido, onEnviandoHoja }) {
-  const [tab, setTab] = useState('respuestas')
+// ⏱ Contador de la ventana de 24 h en su PROPIO componente (port de MANDI 5398a4c):
+// antes su setInterval de 1 s redibujaba el panel entero cada segundo.
+function ContadorVentana({ activeConv }) {
   const [countdown, setCountdown] = useState('')
-
   useEffect(() => {
     if (!activeConv) return
     const lastIncoming = [...activeConv.msgs].reverse().find(m => m.direccion === 'ENTRANTE')
-    if (!lastIncoming) return
+    if (!lastIncoming) { setCountdown(''); return }
     const tick = () => {
       const diff = parseDate(lastIncoming.timestamp).getTime() + 24*60*60*1000 - Date.now()
       if (diff <= 0) { setCountdown('00:00:00'); return }
@@ -446,6 +446,13 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
     }
     tick(); const t = setInterval(tick, 1000); return () => clearInterval(t)
   }, [activeConv])
+  if (!countdown) return null
+  const urgente = parseInt(countdown.split(':')[0]) === 0 && parseInt(countdown.split(':')[1]) < 30
+  return <span style={{ fontFamily:'monospace', fontSize:12, fontWeight:800, color: urgente ? '#f87171' : C.cream }}>⏱ {countdown}</span>
+}
+
+export default function RightPanel({ activeConv, onQuickReply, onSendText, onSendImage, onSendProducto, contactInfo, onUpdateContact, windowOpen, ventanaPautaHasta = null, prefillPedido = null, onPedidoManual, onVerPedido, onEnviarHojaPedido, onEnviandoHoja }) {
+  const [tab, setTab] = useState('respuestas')
 
   const [replies,       setReplies]       = useState([])
   const [repliesLoaded, setRepliesLoaded] = useState(false)
@@ -953,7 +960,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
         <div style={{ marginTop:7, padding:'5px 10px', background:windowOpen?`rgba(244,241,236,.05)`:'rgba(245,158,11,.06)', border:`1px solid ${windowOpen?'rgba(244,241,236,.15)':'rgba(245,158,11,.2)'}`, borderRadius:7, fontSize:12, color:windowOpen?C.cream:'#f59e0b', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <span>{ventanaPautaHasta?'🎯 Ventana de pauta':windowOpen?'✅ Ventana activa':'⚠️ Ventana cerrada'}</span>
           {ventanaPautaHasta&&<span style={{ fontFamily:'monospace', fontSize:12, color:C.cream }}>hasta {etiquetaVencePauta(ventanaPautaHasta)}</span>}
-          {countdown&&windowOpen&&!ventanaPautaHasta&&<span style={{ fontFamily:'monospace', fontSize:12, fontWeight:800, color:parseInt(countdown.split(':')[0])===0&&parseInt(countdown.split(':')[1])<30?'#f87171':C.cream }}>⏱ {countdown}</span>}
+          {windowOpen && !ventanaPautaHasta && <ContadorVentana activeConv={activeConv} />}
           {!windowOpen&&<span style={{ fontFamily:'monospace', fontSize:12, color:C.creamMuted }}>Expirada</span>}
         </div>
       </div>

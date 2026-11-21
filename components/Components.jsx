@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { colorFor, initialsFor, fmtTime, parseDate, hashWamid } from '@/lib/utils'
 import { partirEnlaces } from '@/lib/enlaces'
 import { resumenDeLista } from '@/lib/resumen-lista'
@@ -184,7 +184,7 @@ function CanalBadge({ label, distinto }) {
     </span>
   )
 }
-export function ContactRow({ conv, isActive, onClick, search = '', estado, modoIA, chips = [], msgSnippet = null, canalLabel = null, canalDistinto = false }) {
+function ContactRowBase({ conv, isActive, onClick, search = '', estado, modoIA, chips = [], msgSnippet = null, canalLabel = null, canalDistinto = false }) {
   const [hovered, setHovered] = useState(false)
   const searching = String(search || '').trim().length > 0
   const info = ESTADO_INFO[estado] || null
@@ -832,7 +832,7 @@ export function AvisoInterno({ msg }) {
   )
 }
 
-export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenviar, reaccion = '', reaccionCliente = '', onReaccionar = null, onIrACita = null, onCrearPedido = null }) {
+function MessageBubbleBase({ msg, allMsgs, onResponder, onAbrirChat, onReenviar, reaccion = '', reaccionCliente = '', onReaccionar = null, onIrACita = null, onCrearPedido = null }) {
   const [accion, setAccion] = useState(false)
   const [hover, setHover] = useState(false)
   // Después de los hooks: un return antes rompería el orden de los useState.
@@ -1061,3 +1061,35 @@ export function Toast({ result }) {
     </div>
   )
 }
+
+
+// ── ⚡ Que una tecla no redibuje toda la lista ni todo el hilo (21-nov-2026) ──
+// Port de MANDI (5398a4c): allá cada letra bajó de ~121 ms a ~18 ms en una compu.
+// Una fila o una burbuja solo se redibuja si cambió algo de lo que MUESTRA.
+//
+// ☠️ Las FUNCIONES se comparan solo por presencia (null o no). Por eso App.jsx les
+// pasa envoltorios que llaman SIEMPRE a la versión más reciente por una ref
+// (`ultimasRef`): una fila que no se redibujó nunca abre un chat con datos viejos.
+const mismoContenido = (x, y) => {
+  if (x === y) return true
+  if (!x || !y || typeof x !== 'object' || typeof y !== 'object') return false
+  const kx = Object.keys(x), ky = Object.keys(y)
+  if (kx.length !== ky.length) return false
+  return kx.every(k => x[k] === y[k])
+}
+function igualesParaMemo(a, b) {
+  const ka = Object.keys(a), kb = Object.keys(b)
+  if (ka.length !== kb.length) return false
+  for (const k of ka) {
+    const x = a[k], y = b[k]
+    const fx = typeof x === 'function', fy = typeof y === 'function'
+    if (fx || fy) { if (fx !== fy) return false; continue }
+    if (x === y) continue
+    if (k === 'conv' && mismoContenido(x, y)) continue          // App arma {...conv, nombre} en cada render
+    if ((k === 'chips' || k === 'canalLabel') && JSON.stringify(x) === JSON.stringify(y)) continue
+    return false
+  }
+  return true
+}
+export const ContactRow = memo(ContactRowBase, igualesParaMemo)
+export const MessageBubble = memo(MessageBubbleBase, igualesParaMemo)
