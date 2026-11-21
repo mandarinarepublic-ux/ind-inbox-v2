@@ -2410,7 +2410,7 @@ export default function App() {
         .overlay    { display:none; }
         /* Foco visible SOLO con teclado (20-nov-2026): antes no se veía en qué botón
            estabas. :focus-visible no se dispara con el clic ni con el dedo. */
-        button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible, .sel-etapa:focus-within{ outline:2px solid #F4F1EC !important; outline-offset:2px; }
+        button:focus-visible, a:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible, .sel-etapa:focus-within{ outline:2px solid #F4F1EC !important; outline-offset:2px; }
         /* Filtros plegados también en la compu (20-nov-2026): con letra legible ocupaban
            8 líneas antes del primer chat. El botón dice cuántos hay activos. */
         .filtros-toggle{ display:flex !important; }
