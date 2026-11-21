@@ -24,7 +24,7 @@ const leerGrupoGuardado = () => { try { return localStorage.getItem(LLAVE_GRUPO)
 const guardarGrupo = (g) => { try { localStorage.setItem(LLAVE_GRUPO, g) } catch { /* sin almacenamiento */ } }
 
 // ¿El botón elegido no tiene ninguna respuesta? (para decirlo en vez de mostrar nada)
-const visibles_vacio = (replies, filtro) => (Array.isArray(replies) && replies.length > 0) && indicesVisibles(replies, filtro).length === 0
+const visibles_vacio = (replies, filtro, q) => (Array.isArray(replies) && replies.length > 0) && indicesVisibles(replies, filtro, q).length === 0
 
 const MAX_IMGS  = 10
 
@@ -475,6 +475,8 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   const [grupoFiltro,   setGrupoFiltroEstado] = useState(TODAS)
   useEffect(() => { setGrupoFiltroEstado(leerGrupoGuardado()) }, [])
   const [editGrupo,     setEditGrupo]     = useState('')
+  // 🔎 Buscador de respuestas (no se guarda: al volver arranca vacío).
+  const [buscarResp,    setBuscarResp]    = useState('')
   const [newGrupo,      setNewGrupo]      = useState('')
   const setGrupoFiltro = (g) => {
     setGrupoFiltroEstado(g); guardarGrupo(g)
@@ -991,9 +993,20 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 {repliesLoaded&&<span style={{ fontSize:8, background:`rgba(244,241,236,.06)`, color:C.creamDim, borderRadius:10, padding:'1px 5px' }}>{replies.length}</span>}
                 <span onClick={() => setRepliesLoaded(false)} title="Recargar" style={{ marginLeft:'auto', color:C.creamFaint, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
               </p>
+              {/* 🔎 Buscador: filtra dentro del botón elegido; los conteos dicen dónde hay. */}
+              <div style={{ position:'relative', marginTop:8 }}>
+                <input value={buscarResp} onChange={e => setBuscarResp(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') setBuscarResp('') }}
+                  placeholder="🔎 Buscar respuesta…" enterKeyHint="search"
+                  style={{ width:'100%', boxSizing:'border-box', background:C.surface2, border:`1px solid ${C.border2}`, borderRadius:8, color:C.cream, fontSize:12, padding:'6px 26px 6px 9px', outline:'none', fontFamily:'inherit' }} />
+                {buscarResp && (
+                  <button onClick={() => setBuscarResp('')} title="Borrar búsqueda"
+                    style={{ position:'absolute', right:4, top:'50%', transform:'translateY(-50%)', background:'transparent', border:'none', color:C.creamDim, fontSize:12, cursor:'pointer', padding:'2px 5px' }}>✕</button>
+                )}
+              </div>
               {/* 📋🛍️📐 Botones de grupo (lib/grupos-respuestas.js). "Todas" incluye las sin grupo. */}
               {(() => {
-                const n = conteoPorGrupo(replies)
+                const n = conteoPorGrupo(replies, buscarResp)
                 const botones = [{ id: TODAS, emoji: '', nombre: 'Todas' }, ...GRUPOS_RESPUESTA]
                 return (
                   <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:8 }}>
@@ -1015,7 +1028,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
             </div>
 
             <div style={{ padding:'0 12px', display:'flex', flexDirection:'column', gap:5 }}>
-              {(() => { const visibles = indicesVisibles(replies, grupoFiltro); const verSet = new Set(visibles); return replies.map((reply, idx) => {
+              {(() => { const visibles = indicesVisibles(replies, grupoFiltro, buscarResp); const verSet = new Set(visibles); return replies.map((reply, idx) => {
                 if (!verSet.has(idx)) return null
                 const imgs = getImgUrls(reply)
                 const arriba = vecinaVisible(visibles, idx, -1)
@@ -1098,8 +1111,13 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                   </div>
                 )
               }) })()}
-              {visibles_vacio(replies, grupoFiltro) && (
-                <div style={{ fontSize:11, color:C.creamFaint, padding:'8px 4px' }}>No hay respuestas en este grupo. Crea una abajo o elige el grupo al editar ✏️.</div>
+              {visibles_vacio(replies, grupoFiltro, buscarResp) && (
+                <div style={{ fontSize:11, color:C.creamDim, padding:'8px 4px' }}>
+                  {!buscarResp.trim() ? 'No hay respuestas en este grupo. Crea una abajo o elige el grupo al editar ✏️.'
+                    : conteoPorGrupo(replies, buscarResp)[TODAS] > 0 && (grupoFiltro || TODAS) !== TODAS
+                      ? <>Nada con “{buscarResp.trim()}” en este grupo. <span onClick={() => setGrupoFiltro(TODAS)} style={{ color:C.cream, textDecoration:'underline', cursor:'pointer' }}>Ver en Todas ({conteoPorGrupo(replies, buscarResp)[TODAS]})</span></>
+                      : <>Ninguna respuesta tiene “{buscarResp.trim()}”.</>}
+                </div>
               )}
               {errorOrden && (
                 <div style={{ fontSize:11, color:'#ef4444', padding:'6px 8px' }}>⚠️ {errorOrden}</div>
