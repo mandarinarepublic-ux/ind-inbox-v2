@@ -6,7 +6,7 @@ import React from 'react'
 import { ETAPAS } from '@/lib/gestion'
 import { TEMPERATURAS } from '@/lib/temperatura'
 
-const P = { border: '#1F1F1F', border2: '#2A2A2A', cream: '#F4F1EC', creamDim: '#A09A90', creamFaint: '#6b645b', bg: '#0A0A0A' }
+const P = { border: '#1F1F1F', border2: '#2A2A2A', cream: '#F4F1EC', creamDim: '#A09A90', creamFaint: '#8a847b', bg: '#0A0A0A' }
 
 function Chip({ activo, color, onClick, title, children, n }) {
   return (

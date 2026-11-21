@@ -30,7 +30,7 @@ const C = {
   border2:   '#2A2A2A',
   cream:     '#F4F1EC',
   creamDim:  '#A09A90',
-  creamFaint:'#3A3530',
+  creamFaint:'#3A3530', creamMuted:'#8a847b',
   accent:    '#F4F1EC',  // crema como acento principal
 }
 
@@ -231,13 +231,13 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: C.cream, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{highlight(conv.nombre, search)}</span>
-          <span style={{ fontSize: 12, color: C.creamFaint, whiteSpace: 'nowrap', flexShrink: 0 }}>{fmtTime(conv.last?.timestamp)}</span>
+          <span style={{ fontSize: 12, color: C.creamMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>{fmtTime(conv.last?.timestamp)}</span>
         </div>
         <FilaChips chips={chips} delante={<IABadge modoIA={modoIA} />} />
         {msgSnippet != null ? (
           <div style={{ marginTop: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: C.creamFaint, fontFamily: 'monospace' }}>{etiquetaTelefono(conv.telefono, conv.username)}</span>
+              <span style={{ fontSize: 12, color: C.creamMuted, fontFamily: 'monospace' }}>{etiquetaTelefono(conv.telefono, conv.username)}</span>
               {info && <span style={{ fontSize: 11, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
               <CanalBadge label={canalLabel} distinto={canalDistinto} />
             </div>
@@ -261,7 +261,7 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
             <span style={{
               fontSize: 12,
-              color: conv.unread > 0 ? C.creamDim : C.creamFaint,
+              color: conv.unread > 0 ? C.creamDim : C.creamMuted,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               maxWidth: 175, fontWeight: conv.unread > 0 ? 600 : 400,
             }}>
@@ -725,7 +725,7 @@ function PedidoCard({ pedido }) {
             {/* Sin nombre, el id es lo ÚNICO que identifica el producto: se
                 muestra para que se pueda buscar a mano en el catálogo. */}
             {!it.nombre && (
-              <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 1, fontFamily: 'monospace' }}>
+              <div style={{ fontSize: 11, color: C.creamMuted, marginTop: 1, fontFamily: 'monospace' }}>
                 {it.retailerId}
               </div>
             )}
@@ -744,7 +744,7 @@ function PedidoCard({ pedido }) {
       </div>
       {/* ⚠️ La talla NO viene en el pedido: Meta no la manda y el catálogo la
           trae vacía. Hay que preguntársela al cliente SIEMPRE. */}
-      <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 5 }}>
+      <div style={{ fontSize: 11, color: C.creamMuted, marginTop: 5 }}>
         ⚠️ El pedido no trae la talla — hay que preguntarla
       </div>
     </div>
@@ -783,7 +783,7 @@ function UbicacionCard({ u }) {
           {/* La dirección desplaza las coordenadas: se muestran igual, porque son
               el dato con el que se busca el sitio si el nombre no alcanza. */}
           {u.direccion && (
-            <div style={{ fontSize: 12, color: C.creamFaint, marginTop: 1 }}>{coords}</div>
+            <div style={{ fontSize: 12, color: C.creamMuted, marginTop: 1 }}>{coords}</div>
           )}
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6,
@@ -854,7 +854,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
   // también aparezca en el celular, donde no hay hover.
   const sePuedeReenviar = !!onReenviar && puedeReenviar(msg).ok
   const botonReenviar = sePuedeReenviar ? (
-    <button
+    <button aria-label="Reenviar a otro chat"
       onClick={(e) => { e.stopPropagation(); setAccion(false); onReenviar(msg) }}
       title="Reenviar a otro chat"
       style={{
@@ -868,7 +868,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
   // ☺ Reaccionar: abre la misma barrita que tocar el mensaje. Afuera de la burbuja,
   // tenue, igual que ↪ — en el celular basta con tocar el mensaje.
   const botonReaccionar = onReaccionar ? (
-    <button
+    <button aria-label="Reaccionar"
       onClick={(e) => { e.stopPropagation(); setAccion(v => !v) }}
       title="Reaccionar"
       style={{
@@ -983,9 +983,9 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
             )
           } catch { return null }
         })()}
-        {!hasText && !hasMedia && !msg.botones && <p style={{ margin: 0, fontSize: 13, color: C.creamFaint, fontStyle: 'italic' }}>{msg.tipo ? `[${msg.tipo}]` : '[mensaje]'}</p>}
+        {!hasText && !hasMedia && !msg.botones && <p style={{ margin: 0, fontSize: 13, color: C.creamMuted, fontStyle: 'italic' }}>{msg.tipo ? `[${msg.tipo}]` : '[mensaje]'}</p>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5, marginTop: 4 }}>
-          <span style={{ fontSize: 11, color: C.creamFaint }}>
+          <span style={{ fontSize: 11, color: C.creamMuted }}>
           {(() => {
           const d = parseDate(msg.timestamp)
           const today = new Date()

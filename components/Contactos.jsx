@@ -9,7 +9,7 @@ import { fetchDirectorio, fetchPlantillas, sendReply, sendTemplate } from '@/lib
 const C = {
   bg:'#0A0A0A', surface:'#0D0D0D', surface2:'#111111', modal:'#0D0D0D',
   border:'#1F1F1F', border2:'#2A2A2A', borderFaint:'#161616',
-  cream:'#F4F1EC', creamDim:'#A09A90', creamFaint:'#3A3530',
+  cream:'#F4F1EC', creamDim:'#A09A90', creamFaint:'#3A3530', creamMuted:'#8a847b',
   green:'#4ade80', amber:'#f59e0b',
 }
 const soloDig = (s) => String(s || '').replace(/\D/g, '')
@@ -91,17 +91,17 @@ export default function Contactos({ active, onOpenChat }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '8px 12px' }}>
-          <span style={{ fontSize: 14, color: C.creamFaint }}>🔍</span>
+          <span style={{ fontSize: 14, color: C.creamMuted }}>🔍</span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o número…"
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: C.cream, fontSize: 13, fontFamily: 'Outfit,sans-serif' }} />
-          {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: C.creamFaint, cursor: 'pointer', fontSize: 15 }}>✕</button>}
+          {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: C.creamMuted, cursor: 'pointer', fontSize: 15 }}>✕</button>}
         </div>
       </div>
 
       {/* Lista */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        {loading && <div style={{ color: C.creamFaint, fontSize: 13, padding: 20 }}>Cargando contactos…</div>}
-        {!loading && filtrados.length === 0 && <div style={{ color: C.creamFaint, fontSize: 13, padding: 20 }}>Sin resultados.</div>}
+        {loading && <div style={{ color: C.creamMuted, fontSize: 13, padding: 20 }}>Cargando contactos…</div>}
+        {!loading && filtrados.length === 0 && <div style={{ color: C.creamMuted, fontSize: 13, padding: 20 }}>Sin resultados.</div>}
         {filtrados.map((c) => (
           <button key={c.telefono} onClick={() => setSel(c)} style={{
             width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '11px 16px',
@@ -123,7 +123,7 @@ export default function Contactos({ active, onOpenChat }) {
           </button>
         ))}
         {!loading && contactos.length > 400 && !search && (
-          <div style={{ color: C.creamFaint, fontSize: 12, padding: '12px 16px', textAlign: 'center' }}>
+          <div style={{ color: C.creamMuted, fontSize: 12, padding: '12px 16px', textAlign: 'center' }}>
             Mostrando los 400 más recientes · usa el buscador para el resto
           </div>
         )}
@@ -191,13 +191,13 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
             </div>
             <div style={{ fontSize: 12, color: C.creamDim }}>{soloDig(c.telefono)}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.creamFaint, cursor: 'pointer', fontSize: 20 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.creamMuted, cursor: 'pointer', fontSize: 20 }}>✕</button>
         </div>
 
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: C.creamDim, marginBottom: 8 }}>¿Por cuál número le escribes?</div>
           {opciones.length === 0 && (
-            <div style={{ fontSize: 13, color: C.creamFaint, padding: '10px 12px', borderRadius: 10, border: `1px dashed ${C.border2}` }}>
+            <div style={{ fontSize: 13, color: C.creamMuted, padding: '10px 12px', borderRadius: 10, border: `1px dashed ${C.border2}` }}>
               No hay números configurados.
             </div>
           )}
@@ -235,7 +235,7 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
             <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={3} placeholder="Escribe tu mensaje…"
               style={{ width: '100%', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.cream, fontSize: 13, padding: '10px 12px', fontFamily: 'Outfit,sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
             <button onClick={enviarLibre} disabled={!texto.trim() || sending || !canalSel}
-              style={{ width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: texto.trim() ? C.cream : C.border, color: texto.trim() ? C.bg : C.creamFaint, fontWeight: 900, fontSize: 14, cursor: texto.trim() && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif' }}>{sending ? 'Enviando…' : 'Enviar'}</button>
+              style={{ width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: texto.trim() ? C.cream : C.border, color: texto.trim() ? C.bg : C.creamMuted, fontWeight: 900, fontSize: 14, cursor: texto.trim() && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif' }}>{sending ? 'Enviando…' : 'Enviar'}</button>
           </div>
         ) : (
           // La plantilla sale por el MISMO número elegido arriba.
@@ -259,7 +259,7 @@ export function PlantillaModal({ telefono, nombre, onClose, flash, onCarrusel })
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.cream }}>📋 Enviar plantilla</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.creamFaint, cursor: 'pointer', fontSize: 20 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.creamMuted, cursor: 'pointer', fontSize: 20 }}>✕</button>
         </div>
         <SelectorPlantilla contacto={{ telefono, nombre }} flash={flash} onClose={onClose} onCarrusel={onCarrusel} />
       </div>
@@ -328,7 +328,7 @@ function SelectorPlantilla({ contacto: c, flash, onClose, onCarrusel }) {
         ⚠️ Pasaron más de 24h desde su último mensaje. WhatsApp solo permite enviar una <b>plantilla aprobada</b>.
       </div>
 
-      {estado === 'loading' && <div style={{ color: C.creamFaint, fontSize: 13 }}>Cargando plantillas…</div>}
+      {estado === 'loading' && <div style={{ color: C.creamMuted, fontSize: 13 }}>Cargando plantillas…</div>}
 
       {estado === 'needsEnv' && (
         <div style={{ color: C.creamDim, fontSize: 13, lineHeight: 1.5 }}>
@@ -357,7 +357,7 @@ function SelectorPlantilla({ contacto: c, flash, onClose, onCarrusel }) {
               width: '100%', textAlign: 'left', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10,
               padding: '10px 12px', marginBottom: 8, cursor: 'pointer',
             }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.cream }}>{t.carrusel ? '🛍️ ' : ''}{t.name} <span style={{ fontSize: 11, color: C.creamFaint }}>· {t.language}{t.carrusel ? ' · carrusel: eliges los productos' : ''}</span></div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.cream }}>{t.carrusel ? '🛍️ ' : ''}{t.name} <span style={{ fontSize: 11, color: C.creamMuted }}>· {t.language}{t.carrusel ? ' · carrusel: eliges los productos' : ''}</span></div>
               <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.bodyText}</div>
             </button>
           ))}
@@ -388,13 +388,13 @@ function SelectorPlantilla({ contacto: c, flash, onClose, onCarrusel }) {
 
           {chosen.bodyText && (
             <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', margin: '4px 0 12px' }}>
-              <div style={{ fontSize: 11, color: C.creamFaint, fontWeight: 800, marginBottom: 4 }}>VISTA PREVIA</div>
+              <div style={{ fontSize: 11, color: C.creamMuted, fontWeight: 800, marginBottom: 4 }}>VISTA PREVIA</div>
               <div style={{ fontSize: 13, color: C.cream, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{preview}</div>
             </div>
           )}
 
           <button onClick={enviar} disabled={!listo || sending}
-            style={{ width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: listo ? C.cream : C.border, color: listo ? C.bg : C.creamFaint, fontWeight: 900, fontSize: 14, cursor: listo && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif' }}>{sending ? 'Enviando…' : 'Enviar plantilla'}</button>
+            style={{ width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: listo ? C.cream : C.border, color: listo ? C.bg : C.creamMuted, fontWeight: 900, fontSize: 14, cursor: listo && !sending ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif' }}>{sending ? 'Enviando…' : 'Enviar plantilla'}</button>
         </div>
       )}
     </div>

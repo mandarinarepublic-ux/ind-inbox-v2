@@ -125,7 +125,7 @@ function EditorDisparador({ datos, anuncios, onCambiar }) {
                 border: `1px solid ${BORDE}`, borderRadius: 999, padding: '2px 5px 2px 9px', fontSize: 11, color: '#cbd5e1',
               }}>
                 {p}
-                <button onClick={() => onCambiar({ palabras: palabras.filter((_, j) => j !== i) })}
+                <button aria-label="Quitar" onClick={() => onCambiar({ palabras: palabras.filter((_, j) => j !== i) })}
                   title="Quitar" style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}>✕</button>
               </span>
             ))}
@@ -236,7 +236,7 @@ function EditorMensaje({ datos, respuestas, onCambiar }) {
                   <option value="audio">audio</option>
                   <option value="documento">documento</option>
                 </select>
-                <button onClick={() => onCambiar({ adjuntos: adjuntos.filter((_, j) => j !== i) })}
+                <button aria-label="Quitar" onClick={() => onCambiar({ adjuntos: adjuntos.filter((_, j) => j !== i) })}
                   title="Quitar" style={{ ...estiloBotonChico, flexShrink: 0 }}>✕</button>
               </div>
             ))}

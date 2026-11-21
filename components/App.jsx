@@ -102,7 +102,7 @@ function BotonEje({ on, color, onClick, title, icon, label }) {
       padding:'4px 6px', fontWeight: on ? 800 : 600, flexShrink:0,
       background: on ? `${color}22` : 'transparent',
       border: `${on ? 2 : 1}px solid ${on ? color : C.border2}`,
-      color: on ? color : C.creamFaint,
+      color: on ? color : C.creamMuted,
       borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
       boxShadow: on ? `0 0 8px ${color}44` : 'none',
     }}>
@@ -172,10 +172,10 @@ function EmojiPicker({ onSelect, onClose }) {
   return (
     <div style={{ position:'absolute', bottom:'100%', left:0, right:0, marginBottom:8, background:C.surface2, border:`1px solid ${C.border2}`, borderRadius:14, zIndex:60, overflow:'hidden', boxShadow:'0 8px 32px rgba(0,0,0,.8)' }}>
       <div style={{ padding:'8px 10px 6px', borderBottom:`1px solid ${C.border}`, display:'flex', gap:6, alignItems:'center' }}>
-        <span style={{ fontSize:13, color:C.creamFaint }}>🔍</span>
+        <span style={{ fontSize:13, color:C.creamMuted }}>🔍</span>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar emoji..." autoFocus
           style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.cream, fontSize:12, fontFamily:'Outfit,sans-serif' }} />
-        <button onClick={onClose} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:15, padding:0, lineHeight:1 }}>✕</button>
+        <button onClick={onClose} style={{ background:'transparent', border:'none', color:C.creamMuted, cursor:'pointer', fontSize:15, padding:0, lineHeight:1 }}>✕</button>
       </div>
       {!search.trim() && (
         <div style={{ display:'flex', borderBottom:`1px solid ${C.border}` }}>
@@ -195,7 +195,7 @@ function EmojiPicker({ onSelect, onClose }) {
             onMouseLeave={e => e.currentTarget.style.background='transparent'}
           >{emoji}</button>
         ))}
-        {displayed.length === 0 && <div style={{ gridColumn:'1/-1', textAlign:'center', padding:'20px 0', color:C.creamFaint, fontSize:12 }}>Sin resultados</div>}
+        {displayed.length === 0 && <div style={{ gridColumn:'1/-1', textAlign:'center', padding:'20px 0', color:C.creamMuted, fontSize:12 }}>Sin resultados</div>}
       </div>
     </div>
   )
@@ -2376,6 +2376,9 @@ export default function App() {
         .hide-mobile{ display:inline !important; }
         .show-mobile{ display:none !important; }
         .overlay    { display:none; }
+        /* Foco visible SOLO con teclado (20-nov-2026): antes no se veía en qué botón
+           estabas. :focus-visible no se dispara con el clic ni con el dedo. */
+        button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible{ outline:2px solid #F4F1EC !important; outline-offset:2px; }
         /* Filtros plegados también en la compu (20-nov-2026): con letra legible ocupaban
            8 líneas antes del primer chat. El botón dice cuántos hay activos. */
         .filtros-toggle{ display:flex !important; }
@@ -2468,7 +2471,7 @@ export default function App() {
                 background: activo ? 'rgba(244,241,236,.1)' : 'transparent',
                 borderTop:'2px solid transparent',
                 borderBottom: activo ? `2px solid ${C.cream}` : '2px solid transparent',
-                color: activo ? C.cream : C.creamFaint, fontWeight:800, fontSize:12, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
+                color: activo ? C.cream : C.creamMuted, fontWeight:800, fontSize:12, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
               }}>
                 {/* Ícono y nombre por separado: en el celular van uno ENCIMA del
                     otro y el contador flota en la esquina (ver CSS .tab-ico). */}
@@ -2496,7 +2499,7 @@ export default function App() {
               background: vista===id ? 'rgba(244,241,236,.1)' : 'transparent',
               borderTop:'2px solid transparent',
               borderBottom: vista===id ? `2px solid ${C.cream}` : '2px solid transparent',
-              color: vista===id ? C.cream : C.creamFaint, fontWeight:800, fontSize:12, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
+              color: vista===id ? C.cream : C.creamMuted, fontWeight:800, fontSize:12, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
             }}><span className="tab-par"><span className="tab-ico">{icon}</span> <span className="tab-lbl">{label}</span></span></button>
           ))}
         </div>
@@ -2519,17 +2522,17 @@ export default function App() {
                   </div>
                 </div>
                 <div style={{ display:'flex', gap:5, flexShrink:0 }}>
-                  <button onClick={() => setVista('AUTO')} title="Mensajes de saludo (automatizaciones)" style={{ background:'rgba(244,241,236,.1)', border:'1px solid rgba(244,241,236,.28)', color:C.cream, borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>👋</button>
+                  <button aria-label="Mensajes de saludo (automatizaciones)" onClick={() => setVista('AUTO')} title="Mensajes de saludo (automatizaciones)" style={{ background:'rgba(244,241,236,.1)', border:'1px solid rgba(244,241,236,.28)', color:C.cream, borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>👋</button>
                   <a href="/dashboard" title="Dashboard" style={{ background:'rgba(96,165,250,.14)', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:8, width:30, height:30, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', textDecoration:'none' }}>📊</a>
                   <PushToggle />
                 </div>
               </div>
               <div style={{ position:'relative', marginBottom:6 }}>
-                <span style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:C.creamFaint, fontSize:12, pointerEvents:'none' }}>🔍</span>
+                <span style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:C.creamMuted, fontSize:12, pointerEvents:'none' }}>🔍</span>
                 <input value={search} onChange={e => setSearch(e.target.value)}
                   placeholder={searchMode === 'mensaje' ? 'Buscar en mensajes (ej: Hoodie)...' : 'Buscar nombre o número...'}
                   style={{ width:'100%', padding:'7px 28px 7px 28px', background:C.surface2, border:`1px solid ${searchMode==='mensaje'?'rgba(96,165,250,.4)':C.border}`, borderRadius:8, color:C.cream, fontSize:12, outline:'none' }} />
-                {search && <button onClick={() => setSearch('')} style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:13, padding:0, lineHeight:1 }}>✕</button>}
+                {search && <button onClick={() => setSearch('')} style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'transparent', border:'none', color:C.creamMuted, cursor:'pointer', fontSize:13, padding:0, lineHeight:1 }}>✕</button>}
               </div>
               <div style={{ display:'flex', gap:4, marginBottom:10 }}>
                 {[{ key:'contacto', label:'👤 Contactos' }, { key:'mensaje', label:'💬 Mensajes' }].map(({ key, label }) => (
@@ -2537,7 +2540,7 @@ export default function App() {
                     flex:1, padding:'5px 2px', fontSize:11, fontWeight:700, borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
                     background: searchMode===key ? 'rgba(96,165,250,.15)' : 'transparent',
                     border: `1px solid ${searchMode===key ? 'rgba(96,165,250,.45)' : C.border}`,
-                    color: searchMode===key ? '#60a5fa' : C.creamFaint,
+                    color: searchMode===key ? '#60a5fa' : C.creamMuted,
                   }}>{label}</button>
                 ))}
               </div>
@@ -2547,7 +2550,7 @@ export default function App() {
               {/* ⇅ Orden de 🔴 (lib/filtro-chats.js) — solo en esa bandeja */}
               {filtro.bandeja === 'pendiente' && !isSearching && (
                 <button onClick={alternarOrdenPend} title="Cambiar el orden de Pendientes"
-                  style={{ width:'100%', marginTop:8, padding:'5px 8px', fontSize:11, fontWeight:700, background:'transparent', border:`1px solid ${C.border}`, color:C.creamFaint, borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>
+                  style={{ width:'100%', marginTop:8, padding:'5px 8px', fontSize:11, fontWeight:700, background:'transparent', border:`1px solid ${C.border}`, color:C.creamMuted, borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>
                   ⇅ {pendNuevosArriba ? 'Más nuevos arriba' : 'Más antiguos arriba'}
                 </button>
               )}
@@ -2556,14 +2559,14 @@ export default function App() {
             <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
               {loading ? (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:48, gap:12 }}>
-                  <Spinner size={24} /><span style={{ fontSize:12, color:C.creamFaint }}>Cargando...</span>
+                  <Spinner size={24} /><span style={{ fontSize:12, color:C.creamMuted }}>Cargando...</span>
                 </div>
               ) : buscando ? (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:48, gap:12 }}>
-                  <Spinner size={20} /><span style={{ fontSize:12, color:C.creamFaint }}>Buscando en todo el historial...</span>
+                  <Spinner size={20} /><span style={{ fontSize:12, color:C.creamMuted }}>Buscando en todo el historial...</span>
                 </div>
               ) : filtered.length === 0 ? (
-                <div style={{ padding:28, textAlign:'center', color:C.creamFaint, fontSize:12 }}>
+                <div style={{ padding:28, textAlign:'center', color:C.creamMuted, fontSize:12 }}>
                   {isSearching ? (searchingMsgs ? `Ningún mensaje dice "${search.trim()}"` : `Sin resultados para "${search.trim()}"`) : 'Sin conversaciones'}
                 </div>
               ) : (<>
@@ -2615,7 +2618,7 @@ export default function App() {
                     : '⏸ En pausa por inactividad — toca para reanudar'}
                 </span>
               ) : (
-                <span style={{ fontSize:11, color:C.creamFaint }}>{lastSync?'Sync '+lastSync.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—'}</span>
+                <span style={{ fontSize:11, color:C.creamMuted }}>{lastSync?'Sync '+lastSync.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—'}</span>
               )}
               <button onClick={() => window.location.reload()} style={{ background:`rgba(244,241,236,.06)`, border:`1px solid rgba(244,241,236,.15)`, color:C.cream, borderRadius:7, width:30, height:30, cursor:'pointer', fontSize:15, display:'flex', alignItems:'center', justifyContent:'center' }}>↻</button>
             </div>
@@ -2754,7 +2757,7 @@ export default function App() {
                 {/* ⚠️ Que se VEA que está trayendo historial. Sin aviso, subir en
                     un chat largo se siente como que la pantalla se trabó. */}
                 {cargandoMas && (
-                  <div style={{ textAlign:'center', padding:'10px 0', fontSize:12, color:C.creamFaint }}>
+                  <div style={{ textAlign:'center', padding:'10px 0', fontSize:12, color:C.creamMuted }}>
                     Trayendo mensajes anteriores…
                   </div>
                 )}
@@ -2790,7 +2793,7 @@ export default function App() {
                     <div key={msg.id} data-salto={claveSalto(msg.id)}>
                       {showDate && (
                         <div style={{ display:'flex', justifyContent:'center', margin:'12px 0 8px' }}>
-                          <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:12, color:C.creamFaint }}>{fmtDate(msg.timestamp)}</span>
+                          <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:12, color:C.creamMuted }}>{fmtDate(msg.timestamp)}</span>
                         </div>
                       )}
                       <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={responderA} onAbrirChat={openConv} onReenviar={setReenviando}
@@ -2855,7 +2858,7 @@ export default function App() {
                 {avisoAdjunto && (
                   <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.25)', borderRadius:8, fontSize:12, color:'#fbbf24', display:'flex', alignItems:'center', gap:8 }}>
                     <span style={{ flex:1 }}>{avisoAdjunto}</span>
-                    <button onClick={() => avisarAdjunto('')} title="Cerrar"
+                    <button aria-label="Cerrar" onClick={() => avisarAdjunto('')} title="Cerrar"
                       style={{ background:'transparent', border:'none', color:'#a16207', fontSize:13, cursor:'pointer', lineHeight:1, flexShrink:0 }}>✕</button>
                   </div>
                 )}
@@ -2890,7 +2893,7 @@ export default function App() {
                       ))}
                     </div>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                      <span style={{ fontSize:11, color:C.creamFaint }}>
+                      <span style={{ fontSize:11, color:C.creamMuted }}>
                         {imgUploading
                           ? `Enviando ${imgProgress}/${imgFiles.length}...`
                           : imgResult
@@ -2905,10 +2908,10 @@ export default function App() {
                       {!imgResult && (
                         <div style={{ display:'flex', gap:5 }}>
                           <button onClick={handleSendImage} disabled={imgUploading||!windowOpen}
-                            style={{ padding:'5px 10px', background:imgUploading?C.surface2:C.cream, border:'none', borderRadius:7, color:imgUploading?C.creamFaint:C.bg, fontSize:12, fontWeight:700, cursor:imgUploading?'default':'pointer', fontFamily:'inherit' }}>
+                            style={{ padding:'5px 10px', background:imgUploading?C.surface2:C.cream, border:'none', borderRadius:7, color:imgUploading?C.creamMuted:C.bg, fontSize:12, fontWeight:700, cursor:imgUploading?'default':'pointer', fontFamily:'inherit' }}>
                             {imgUploading?'⏳':'📤 Enviar'}
                           </button>
-                          <button onClick={cancelImage} style={{ padding:'5px 8px', background:'transparent', border:`1px solid ${C.border2}`, borderRadius:7, color:C.creamFaint, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>✕</button>
+                          <button onClick={cancelImage} style={{ padding:'5px 8px', background:'transparent', border:`1px solid ${C.border2}`, borderRadius:7, color:C.creamMuted, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>✕</button>
                         </div>
                       )}
                     </div>
@@ -2929,7 +2932,7 @@ export default function App() {
                       <div style={{ fontSize:11, color:C.cream, fontWeight:700, marginBottom:7, letterSpacing:'.06em' }}>🔘 BOTONES INTERACTIVOS</div>
                       {btnTexts.map((txt,i) => (
                         <div key={i} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
-                          <span style={{ fontSize:11, color:C.creamFaint, width:12, flexShrink:0 }}>{i+1}.</span>
+                          <span style={{ fontSize:11, color:C.creamMuted, width:12, flexShrink:0 }}>{i+1}.</span>
                           <input value={txt} onChange={e => setBtnTexts(prev=>prev.map((v,j)=>j===i?e.target.value:v))} placeholder={`Botón ${i+1}`} maxLength={20}
                             style={{ flex:1, background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 9px', color:C.cream, fontSize:12, outline:'none', fontFamily:'inherit' }}
                             onFocus={e=>e.target.style.borderColor=C.cream} onBlur={e=>e.target.style.borderColor=C.border} />
@@ -2940,7 +2943,7 @@ export default function App() {
                           ⚠️ Falta escribir el mensaje (va arriba de los botones) — luego dale a ➤
                         </div>
                       ) : (
-                        <div style={{ fontSize:11, color:C.creamFaint, marginTop:3 }}>Escribe el mensaje abajo y dale a enviar · Máx 3 botones</div>
+                        <div style={{ fontSize:11, color:C.creamMuted, marginTop:3 }}>Escribe el mensaje abajo y dale a enviar · Máx 3 botones</div>
                       )}
                     </div>
                   )}
@@ -2961,8 +2964,8 @@ export default function App() {
                             {citando.mensaje || `[${citando.tipo || 'archivo'}]`}
                           </div>
                         </div>
-                        <button onClick={() => setCitando(null)} title="Quitar la cita"
-                          style={{ background:'transparent', border:'none', color:C.creamFaint, fontSize:15, cursor:'pointer', lineHeight:1, flexShrink:0 }}>✕</button>
+                        <button aria-label="Quitar la cita" onClick={() => setCitando(null)} title="Quitar la cita"
+                          style={{ background:'transparent', border:'none', color:C.creamMuted, fontSize:15, cursor:'pointer', lineHeight:1, flexShrink:0 }}>✕</button>
                       </div>
                     )}
                     <textarea ref={taRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
@@ -2987,7 +2990,7 @@ export default function App() {
                           title={conBotones ? 'Enviar con botones' : 'Enviar'}
                           style={{ width:42, height:42, flexShrink:0, border:'none', borderRadius:11, cursor: activo ? 'pointer' : 'default', fontSize: conBotones ? 15 : 17, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s',
                             background: activo ? (conBotones ? '#f59e0b' : C.cream) : C.surface2,
-                            color: activo ? (conBotones ? '#fff' : C.bg) : C.creamFaint,
+                            color: activo ? (conBotones ? '#fff' : C.bg) : C.creamMuted,
                             boxShadow: activo ? (conBotones ? '0 4px 14px rgba(245,158,11,.3)' : `0 4px 14px rgba(244,241,236,.2)`) : 'none' }}>
                           {busy ? '⏳' : (conBotones ? '🔘' : '➤')}
                         </button>
@@ -3007,11 +3010,11 @@ export default function App() {
                     📎
                     {imgFiles.length > 0 && <span style={{ position:'absolute', top:-4, right:-4, width:16, height:16, borderRadius:'50%', background:C.cream, color:C.bg, fontSize:11, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>{imgFiles.length}</span>}
                   </button>
-                  <button onClick={() => setShowCarrusel(true)} title="Enviar productos del catálogo (carrusel)"
+                  <button aria-label="Enviar productos del catálogo (carrusel)" onClick={() => setShowCarrusel(true)} title="Enviar productos del catálogo (carrusel)"
                     style={{ width:42, height:42, flexShrink:0, background:C.surface2, border:`1px solid ${C.border}`, borderRadius:11, cursor:'pointer', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center', color:C.creamDim, transition:'all .15s' }}>🛍️</button>
-                  <button onClick={() => setShowBtnPanel(p=>!p)} title="Botones interactivos"
+                  <button aria-label="Botones interactivos" onClick={() => setShowBtnPanel(p=>!p)} title="Botones interactivos"
                     style={{ width:42, height:42, flexShrink:0, background:showBtnPanel?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${showBtnPanel?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center', color:showBtnPanel?C.cream:C.creamDim, transition:'all .15s' }}>🔘</button>
-                  <button onClick={() => { setShowEmoji(p=>!p); setShowBtnPanel(false) }} title="Emojis"
+                  <button aria-label="Emojis" onClick={() => { setShowEmoji(p=>!p); setShowBtnPanel(false) }} title="Emojis"
                     style={{ width:42, height:42, flexShrink:0, background:showEmoji?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${showEmoji?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:20, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .15s' }}>😊</button>
                 </div>
               </div>
@@ -3020,7 +3023,7 @@ export default function App() {
             <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, position:'relative' }}>
               <button className="mob-ham" onClick={() => setShowSidebar(true)} style={{ position:'absolute', top:14, left:14, background:`rgba(244,241,236,.06)`, border:`1px solid rgba(244,241,236,.15)`, color:C.cream, borderRadius:9, width:38, height:38, cursor:'pointer', fontSize:18, display:'none', alignItems:'center', justifyContent:'center' }}>☰</button>
               <div style={{ fontSize:52, opacity:.05 }}>💬</div>
-              <p style={{ color:C.creamFaint, fontSize:13, fontWeight:700 }}>{loading?'Cargando...':'Selecciona una conversación'}</p>
+              <p style={{ color:C.creamMuted, fontSize:13, fontWeight:700 }}>{loading?'Cargando...':'Selecciona una conversación'}</p>
             </div>
           )}
 
@@ -3044,7 +3047,7 @@ export default function App() {
           {showRight && activeConv && (
             <div className={`right-col${crmEnCajon ? ' crm-abierto' : ''}`}>
               <div style={{ display:'flex', justifyContent:'flex-end', padding:'10px 10px 0' }}>
-                <button onClick={cerrarCajonDerecho} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:17 }}>✕</button>
+                <button onClick={cerrarCajonDerecho} style={{ background:'transparent', border:'none', color:C.creamMuted, cursor:'pointer', fontSize:17 }}>✕</button>
               </div>
               <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} prefillPedido={prefillPedido} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={setHojaEnviando} />
             </div>

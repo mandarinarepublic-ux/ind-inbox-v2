@@ -10,7 +10,7 @@ import { CANALES } from '@/lib/canales'
 const C = {
   bg:'#0A0A0A', surface:'#0D0D0D', surface2:'#111111',
   border:'#1F1F1F', border2:'#2A2A2A',
-  cream:'#F4F1EC', creamDim:'#A09A90', creamFaint:'#3A3530',
+  cream:'#F4F1EC', creamDim:'#A09A90', creamFaint:'#3A3530', creamMuted:'#8a847b',
   green:'#4ade80', amber:'#f59e0b', red:'#ef4444',
 }
 
@@ -205,7 +205,7 @@ export default function Automatizaciones({ active }) {
           </div>
         </div>
 
-        {loading && <div style={{ color: C.creamFaint, fontSize: 13, padding: 20 }}>Cargando…</div>}
+        {loading && <div style={{ color: C.creamMuted, fontSize: 13, padding: 20 }}>Cargando…</div>}
 
         {!loading && config && (<>
 
@@ -422,8 +422,8 @@ export default function Automatizaciones({ active }) {
                             <input value={title} maxLength={20} placeholder={`Botón ${i + 1}`}
                               onChange={e => setBoton(key, t, i, e.target.value)}
                               style={{ ...inputBase, padding: '8px 10px', resize: 'none' }} />
-                            <span style={{ fontSize: 11, color: C.creamFaint, width: 34, textAlign: 'right' }}>{title.length}/20</span>
-                            <button onClick={() => delBoton(key, t, i)} title="Quitar botón"
+                            <span style={{ fontSize: 11, color: C.creamMuted, width: 34, textAlign: 'right' }}>{title.length}/20</span>
+                            <button aria-label="Quitar botón" onClick={() => delBoton(key, t, i)} title="Quitar botón"
                               style={{ background: 'transparent', border: `1px solid ${C.border2}`, color: C.creamDim, borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>✕</button>
                           </div>
                         ))}
@@ -434,7 +434,7 @@ export default function Automatizaciones({ active }) {
                           </button>
                         )}
                         {bs.length > 0 && (
-                          <div style={{ fontSize: 12, color: C.creamFaint, marginTop: 6 }}>
+                          <div style={{ fontSize: 12, color: C.creamMuted, marginTop: 6 }}>
                             Con botones el mensaje sale como interactivo de WhatsApp. La respuesta llega al chat como texto y lo pone en PENDIENTES; ningún botón hace nada solo.
                           </div>
                         )}
@@ -450,7 +450,7 @@ export default function Automatizaciones({ active }) {
             </>)}
           </Card>
 
-          <div style={{ border: `1px dashed ${C.border2}`, borderRadius: 14, padding: 16, textAlign: 'center', color: C.creamFaint, fontSize: 12 }}>
+          <div style={{ border: `1px dashed ${C.border2}`, borderRadius: 14, padding: 16, textAlign: 'center', color: C.creamMuted, fontSize: 12 }}>
             🚧 Aquí iremos sumando más automatizaciones (fuera de horario, etiquetas…).
           </div>
         </>)}
@@ -460,7 +460,7 @@ export default function Automatizaciones({ active }) {
       {!loading && config && (
         <div style={{ position: 'sticky', bottom: 0, left: 0, right: 0, padding: '12px 16px', background: `linear-gradient(180deg, transparent, ${C.bg} 40%)`, display: 'flex', justifyContent: 'center' }}>
           <button onClick={guardar} disabled={!dirty || saving}
-            style={{ padding: '11px 34px', borderRadius: 12, border: 'none', background: dirty ? C.cream : C.border, color: dirty ? C.bg : C.creamFaint, fontWeight: 900, fontSize: 14, cursor: dirty && !saving ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif', minWidth: 200 }}>
+            style={{ padding: '11px 34px', borderRadius: 12, border: 'none', background: dirty ? C.cream : C.border, color: dirty ? C.bg : C.creamMuted, fontWeight: 900, fontSize: 14, cursor: dirty && !saving ? 'pointer' : 'default', fontFamily: 'Outfit,sans-serif', minWidth: 200 }}>
             {saving ? 'Guardando…' : dirty ? 'Guardar cambios' : 'Guardado'}
           </button>
         </div>

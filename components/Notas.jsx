@@ -28,7 +28,7 @@ const ROJO  = '#f87171'
 // Misma paleta que el resto del panel de IND (negro/crema), no la azul de MANDI.
 const C = {
   bg: '#0A0A0A', surface2: '#111111', border: '#1F1F1F', border2: '#2A2A2A',
-  cream: '#F4F1EC', creamDim: '#A09A90', creamFaint: '#3A3530',
+  cream: '#F4F1EC', creamDim: '#A09A90', creamFaint: '#3A3530', creamMuted:'#8a847b',
 }
 
 // El color de la nota según su `tipo` (pago_ok = verde, pago_error = rojo,
@@ -182,7 +182,7 @@ export default function Notas({ telefono, refrescar = 0, onVerPedido }) {
       {cargando ? (
         <div style={{ fontSize: 11, color: C.creamDim, marginTop: 8 }}>Cargando notas...</div>
       ) : notas.length === 0 ? (
-        <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 8 }}>Sin notas todavía.</div>
+        <div style={{ fontSize: 11, color: C.creamMuted, marginTop: 8 }}>Sin notas todavía.</div>
       ) : (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
           {(() => {
@@ -291,7 +291,7 @@ export default function Notas({ telefono, refrescar = 0, onVerPedido }) {
                             </span>
                           ) : (
                             <button onClick={() => setConfirmarBorrar(nota.id)}
-                              style={{ background: 'none', border: 'none', padding: 0, color: C.creamFaint, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Borrar</button>
+                              style={{ background: 'none', border: 'none', padding: 0, color: C.creamMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Borrar</button>
                           )}
                         </div>
                       </>

@@ -459,7 +459,7 @@ function Lienzo({ active }) {
       <div style={{ width: 236, flexShrink: 0, borderRight: `1px solid ${BORDE}`, display: 'flex', flexDirection: 'column', background: '#080f1a' }}>
         <div style={{ padding: '12px 12px 8px', borderBottom: `1px solid ${BORDE}`, display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: '1.4px', color: MORADO }}>🧭 FLUJOS</div>
-          <button onClick={cargarTodo} title="Volver a leer los flujos" style={boton('#64748b')}>↻</button>
+          <button aria-label="Volver a leer los flujos" onClick={cargarTodo} title="Volver a leer los flujos" style={boton('#64748b')}>↻</button>
         </div>
 
         <div style={{ padding: 10, borderBottom: `1px solid ${BORDE}` }}>
@@ -491,7 +491,7 @@ function Lienzo({ active }) {
                 <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{resumenDisparador(f.grafo)}</div>
                 <div style={{ fontSize: 9, color: '#475569', marginTop: 2 }}>{fecha(f.actualizado_at)}</div>
                 <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-                  <button onClick={(e) => { e.stopPropagation(); abrir({ nombre: `${f.nombre} (copia)`, grafo: f.grafo }, { guardado: false }) }}
+                  <button aria-label="Duplicar" onClick={(e) => { e.stopPropagation(); abrir({ nombre: `${f.nombre} (copia)`, grafo: f.grafo }, { guardado: false }) }}
                     title="Duplicar" style={{ ...boton('#64748b'), padding: '3px 8px', fontSize: 10 }}>⧉</button>
                   <button onClick={(e) => { e.stopPropagation(); eliminar(f) }}
                     title={porBorrar === f.flujo_id ? 'Toca otra vez para eliminar' : 'Eliminar'}
@@ -543,8 +543,8 @@ function Lienzo({ active }) {
 
               <div style={{ flex: 1 }} />
 
-              <button onClick={deshacer} disabled={!puedeDeshacer} title="Deshacer (Ctrl+Z)" style={boton('#64748b', puedeDeshacer)}>↶</button>
-              <button onClick={rehacer} disabled={!puedeRehacer} title="Rehacer (Ctrl+Shift+Z)" style={boton('#64748b', puedeRehacer)}>↷</button>
+              <button aria-label="Deshacer (Ctrl+Z)" onClick={deshacer} disabled={!puedeDeshacer} title="Deshacer (Ctrl+Z)" style={boton('#64748b', puedeDeshacer)}>↶</button>
+              <button aria-label="Rehacer (Ctrl+Shift+Z)" onClick={rehacer} disabled={!puedeRehacer} title="Rehacer (Ctrl+Shift+Z)" style={boton('#64748b', puedeRehacer)}>↷</button>
             </div>
 
             {/* Paleta */}

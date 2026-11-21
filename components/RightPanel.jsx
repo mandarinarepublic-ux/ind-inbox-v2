@@ -58,7 +58,7 @@ function PedidoCard({ p, onVer, onEnviar, envio, puedeEnviar }) {
         </div>
       ))}
       {items.length > 4 && (
-        <div style={{ fontSize:11, color:C.creamFaint, marginTop:2 }}>+{items.length - 4} ítem{items.length - 4 === 1 ? '' : 's'} más…</div>
+        <div style={{ fontSize:11, color:C.creamMuted, marginTop:2 }}>+{items.length - 4} ítem{items.length - 4 === 1 ? '' : 's'} más…</div>
       )}
       <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:5, flexWrap:'wrap' }}>
         <span style={{ fontSize:11, fontWeight:800, color:estColor, background:`${estColor}1e`, border:`1px solid ${estColor}44`, borderRadius:5, padding:'1px 6px' }}>{p.estado || '—'}</span>
@@ -71,7 +71,7 @@ function PedidoCard({ p, onVer, onEnviar, envio, puedeEnviar }) {
         {p.id && onEnviar && (
           <button onClick={() => onEnviar(p.id)} disabled={!puedeEnviar || envio?.estado === 'enviando'}
             title={puedeEnviar ? 'Enviar la foto del pedido al cliente' : 'Ventana cerrada o ya hay un envío en curso'}
-            style={{ marginLeft:'auto', background: puedeEnviar ? 'rgba(244,241,236,.1)' : 'transparent', border:`1px solid ${puedeEnviar ? 'rgba(244,241,236,.35)' : C.border}`, borderRadius:5, padding:'1px 7px', fontSize:11, fontWeight:700, color: puedeEnviar ? C.cream : C.creamFaint, cursor: puedeEnviar ? 'pointer' : 'default', fontFamily:'inherit' }}>
+            style={{ marginLeft:'auto', background: puedeEnviar ? 'rgba(244,241,236,.1)' : 'transparent', border:`1px solid ${puedeEnviar ? 'rgba(244,241,236,.35)' : C.border}`, borderRadius:5, padding:'1px 7px', fontSize:11, fontWeight:700, color: puedeEnviar ? C.cream : C.creamMuted, cursor: puedeEnviar ? 'pointer' : 'default', fontFamily:'inherit' }}>
             {envio?.estado === 'enviando' ? '⏳ Enviando…' : '📤 Enviar'}
           </button>
         )}
@@ -154,7 +154,7 @@ function urlsToReply(adjuntos) {
 
 // Las flechitas de mover. Chicas a proposito: comparten los 44px de la
 // miniatura y no pueden competir con ella.
-const FLECHA = { flex:1, height:13, padding:0, background:'transparent', border:`1px solid ${C.border2}`, borderRadius:3, color:C.creamFaint, fontSize:11, lineHeight:1, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center' }
+const FLECHA = { flex:1, height:13, padding:0, background:'transparent', border:`1px solid ${C.border2}`, borderRadius:3, color:C.creamMuted, fontSize:11, lineHeight:1, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center' }
 
 // ── MultiImgEditor — editor de hasta 10 fotos ────────────────────
 // ⚠️ EL ORDEN ES DEL VENDEDOR: cada adjunto nuevo se AGREGA donde se cargó y nunca
@@ -275,7 +275,7 @@ function MultiImgEditor({ urls, onChange }) {
             <>
               <button onClick={() => refs[idx].current?.click()}
                 style={{ width:44, height:44, border:`1px dashed ${C.border2}`, borderRadius:6,
-                  background:'transparent', cursor:'pointer', color:C.creamFaint, fontSize:18, display:'flex',
+                  background:'transparent', cursor:'pointer', color:C.creamMuted, fontSize:18, display:'flex',
                   alignItems:'center', justifyContent:'center', fontFamily:'inherit' }}>
                 {uploading[idx] ? '↑' : '+'}
               </button>
@@ -294,17 +294,17 @@ function MultiImgEditor({ urls, onChange }) {
         {url && urls.length > 1 && (
           <div style={{ display:'flex', gap:2, marginTop:2 }}>
             {idx > 0
-              ? <button onClick={() => mover(idx, -1)} title="Mover un lugar antes" style={FLECHA}>◀</button>
+              ? <button aria-label="Mover un lugar antes" onClick={() => mover(idx, -1)} title="Mover un lugar antes" style={FLECHA}>◀</button>
               : <span style={{ flex:1 }} />}
             {idx < urls.length - 1
-              ? <button onClick={() => mover(idx, +1)} title="Mover un lugar despues" style={FLECHA}>▶</button>
+              ? <button aria-label="Mover un lugar despues" onClick={() => mover(idx, +1)} title="Mover un lugar despues" style={FLECHA}>▶</button>
               : <span style={{ flex:1 }} />}
           </div>
         )}
         </div>
       ))}
       {urls.length > 0 && (
-        <div style={{ width:'100%', fontSize:11, color:C.creamFaint, marginTop:2 }}>
+        <div style={{ width:'100%', fontSize:11, color:C.creamMuted, marginTop:2 }}>
           {urls.length}/{MAX_IMGS} adjuntos · salen en este orden{urls.length > 1 ? ' · ◀ ▶ para mover' : ''}
         </div>
       )}
@@ -351,7 +351,7 @@ function GrupoSelector({ grupo, onChange }) {
             style={{ padding:'3px 8px', borderRadius:12, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
               background: on ? 'rgba(244,241,236,.12)' : 'transparent',
               border: `1px solid ${on ? 'rgba(244,241,236,.4)' : C.border}`,
-              color: on ? C.cream : C.creamFaint }}>
+              color: on ? C.cream : C.creamMuted }}>
             {o.emoji ? `${o.emoji} ` : ''}{o.nombre}
           </button>
         )
@@ -378,7 +378,7 @@ function BotonesEditor({ botones, onChange }) {
 // ── Tarjeta de producto del catálogo (pestaña TIENDA) ────────────
 function ProductCard({ p, sending, windowOpen, onSendFoto, onSendInfo }) {
   const btnOn  = { background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.25)`, color:C.cream }
-  const btnOff = { background:'transparent', border:`1px solid ${C.border}`, color:C.creamFaint }
+  const btnOff = { background:'transparent', border:`1px solid ${C.border}`, color:C.creamMuted }
   return (
     <div style={{ background:`rgba(244,241,236,.02)`, border:`1px solid ${C.border}`, borderRadius:9, overflow:'hidden', display:'flex', flexDirection:'column' }}>
       <div style={{ position:'relative', width:'100%', aspectRatio:'1 / 1', background:C.bg }}>
@@ -394,12 +394,12 @@ function ProductCard({ p, sending, windowOpen, onSendFoto, onSendInfo }) {
           {p.title}
         </span>
         {p.fuente === 'sucursal' ? (
-          <span style={{ fontSize:11, color:C.creamFaint }}>
+          <span style={{ fontSize:11, color:C.creamMuted }}>
             {[p.talla, p.color].filter(Boolean).join(' · ')}{(p.talla || p.color) ? ' · ' : ''}
             <span style={{ color: p.stock > 0 ? '#10b981' : '#f87171', fontWeight:700 }}>{p.stock > 0 ? `${p.stock} en stock` : 'sin stock'}</span>
           </span>
         ) : p.variants?.length > 0 ? (
-          <span style={{ fontSize:11, color:C.creamFaint }}>{p.variants.length} variante{p.variants.length === 1 ? '' : 's'}</span>
+          <span style={{ fontSize:11, color:C.creamMuted }}>{p.variants.length} variante{p.variants.length === 1 ? '' : 's'}</span>
         ) : null}
         <div style={{ display:'flex', gap:3, marginTop:'auto' }}>
           <button onClick={() => onSendFoto(p)} disabled={sending || !windowOpen}
@@ -411,7 +411,7 @@ function ProductCard({ p, sending, windowOpen, onSendFoto, onSendInfo }) {
           <button onClick={() => onSendInfo(p)} disabled={sending || !windowOpen}
             title={windowOpen ? 'Enviar foto + título y precio' : 'Ventana cerrada'}
             style={{ padding:'5px 8px', borderRadius:6, fontSize:11, fontWeight:700, fontFamily:'inherit',
-              cursor: windowOpen && !sending ? 'pointer' : 'default', ...btnOff, color: windowOpen ? C.creamDim : C.creamFaint }}>
+              cursor: windowOpen && !sending ? 'pointer' : 'default', ...btnOff, color: windowOpen ? C.creamDim : C.creamMuted }}>
             {sending === 'info' ? '⏳' : 'ℹ️'}
           </button>
         </div>
@@ -944,17 +944,17 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
               <div style={{ display:'flex', alignItems:'center', gap:4 }}>
                 <span style={{ fontWeight:700, color:C.cream, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{contactName}</span>
                 <button onClick={()=>{setAliasInput(contactInfo?.alias||'');setEditAlias(true)}}
-                  style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:11, padding:0, flexShrink:0 }}>✏️</button>
+                  style={{ background:'transparent', border:'none', color:C.creamMuted, cursor:'pointer', fontSize:11, padding:0, flexShrink:0 }}>✏️</button>
               </div>
             )}
-            <div style={{ fontSize:11, color:C.creamFaint, marginTop:1 }}>{etiquetaTelefono(activeConv.telefono, contactInfo?.username)}</div>
+            <div style={{ fontSize:11, color:C.creamMuted, marginTop:1 }}>{etiquetaTelefono(activeConv.telefono, contactInfo?.username)}</div>
           </div>
         </div>
         <div style={{ marginTop:7, padding:'5px 10px', background:windowOpen?`rgba(244,241,236,.05)`:'rgba(245,158,11,.06)', border:`1px solid ${windowOpen?'rgba(244,241,236,.15)':'rgba(245,158,11,.2)'}`, borderRadius:7, fontSize:12, color:windowOpen?C.cream:'#f59e0b', fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <span>{ventanaPautaHasta?'🎯 Ventana de pauta':windowOpen?'✅ Ventana activa':'⚠️ Ventana cerrada'}</span>
           {ventanaPautaHasta&&<span style={{ fontFamily:'monospace', fontSize:12, color:C.cream }}>hasta {etiquetaVencePauta(ventanaPautaHasta)}</span>}
           {countdown&&windowOpen&&!ventanaPautaHasta&&<span style={{ fontFamily:'monospace', fontSize:12, fontWeight:800, color:parseInt(countdown.split(':')[0])===0&&parseInt(countdown.split(':')[1])<30?'#f87171':C.cream }}>⏱ {countdown}</span>}
-          {!windowOpen&&<span style={{ fontFamily:'monospace', fontSize:12, color:C.creamFaint }}>Expirada</span>}
+          {!windowOpen&&<span style={{ fontFamily:'monospace', fontSize:12, color:C.creamMuted }}>Expirada</span>}
         </div>
       </div>
       )}
@@ -968,7 +968,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
               style={{
                 flex:1, padding:'10px 4px 8px', background: active ? 'rgba(244,241,236,.05)' : 'transparent',
                 border:'none', borderBottom: active ? `2px solid ${C.cream}` : '2px solid transparent',
-                color: active ? C.cream : C.creamFaint, fontSize:12, fontWeight:800, cursor:'pointer',
+                color: active ? C.cream : C.creamMuted, fontSize:12, fontWeight:800, cursor:'pointer',
                 fontFamily:'inherit', display:'flex', flexDirection:'column', alignItems:'center', gap:2,
                 transition:'all .15s', letterSpacing:'.02em',
               }}>
@@ -987,11 +987,11 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
           <>
             {/* Cabecera FIJA: se queda arriba mientras bajas por la lista. */}
             <div style={{ position:'sticky', top:0, zIndex:2, padding:'10px 12px 8px', marginBottom:6, background:C.surface, borderBottom:`1px solid ${C.border}` }}>
-              <p style={{ fontSize:11, color:C.creamFaint, fontWeight:700, letterSpacing:'.08em', display:'flex', alignItems:'center', gap:5, margin:0 }}>
+              <p style={{ fontSize:11, color:C.creamMuted, fontWeight:700, letterSpacing:'.08em', display:'flex', alignItems:'center', gap:5, margin:0 }}>
                 ⚡ RESPUESTAS RÁPIDAS
-                {!repliesLoaded&&<span style={{ fontSize:11, color:C.creamFaint }}>cargando...</span>}
+                {!repliesLoaded&&<span style={{ fontSize:11, color:C.creamMuted }}>cargando...</span>}
                 {repliesLoaded&&<span style={{ fontSize:11, background:`rgba(244,241,236,.06)`, color:C.creamDim, borderRadius:10, padding:'1px 5px' }}>{replies.length}</span>}
-                <span onClick={() => setRepliesLoaded(false)} title="Recargar" style={{ marginLeft:'auto', color:C.creamFaint, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
+                <span onClick={() => setRepliesLoaded(false)} title="Recargar" style={{ marginLeft:'auto', color:C.creamMuted, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
               </p>
               {/* 🔎 Buscador: filtra dentro del botón elegido; los conteos dicen dónde hay. */}
               <div style={{ position:'relative', marginTop:8 }}>
@@ -1000,7 +1000,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                   placeholder="🔎 Buscar respuesta…" enterKeyHint="search"
                   style={{ width:'100%', boxSizing:'border-box', background:C.surface2, border:`1px solid ${C.border2}`, borderRadius:8, color:C.cream, fontSize:12, padding:'6px 26px 6px 9px', outline:'none', fontFamily:'inherit' }} />
                 {buscarResp && (
-                  <button onClick={() => setBuscarResp('')} title="Borrar búsqueda"
+                  <button aria-label="Borrar búsqueda" onClick={() => setBuscarResp('')} title="Borrar búsqueda"
                     style={{ position:'absolute', right:4, top:'50%', transform:'translateY(-50%)', background:'transparent', border:'none', color:C.creamDim, fontSize:12, cursor:'pointer', padding:'2px 5px' }}>✕</button>
                 )}
               </div>
@@ -1042,7 +1042,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                       <div style={{ background:`rgba(244,241,236,.03)`, border:`1px solid ${C.cream}`, borderRadius:9, padding:'8px', marginBottom:2 }}>
                         <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={4} placeholder="Texto..."
                           style={{ width:'100%', ...inputBase, border:`1px solid ${C.cream}`, resize:'vertical', marginBottom:5, whiteSpace:'pre-wrap', minHeight:80 }} />
-                        <p style={{ fontSize:11, color:C.creamFaint, marginBottom:3 }}>Adjuntos ({editImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
+                        <p style={{ fontSize:11, color:C.creamMuted, marginBottom:3 }}>Adjuntos ({editImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
                         <MultiImgEditor urls={editImgUrls} onChange={setEditImgUrls} />
                         {editCarrusel.length === 0 && <BotonesEditor botones={editBotones} onChange={setEditBotones} />}
                         <CarruselEditor productos={editCarrusel} hayBotones={editBotones.some(b => b.trim())} onElegir={() => setEligiendo('edit')} onQuitar={() => setEditCarrusel([])} />
@@ -1094,16 +1094,16 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                           <div className="rr-acciones" style={{ display:'flex', gap:2, flexShrink:0 }}>
                             <button onClick={() => reordenar(idx, arriba)} disabled={arriba < 0 || hayAltaPendiente}
                               title={hayAltaPendiente ? 'Espera a que se confirme el alta pendiente' : 'Subir'}
-                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (arriba < 0 || hayAltaPendiente) ? C.creamFaint : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:11, cursor: (arriba < 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↑</button>
+                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (arriba < 0 || hayAltaPendiente) ? C.creamMuted : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:11, cursor: (arriba < 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↑</button>
                             <button onClick={() => reordenar(idx, abajo)} disabled={abajo < 0 || hayAltaPendiente}
                               title={hayAltaPendiente ? 'Espera a que se confirme el alta pendiente' : 'Bajar'}
-                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (abajo < 0 || hayAltaPendiente) ? C.creamFaint : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:11, cursor: (abajo < 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↓</button>
+                              style={{ background:'transparent', border:`1px solid ${C.border}`, color: (abajo < 0 || hayAltaPendiente) ? C.creamMuted : C.creamDim, borderRadius:5, padding:'0 3px', height:20, fontSize:11, cursor: (abajo < 0 || hayAltaPendiente) ? 'default' : 'pointer', fontFamily:'inherit' }}>↓</button>
                             <button onClick={()=>handleSendQuick(idx)} disabled={!!sending[idx]||!windowOpen}
                               style={{ ...btnBase, background:`rgba(244,241,236,.1)`, border:`1px solid rgba(244,241,236,.2)`, color:C.cream, borderRadius:5, minWidth:20, height:20, padding:'0 3px', cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center' }}>
                               {sending[idx] || '➤'}
                             </button>
-                            <button onClick={()=>startEdit(idx)} disabled={guardando} title={guardando ? 'Espera a que se confirme el alta' : undefined} style={{ background:'transparent', border:'none', color:C.creamFaint, cursor: guardando ? 'default' : 'pointer', fontSize:11, padding:'0 2px' }}>✏️</button>
-                            <button className="rr-borrar" onClick={()=>deleteReply(idx)} title="Borrar respuesta" style={{ background:'transparent', border:'none', color:C.creamFaint, cursor:'pointer', fontSize:11, padding:'0 2px' }}>🗑️</button>
+                            <button onClick={()=>startEdit(idx)} disabled={guardando} title={guardando ? 'Espera a que se confirme el alta' : undefined} style={{ background:'transparent', border:'none', color:C.creamMuted, cursor: guardando ? 'default' : 'pointer', fontSize:11, padding:'0 2px' }}>✏️</button>
+                            <button aria-label="Borrar respuesta" className="rr-borrar" onClick={()=>deleteReply(idx)} title="Borrar respuesta" style={{ background:'transparent', border:'none', color:C.creamMuted, cursor:'pointer', fontSize:11, padding:'0 2px' }}>🗑️</button>
                           </div>
                         </div>
                       </div>
@@ -1126,17 +1126,17 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
 
             {/* Nueva respuesta */}
             <div style={{ margin:'8px 12px 14px', background:`rgba(244,241,236,.02)`, border:`1px dashed ${C.border2}`, borderRadius:8, padding:'8px' }}>
-              <p style={{ fontSize:11, color:C.creamFaint, fontWeight:700, letterSpacing:'.06em', marginBottom:5 }}>+ NUEVA</p>
+              <p style={{ fontSize:11, color:C.creamMuted, fontWeight:700, letterSpacing:'.06em', marginBottom:5 }}>+ NUEVA</p>
               <textarea value={newText} onChange={e=>setNewText(e.target.value)} placeholder="Texto..." rows={2}
                 style={{ width:'100%', ...inputBase, fontSize:12, padding:'5px 7px', resize:'none', marginBottom:5, whiteSpace:'pre-wrap' }}
                 onFocus={e=>e.target.style.borderColor=C.cream} onBlur={e=>e.target.style.borderColor=C.border} />
-              <p style={{ fontSize:11, color:C.creamFaint, marginBottom:3 }}>Adjuntos ({newImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
+              <p style={{ fontSize:11, color:C.creamMuted, marginBottom:3 }}>Adjuntos ({newImgUrls.length}/{MAX_IMGS}) — fotos y audios, en orden</p>
               <MultiImgEditor urls={newImgUrls} onChange={setNewImgUrls} />
               {newCarrusel.length === 0 && <BotonesEditor botones={newBotones} onChange={setNewBotones} />}
               <CarruselEditor productos={newCarrusel} hayBotones={newBotones.some(b => b.trim())} onElegir={() => setEligiendo('new')} onQuitar={() => setNewCarrusel([])} />
               <GrupoSelector grupo={newGrupo} onChange={setNewGrupo} />
               <button onClick={addReply} disabled={!newText.trim()}
-                style={{ ...btnBase, width:'100%', marginTop:7, padding:'6px', background:newText.trim()?`rgba(244,241,236,.1)`:'transparent', border:`1px solid ${newText.trim()?'rgba(244,241,236,.25)':C.border}`, color:newText.trim()?C.cream:C.creamFaint, borderRadius:7, fontSize:12, fontWeight:600, cursor:newText.trim()?'pointer':'default' }}>
+                style={{ ...btnBase, width:'100%', marginTop:7, padding:'6px', background:newText.trim()?`rgba(244,241,236,.1)`:'transparent', border:`1px solid ${newText.trim()?'rgba(244,241,236,.25)':C.border}`, color:newText.trim()?C.cream:C.creamMuted, borderRadius:7, fontSize:12, fontWeight:600, cursor:newText.trim()?'pointer':'default' }}>
                 + Agregar
               </button>
             </div>
@@ -1438,7 +1438,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                       style={{ flexShrink:0, padding:'7px 10px', borderRadius:7, fontSize:12, fontWeight:700, fontFamily:'inherit', background:'transparent', border:`1px solid ${C.border}`, color:C.creamDim, cursor:'pointer' }}>
                       📋 Copiar
                     </button>
-                    <button onClick={() => setLinkListo(null)} title="Cerrar"
+                    <button aria-label="Cerrar" onClick={() => setLinkListo(null)} title="Cerrar"
                       style={{ flexShrink:0, padding:'7px 8px', borderRadius:7, fontSize:12, background:'transparent', border:`1px solid ${C.border}`, color:C.creamDim, cursor:'pointer' }}>✕</button>
                   </div>
                   {!windowOpen && <div style={{ marginTop:6, fontSize:11, color:'#f59e0b' }}>Ventana de 24 h cerrada: este texto no se puede mandar suelto.</div>}
@@ -1526,25 +1526,25 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                       style={{ flex:1, padding:'6px 8px', borderRadius:8, fontSize:12, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
                         border:`1px solid ${on ? 'rgba(244,241,236,.5)' : C.border}`,
                         background: on ? 'rgba(244,241,236,.1)' : 'transparent',
-                        color: on ? C.cream : C.creamFaint, transition:'all .15s' }}>
+                        color: on ? C.cream : C.creamMuted, transition:'all .15s' }}>
                       {f.icon} {f.label}
                     </button>
                   )
                 })}
               </div>
               <div style={{ position:'relative' }}>
-                <span style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', fontSize:12, color:C.creamFaint }}>🔍</span>
+                <span style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', fontSize:12, color:C.creamMuted }}>🔍</span>
                 <input value={prodQuery} onChange={e => setProdQuery(e.target.value)} placeholder="Buscar producto…"
                   style={{ width:'100%', ...inputBase, fontSize:12, padding:'7px 28px' }}
                   onFocus={e => e.target.style.borderColor=C.cream} onBlur={e => e.target.style.borderColor=C.border} />
                 {prodQuery && (
-                  <button onClick={() => setProdQuery('')} style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:'transparent', border:'none', color:C.creamFaint, fontSize:12, cursor:'pointer', padding:'2px 4px' }}>✕</button>
+                  <button onClick={() => setProdQuery('')} style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:'transparent', border:'none', color:C.creamMuted, fontSize:12, cursor:'pointer', padding:'2px 4px' }}>✕</button>
                 )}
               </div>
               {productos !== null && (
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
-                  <span style={{ fontSize:11, color:C.creamFaint }}>{productosFiltrados.length} producto{productosFiltrados.length === 1 ? '' : 's'}</span>
-                  <span onClick={() => setProdCache(prev => { const n = { ...prev }; delete n[fuente]; return n })} title="Recargar catálogo" style={{ marginLeft:'auto', color:C.creamFaint, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
+                  <span style={{ fontSize:11, color:C.creamMuted }}>{productosFiltrados.length} producto{productosFiltrados.length === 1 ? '' : 's'}</span>
+                  <span onClick={() => setProdCache(prev => { const n = { ...prev }; delete n[fuente]; return n })} title="Recargar catálogo" style={{ marginLeft:'auto', color:C.creamMuted, fontSize:12, cursor:'pointer', padding:'0 2px', lineHeight:1 }}>🔄</span>
                 </div>
               )}
             </div>
