@@ -91,7 +91,7 @@ function groupByConversation(rows) {
 function ChannelBadge({ channel }) {
   const meta = CHANNEL_META[channel] || CHANNEL_META.FB
   return (
-    <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'1px 6px', borderRadius:5, fontSize:10, fontWeight:700, background: meta.bg, color: meta.color }}>
+    <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'1px 6px', borderRadius:5, fontSize:11, fontWeight:700, background: meta.bg, color: meta.color }}>
       {meta.icon} {channel}
     </span>
   )
@@ -100,7 +100,7 @@ function ChannelBadge({ channel }) {
 function StatusBadge({ status }) {
   const s = STATUS_COLORS[status] || STATUS_COLORS.PENDIENTE
   return (
-    <span style={{ padding:'1px 6px', borderRadius:5, fontSize:9, fontWeight:700, background: s.bg, color: s.color }}>
+    <span style={{ padding:'1px 6px', borderRadius:5, fontSize:11, fontWeight:700, background: s.bg, color: s.color }}>
       {status}
     </span>
   )
@@ -114,7 +114,7 @@ function SocialAvatar({ name, channel }) {
       <div style={{ width:40, height:40, borderRadius:'50%', background: meta.color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:14, fontWeight:700 }}>
         {initials || '?'}
       </div>
-      <div style={{ position:'absolute', bottom:-1, right:-1, width:16, height:16, borderRadius:'50%', background: meta.color, border:'2px solid #0d1520', display:'flex', alignItems:'center', justifyContent:'center', fontSize:8 }}>
+      <div style={{ position:'absolute', bottom:-1, right:-1, width:16, height:16, borderRadius:'50%', background: meta.color, border:'2px solid #0d1520', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>
         {meta.icon}
       </div>
     </div>
@@ -135,18 +135,18 @@ function ConvRow({ conv, isActive, onClick }) {
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:'flex', justifyContent:'space-between', marginBottom:2 }}>
           <span style={{ fontSize:13, fontWeight:700, color:'#e2e8f0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:130 }}>{conv.nombre}</span>
-          <span style={{ fontSize:9, color:'#334155', flexShrink:0 }}>{conv.last_time ? new Date(conv.last_time).toLocaleTimeString('es-EC', { hour:'2-digit', minute:'2-digit' }) : ''}</span>
+          <span style={{ fontSize:11, color:'#334155', flexShrink:0 }}>{conv.last_time ? new Date(conv.last_time).toLocaleTimeString('es-EC', { hour:'2-digit', minute:'2-digit' }) : ''}</span>
         </div>
         <div style={{ display:'flex', gap:4, marginBottom:3 }}>
           <ChannelBadge channel={conv.canal} />
           <StatusBadge status={conv.status} />
         </div>
-        <div style={{ fontSize:11, color:'#334155', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+        <div style={{ fontSize:12, color:'#334155', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
           {conv.messages[conv.messages.length - 1]?.text || '—'}
         </div>
       </div>
       {conv.unread > 0 && (
-        <span style={{ flexShrink:0, width:18, height:18, borderRadius:'50%', background:'#f59e0b', color:'#000', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>{conv.unread}</span>
+        <span style={{ flexShrink:0, width:18, height:18, borderRadius:'50%', background:'#f59e0b', color:'#000', fontSize:11, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>{conv.unread}</span>
       )}
     </button>
   )
@@ -165,10 +165,10 @@ function MsgBubble({ msg, channel }) {
         fontSize:13, lineHeight:1.5,
         border: isUser ? '1px solid #1e2d3d' : 'none',
       }}>
-        {isMandi && <div style={{ fontSize:9, fontWeight:700, opacity:.75, marginBottom:3 }}>🍊 MANDI</div>}
+        {isMandi && <div style={{ fontSize:11, fontWeight:700, opacity:.75, marginBottom:3 }}>🍊 MANDI</div>}
         <div>{msg.text}</div>
         {msg.time && (
-          <div style={{ fontSize:9, opacity:.5, marginTop:4, textAlign:'right' }}>
+          <div style={{ fontSize:11, opacity:.5, marginTop:4, textAlign:'right' }}>
             {new Date(msg.time).toLocaleTimeString('es-EC', { hour:'2-digit', minute:'2-digit' })}
           </div>
         )}
@@ -266,7 +266,7 @@ export default function SocialInbox({ active: isVisible }) {
             <div style={{ width:36, height:36, borderRadius:10, background:'linear-gradient(135deg,#1877F2,#E1306C)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>🌐</div>
             <div>
               <div style={{ fontSize:13, fontWeight:800, color:'#e2e8f0' }}>Social Inbox</div>
-              <div style={{ fontSize:10, color:'#25d366', display:'flex', alignItems:'center', gap:3 }}>
+              <div style={{ fontSize:11, color:'#25d366', display:'flex', alignItems:'center', gap:3 }}>
                 <span style={{ width:5, height:5, borderRadius:'50%', background:'#25d366', display:'inline-block' }} />
                 {loading ? 'Cargando...' : `${convs.length} conversaciones`}
               </div>
@@ -276,7 +276,7 @@ export default function SocialInbox({ active: isVisible }) {
           <div style={{ display:'flex', gap:3, flexWrap:'wrap' }}>
             {FILTERS.map(f => (
               <button key={f} onClick={() => setFilter(f)} style={{
-                padding:'3px 8px', fontSize:9, fontWeight:700, borderRadius:6, cursor:'pointer',
+                padding:'3px 8px', fontSize:11, fontWeight:700, borderRadius:6, cursor:'pointer',
                 background: filter === f ? 'rgba(37,211,102,.15)' : 'transparent',
                 border: `1px solid ${filter === f ? 'rgba(37,211,102,.4)' : '#1a2d40'}`,
                 color: filter === f ? '#25d366' : '#334155',
@@ -300,7 +300,7 @@ export default function SocialInbox({ active: isVisible }) {
 
         {/* Footer sync */}
         <div style={{ padding:'7px 14px', borderTop:'1px solid #162030', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
-          <span style={{ fontSize:10, color:'#334155' }}>{lastSync ? 'Sync ' + lastSync.toLocaleTimeString('es-EC', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '—'}</span>
+          <span style={{ fontSize:11, color:'#334155' }}>{lastSync ? 'Sync ' + lastSync.toLocaleTimeString('es-EC', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '—'}</span>
           <button onClick={load} style={{ background:'rgba(37,211,102,.1)', border:'1px solid rgba(37,211,102,.25)', color:'#25d366', borderRadius:7, width:28, height:28, cursor:'pointer', fontSize:14, display:'flex', alignItems:'center', justifyContent:'center' }}>↻</button>
         </div>
       </div>
@@ -316,7 +316,7 @@ export default function SocialInbox({ active: isVisible }) {
                 <span style={{ fontSize:14, fontWeight:800, color:'#e2e8f0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{selectedConv.nombre}</span>
                 <ChannelBadge channel={selectedConv.canal} />
               </div>
-              <div style={{ fontSize:10, color:'#475569' }}>{CHANNEL_META[selectedConv.canal]?.label} · {selectedConv.sender_id}</div>
+              <div style={{ fontSize:11, color:'#475569' }}>{CHANNEL_META[selectedConv.canal]?.label} · {selectedConv.sender_id}</div>
             </div>
             <div style={{ display:'flex', gap:4, flexShrink:0 }}>
               {['PENDIENTE','VENTAPROCESO','ATENDIDO','ARCHIVADO'].map(s => {
@@ -324,7 +324,7 @@ export default function SocialInbox({ active: isVisible }) {
                 const isActive = selectedConv.status === s
                 return (
                   <button key={s} title={s} style={{
-                    padding:'3px 6px', fontSize:8, fontWeight:700, borderRadius:5, cursor:'pointer',
+                    padding:'3px 6px', fontSize:11, fontWeight:700, borderRadius:5, cursor:'pointer',
                     background: isActive ? sc.bg : 'transparent',
                     border: `1px solid ${isActive ? sc.color + '60' : '#1a2d40'}`,
                     color: isActive ? sc.color : '#334155',
@@ -338,7 +338,7 @@ export default function SocialInbox({ active: isVisible }) {
           {/* Mensajes */}
           <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
             <div style={{ textAlign:'center', marginBottom:16 }}>
-              <span style={{ fontSize:10, background: CHANNEL_META[selectedConv.canal]?.bg, color: CHANNEL_META[selectedConv.canal]?.color, padding:'3px 10px', borderRadius:20, fontWeight:700 }}>
+              <span style={{ fontSize:11, background: CHANNEL_META[selectedConv.canal]?.bg, color: CHANNEL_META[selectedConv.canal]?.color, padding:'3px 10px', borderRadius:20, fontWeight:700 }}>
                 {CHANNEL_META[selectedConv.canal]?.icon} Conversación de {CHANNEL_META[selectedConv.canal]?.label}
               </span>
             </div>
@@ -367,7 +367,7 @@ export default function SocialInbox({ active: isVisible }) {
                 color:'#fff', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .2s',
               }}>{sending ? '⏳' : '➤'}</button>
             </div>
-            <div style={{ fontSize:9, color:'#2a3f55', marginTop:4, textAlign:'right' }}>Enter · Shift+Enter nueva línea</div>
+            <div style={{ fontSize:11, color:'#2a3f55', marginTop:4, textAlign:'right' }}>Enter · Shift+Enter nueva línea</div>
           </div>
         </div>
       ) : (
@@ -375,7 +375,7 @@ export default function SocialInbox({ active: isVisible }) {
           <div style={{ textAlign:'center', color:'#1e2d3d' }}>
             <div style={{ fontSize:48, marginBottom:12 }}>🌐</div>
             <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>Social Inbox</div>
-            <div style={{ fontSize:11 }}>Selecciona una conversación de FB o IG</div>
+            <div style={{ fontSize:12 }}>Selecciona una conversación de FB o IG</div>
           </div>
         </div>
       )}

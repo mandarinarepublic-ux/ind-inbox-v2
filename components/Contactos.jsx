@@ -36,7 +36,7 @@ function render(txt, params = []) {
 function Badge24h({ on }) {
   return (
     <span style={{
-      fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
+      fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
       background: on ? 'rgba(74,222,128,.1)' : 'rgba(160,154,144,.08)',
       color: on ? C.green : C.creamDim,
       border: `1px solid ${on ? 'rgba(74,222,128,.28)' : 'rgba(160,154,144,.2)'}`,
@@ -86,7 +86,7 @@ export default function Contactos({ active, onOpenChat }) {
       <div style={{ padding: '16px 16px 10px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ fontSize: 19, fontWeight: 900, color: C.cream }}>👥 Contactos</div>
-          <div style={{ fontSize: 11, color: C.creamDim }}>
+          <div style={{ fontSize: 12, color: C.creamDim }}>
             {contactos.length} en total · <b style={{ color: C.green }}>{dentro24h}</b> dentro de 24h
           </div>
         </div>
@@ -112,10 +112,10 @@ export default function Contactos({ active, onOpenChat }) {
               background: C.surface, color: C.cream, fontWeight: 800, fontSize: 15, border: `1px solid ${C.border2}`,
             }}>{(c.nombre || c.telefono || '?').trim().charAt(0).toUpperCase()}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.cream, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.cream, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {c.nombre || c.alias || c.telefono}
               </div>
-              <div style={{ fontSize: 11, color: C.creamDim, marginTop: 1 }}>
+              <div style={{ fontSize: 12, color: C.creamDim, marginTop: 1 }}>
                 {soloDig(c.telefono)} · {hace(c.ultimoEntranteAt)}
               </div>
             </div>
@@ -123,7 +123,7 @@ export default function Contactos({ active, onOpenChat }) {
           </button>
         ))}
         {!loading && contactos.length > 400 && !search && (
-          <div style={{ color: C.creamFaint, fontSize: 11, padding: '12px 16px', textAlign: 'center' }}>
+          <div style={{ color: C.creamFaint, fontSize: 12, padding: '12px 16px', textAlign: 'center' }}>
             Mostrando los 400 más recientes · usa el buscador para el resto
           </div>
         )}
@@ -197,7 +197,7 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: C.creamDim, marginBottom: 8 }}>¿Por cuál número le escribes?</div>
           {opciones.length === 0 && (
-            <div style={{ fontSize: 12.5, color: C.creamFaint, padding: '10px 12px', borderRadius: 10, border: `1px dashed ${C.border2}` }}>
+            <div style={{ fontSize: 13, color: C.creamFaint, padding: '10px 12px', borderRadius: 10, border: `1px dashed ${C.border2}` }}>
               No hay números configurados.
             </div>
           )}
@@ -212,7 +212,7 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
                 color: C.cream, fontFamily: 'Outfit,sans-serif',
               }}>
                 <span style={{ fontSize: 13, opacity: sel ? 1 : .45 }}>{sel ? '◉' : '○'}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 800, flex: 1 }}>{o.etiqueta}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, flex: 1 }}>{o.etiqueta}</span>
                 <Badge24h on={o.dentro24h} />
               </button>
             )
@@ -220,14 +220,14 @@ function PanelContacto({ contacto: c, onClose, onOpenChat, flash }) {
           {opciones.length > 0 && !canalSel && (
             // Sin preseleccionado = no sabemos por dónde escribió. Que elija a
             // propósito es justo lo que impide un envío que muere en Meta.
-            <div style={{ fontSize: 11.5, color: C.amber, marginTop: 6 }}>
+            <div style={{ fontSize: 12, color: C.amber, marginTop: 6 }}>
               Este contacto no ha escrito por ninguno de los dos. Elige uno para escribirle por plantilla.
             </div>
           )}
         </div>
 
         <button onClick={() => { onOpenChat?.(c.telefono); onClose() }}
-          style={{ width: '100%', padding: '11px', borderRadius: 11, border: `1px solid ${C.border2}`, marginBottom: 16, background: C.surface2, color: C.cream, fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: 'Outfit,sans-serif' }}>💬 Abrir la conversación</button>
+          style={{ width: '100%', padding: '11px', borderRadius: 11, border: `1px solid ${C.border2}`, marginBottom: 16, background: C.surface2, color: C.cream, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Outfit,sans-serif' }}>💬 Abrir la conversación</button>
 
         {abierta ? (
           <div>
@@ -324,23 +324,23 @@ function SelectorPlantilla({ contacto: c, flash, onClose, onCarrusel }) {
 
   return (
     <div>
-      <div style={{ fontSize: 11.5, color: C.amber, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 9, padding: '8px 10px', marginBottom: 12, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 12, color: C.amber, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 9, padding: '8px 10px', marginBottom: 12, lineHeight: 1.4 }}>
         ⚠️ Pasaron más de 24h desde su último mensaje. WhatsApp solo permite enviar una <b>plantilla aprobada</b>.
       </div>
 
       {estado === 'loading' && <div style={{ color: C.creamFaint, fontSize: 13 }}>Cargando plantillas…</div>}
 
       {estado === 'needsEnv' && (
-        <div style={{ color: C.creamDim, fontSize: 12.5, lineHeight: 1.5 }}>
+        <div style={{ color: C.creamDim, fontSize: 13, lineHeight: 1.5 }}>
           Falta configurar <b style={{ color: C.cream }}>{error}</b> para listar tus plantillas.
           {error === 'META_WABA_ID' && ' Es el ID de tu cuenta de WhatsApp Business (no el phone id).'}
         </div>
       )}
 
-      {estado === 'error' && <div style={{ color: '#f87171', fontSize: 12.5 }}>Error: {error}</div>}
+      {estado === 'error' && <div style={{ color: '#f87171', fontSize: 13 }}>Error: {error}</div>}
 
       {estado === 'ready' && tpls.length === 0 && (
-        <div style={{ color: C.creamDim, fontSize: 12.5, lineHeight: 1.5 }}>
+        <div style={{ color: C.creamDim, fontSize: 13, lineHeight: 1.5 }}>
           No hay plantillas aprobadas todavía. Crea una en Meta (WhatsApp Manager → Plantillas) para poder escribir fuera de 24h.
         </div>
       )}
@@ -357,8 +357,8 @@ function SelectorPlantilla({ contacto: c, flash, onClose, onCarrusel }) {
               width: '100%', textAlign: 'left', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10,
               padding: '10px 12px', marginBottom: 8, cursor: 'pointer',
             }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.cream }}>{t.carrusel ? '🛍️ ' : ''}{t.name} <span style={{ fontSize: 10, color: C.creamFaint }}>· {t.language}{t.carrusel ? ' · carrusel: eliges los productos' : ''}</span></div>
-              <div style={{ fontSize: 11.5, color: C.creamDim, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.bodyText}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.cream }}>{t.carrusel ? '🛍️ ' : ''}{t.name} <span style={{ fontSize: 11, color: C.creamFaint }}>· {t.language}{t.carrusel ? ' · carrusel: eliges los productos' : ''}</span></div>
+              <div style={{ fontSize: 12, color: C.creamDim, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.bodyText}</div>
             </button>
           ))}
         </div>
@@ -370,25 +370,25 @@ function SelectorPlantilla({ contacto: c, flash, onClose, onCarrusel }) {
           <div style={{ fontSize: 13, fontWeight: 800, color: C.cream, marginBottom: 8 }}>{chosen.name}</div>
 
           {chosen.header?.format === 'IMAGE' && (
-            <><div style={{ fontSize: 11, color: C.creamDim, marginBottom: 4 }}>URL de la imagen del encabezado</div>
+            <><div style={{ fontSize: 12, color: C.creamDim, marginBottom: 4 }}>URL de la imagen del encabezado</div>
               <input value={headImg} onChange={e => setHeadImg(e.target.value)} placeholder="https://…" style={inp} /></>
           )}
           {headP.map((v, i) => (
             <div key={`h${i}`}>
-              <div style={{ fontSize: 11, color: C.creamDim, marginBottom: 4 }}>Encabezado · variable {i + 1}</div>
+              <div style={{ fontSize: 12, color: C.creamDim, marginBottom: 4 }}>Encabezado · variable {i + 1}</div>
               <input value={v} onChange={e => setHeadP(p => p.map((x, j) => j === i ? e.target.value : x))} style={inp} />
             </div>
           ))}
           {bodyP.map((v, i) => (
             <div key={`b${i}`}>
-              <div style={{ fontSize: 11, color: C.creamDim, marginBottom: 4 }}>Variable {'{{'}{i + 1}{'}}'}</div>
+              <div style={{ fontSize: 12, color: C.creamDim, marginBottom: 4 }}>Variable {'{{'}{i + 1}{'}}'}</div>
               <input value={v} onChange={e => setBodyP(p => p.map((x, j) => j === i ? e.target.value : x))} style={inp} />
             </div>
           ))}
 
           {chosen.bodyText && (
             <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', margin: '4px 0 12px' }}>
-              <div style={{ fontSize: 10, color: C.creamFaint, fontWeight: 800, marginBottom: 4 }}>VISTA PREVIA</div>
+              <div style={{ fontSize: 11, color: C.creamFaint, fontWeight: 800, marginBottom: 4 }}>VISTA PREVIA</div>
               <div style={{ fontSize: 13, color: C.cream, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{preview}</div>
             </div>
           )}

@@ -106,7 +106,7 @@ function BotonEje({ on, color, onClick, title, icon, label }) {
       borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
       boxShadow: on ? `0 0 8px ${color}44` : 'none',
     }}>
-      <span className="hide-mobile" style={{ fontSize:10 }}>{icon} {label}</span>
+      <span className="hide-mobile" style={{ fontSize:11 }}>{icon} {label}</span>
       {/* En el celular no hay "pasar el mouse" para ver el title: el nombre va
           debajo del emoji, si no hay que saberse los botones de memoria. */}
       <span className="show-mobile eje-mob">
@@ -2347,7 +2347,7 @@ export default function App() {
         <button onClick={() => window.location.reload()} title="Hay una versión nueva del inbox. Se recarga sola cuando cierres el chat; o toca para recargar ya." style={{
           position:'fixed', bottom:10, left:10, zIndex:9999, background:'rgba(255,255,255,.08)',
           color:'#f5efe6', border:'1px solid rgba(245,239,230,.25)', borderRadius:14,
-          padding:'3px 10px', fontWeight:600, fontSize:11, cursor:'pointer', fontFamily:'inherit',
+          padding:'3px 10px', fontWeight:600, fontSize:12, cursor:'pointer', fontFamily:'inherit',
         }}>🔄 versión nueva</button>
       )}
       <style>{`
@@ -2395,7 +2395,7 @@ export default function App() {
           /* Cabecera en 2 filas: info arriba, acciones en tira scrollable abajo
              (evita que los botones se envuelvan y se tapen entre sí en móvil). */
           .chat-header-left{ flex:1 1 100% !important; }
-          .ia-toggle{ padding:5px 9px !important; font-size:10px !important; }
+          .ia-toggle{ padding:5px 9px !important; font-size:11px !important; }
           .chat-actions{ flex:1 1 100% !important; flex-wrap:nowrap !important; overflow-x:auto; justify-content:flex-start !important; padding-bottom:2px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
           .chat-actions::-webkit-scrollbar{ display:none; }
           .chat-actions > *{ flex-shrink:0 !important; }
@@ -2406,15 +2406,15 @@ export default function App() {
           .tab-selector > button{ flex:1 1 0 !important; min-width:0 !important; padding:3px 2px !important; position:relative; justify-content:center; letter-spacing:0 !important; }
           .tab-par{ display:flex; flex-direction:column; align-items:center; line-height:1.15; min-width:0; max-width:100%; }
           .tab-ico{ font-size:15px; }
-          .tab-lbl{ font-size:8.5px; letter-spacing:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
-          .tab-badge{ position:absolute; top:2px; right:3px; min-width:14px !important; height:14px !important; font-size:8px !important; padding:0 3px !important; }
+          .tab-lbl{ font-size:11px; letter-spacing:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+          .tab-badge{ position:absolute; top:0; right:1px; min-width:16px !important; height:16px !important; font-size:11px !important; line-height:16px !important; padding:0 3px !important; }
           /* ☰ volver a la lista: medía 22×20. */
           .chat-header .mob-ham{ min-width:40px; min-height:40px; font-size:24px !important; align-items:center; justify-content:center; }
           .panel-mob{ display:flex !important; }
           /* Botones de la cabecera del chat: emoji + nombre debajo, 40px de alto. */
           .chat-actions > button{ min-height:40px; }
           .eje-mob{ display:inline-flex !important; flex-direction:column; align-items:center; gap:2px; }
-          .eje-mob-lbl{ font-size:8.5px; font-weight:700; white-space:nowrap; max-width:60px; overflow:hidden; text-overflow:ellipsis; }
+          .eje-mob-lbl{ font-size:11px; font-weight:700; white-space:nowrap; max-width:60px; overflow:hidden; text-overflow:ellipsis; }
           /* Filtros: en la compu se ven todos; en el celular, detrás de un botón. */
           .filtros-toggle{ display:flex !important; }
           .filtros-extra{ display:none; }
@@ -2451,7 +2451,7 @@ export default function App() {
             (celular) se cortan POR LOS DOS LADOS y lo de la izquierda queda fuera de
             alcance — el logo y el 3326 quedaban en x = -94, imposibles de tocar. */}
         <div className="tab-selector" style={{ display:'flex', justifyContent:'safe center', alignItems:'center', gap:12, flexShrink:0, height:42, background:C.bg, borderBottom:`1px solid ${C.border}`, zIndex:200, overflowX:'auto' }}>
-          <div className="tab-logo" style={{ width:26, height:26, background:C.cream, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:900, color:C.bg, letterSpacing:'-0.5px', flexShrink:0 }}>IND</div>
+          <div className="tab-logo" style={{ width:26, height:26, background:C.cream, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:900, color:C.bg, letterSpacing:'-0.5px', flexShrink:0 }}>IND</div>
           {/* Un botón por número + las vistas de siempre. El chat NO se duplica:
               es el mismo panel, solo cambia el canal que se está atendiendo. */}
           {CANALES.map((c) => {
@@ -2464,7 +2464,7 @@ export default function App() {
                 background: activo ? 'rgba(244,241,236,.1)' : 'transparent',
                 borderTop:'2px solid transparent',
                 borderBottom: activo ? `2px solid ${C.cream}` : '2px solid transparent',
-                color: activo ? C.cream : C.creamFaint, fontWeight:800, fontSize:11, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
+                color: activo ? C.cream : C.creamFaint, fontWeight:800, fontSize:12, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
               }}>
                 {/* Ícono y nombre por separado: en el celular van uno ENCIMA del
                     otro y el contador flota en la esquina (ver CSS .tab-ico). */}
@@ -2475,7 +2475,7 @@ export default function App() {
                   <span className="tab-badge" style={{
                     background:'#f87171', color:'#fff', borderRadius:9, minWidth:17, height:17,
                     display:'inline-flex', alignItems:'center', justifyContent:'center',
-                    fontSize:9.5, fontWeight:900, padding:'0 5px', letterSpacing:0,
+                    fontSize:11, fontWeight:900, padding:'0 5px', letterSpacing:0,
                   }}>{n}</span>
                 )}
               </button>
@@ -2492,7 +2492,7 @@ export default function App() {
               background: vista===id ? 'rgba(244,241,236,.1)' : 'transparent',
               borderTop:'2px solid transparent',
               borderBottom: vista===id ? `2px solid ${C.cream}` : '2px solid transparent',
-              color: vista===id ? C.cream : C.creamFaint, fontWeight:800, fontSize:11, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
+              color: vista===id ? C.cream : C.creamFaint, fontWeight:800, fontSize:12, letterSpacing:'1px', fontFamily:'inherit', transition:'all .2s',
             }}><span className="tab-par"><span className="tab-ico">{icon}</span> <span className="tab-lbl">{label}</span></span></button>
           ))}
         </div>
@@ -2505,10 +2505,10 @@ export default function App() {
               {/* Header IND */}
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-                  <div style={{ width:36, height:36, borderRadius:10, background:C.cream, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:900, color:C.bg, letterSpacing:'-0.5px', boxShadow:'0 4px 16px rgba(244,241,236,.15)' }}>IND</div>
+                  <div style={{ width:36, height:36, borderRadius:10, background:C.cream, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:900, color:C.bg, letterSpacing:'-0.5px', boxShadow:'0 4px 16px rgba(244,241,236,.15)' }}>IND</div>
                   <div>
                     <div style={{ fontSize:13, fontWeight:800, color:C.cream }}>INDLOVERS CHAT</div>
-                    <div style={{ fontSize:10, fontWeight:700, color:C.creamDim, display:'flex', alignItems:'center', gap:3, marginTop:1 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:C.creamDim, display:'flex', alignItems:'center', gap:3, marginTop:1 }}>
                       <span style={{ animation:'pulse 2s infinite', display:'inline-block', width:5, height:5, borderRadius:'50%', background:'#4ade80' }} />
                       {`En vivo · ${totalPendientes} pendiente${totalPendientes === 1 ? '' : 's'}`}
                     </div>
@@ -2530,7 +2530,7 @@ export default function App() {
               <div style={{ display:'flex', gap:4, marginBottom:10 }}>
                 {[{ key:'contacto', label:'👤 Contactos' }, { key:'mensaje', label:'💬 Mensajes' }].map(({ key, label }) => (
                   <button key={key} onClick={() => setSearchMode(key)} style={{
-                    flex:1, padding:'5px 2px', fontSize:10, fontWeight:700, borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
+                    flex:1, padding:'5px 2px', fontSize:11, fontWeight:700, borderRadius:7, cursor:'pointer', fontFamily:'inherit', transition:'all .15s',
                     background: searchMode===key ? 'rgba(96,165,250,.15)' : 'transparent',
                     border: `1px solid ${searchMode===key ? 'rgba(96,165,250,.45)' : C.border}`,
                     color: searchMode===key ? '#60a5fa' : C.creamFaint,
@@ -2543,7 +2543,7 @@ export default function App() {
               {/* ⇅ Orden de 🔴 (lib/filtro-chats.js) — solo en esa bandeja */}
               {filtro.bandeja === 'pendiente' && !isSearching && (
                 <button onClick={alternarOrdenPend} title="Cambiar el orden de Pendientes"
-                  style={{ width:'100%', marginTop:8, padding:'5px 8px', fontSize:10, fontWeight:700, background:'transparent', border:`1px solid ${C.border}`, color:C.creamFaint, borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>
+                  style={{ width:'100%', marginTop:8, padding:'5px 8px', fontSize:11, fontWeight:700, background:'transparent', border:`1px solid ${C.border}`, color:C.creamFaint, borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>
                   ⇅ {pendNuevosArriba ? 'Más nuevos arriba' : 'Más antiguos arriba'}
                 </button>
               )}
@@ -2552,11 +2552,11 @@ export default function App() {
             <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
               {loading ? (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:48, gap:12 }}>
-                  <Spinner size={24} /><span style={{ fontSize:11, color:C.creamFaint }}>Cargando...</span>
+                  <Spinner size={24} /><span style={{ fontSize:12, color:C.creamFaint }}>Cargando...</span>
                 </div>
               ) : buscando ? (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:48, gap:12 }}>
-                  <Spinner size={20} /><span style={{ fontSize:11, color:C.creamFaint }}>Buscando en todo el historial...</span>
+                  <Spinner size={20} /><span style={{ fontSize:12, color:C.creamFaint }}>Buscando en todo el historial...</span>
                 </div>
               ) : filtered.length === 0 ? (
                 <div style={{ padding:28, textAlign:'center', color:C.creamFaint, fontSize:12 }}>
@@ -2564,7 +2564,7 @@ export default function App() {
                 </div>
               ) : (<>
                 {isSearching && (
-                  <div style={{ padding:'8px 16px 4px', fontSize:10, fontWeight:800, letterSpacing:'.06em', color:C.creamDim }}>
+                  <div style={{ padding:'8px 16px 4px', fontSize:11, fontWeight:800, letterSpacing:'.06em', color:C.creamDim }}>
                     {filtered.length} {searchingMsgs ? (filtered.length===1?'CHAT CON':'CHATS CON') : `RESULTADO${filtered.length===1?'':'S'}`}{searchingMsgs ? ' ESE MENSAJE' : ' · TODAS LAS BANDEJAS'}
                   </div>
                 )}
@@ -2586,7 +2586,7 @@ export default function App() {
                   <button onClick={() => setTope(t => t + 200)} style={{
                     width:'100%', padding:'12px 16px', background:'transparent',
                     border:'none', borderTop:`1px solid ${C.borderFaint}`,
-                    color:C.creamDim, fontSize:11.5, fontWeight:700, cursor:'pointer',
+                    color:C.creamDim, fontSize:12, fontWeight:700, cursor:'pointer',
                     fontFamily:'Outfit,sans-serif',
                   }}>
                     Mostrando {tope} de {filtered.length} · ver 200 más
@@ -2603,7 +2603,7 @@ export default function App() {
                   de actualizarse se ve idéntica a una al día. */}
               {pausado ? (
                 <span style={{
-                  fontSize:10, fontWeight:600, cursor:'pointer',
+                  fontSize:11, fontWeight:600, cursor:'pointer',
                   color: novedadEnPausa ? '#f0b429' : '#b98f4a',
                 }}>
                   {novedadEnPausa
@@ -2611,7 +2611,7 @@ export default function App() {
                     : '⏸ En pausa por inactividad — toca para reanudar'}
                 </span>
               ) : (
-                <span style={{ fontSize:10, color:C.creamFaint }}>{lastSync?'Sync '+lastSync.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—'}</span>
+                <span style={{ fontSize:11, color:C.creamFaint }}>{lastSync?'Sync '+lastSync.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—'}</span>
               )}
               <button onClick={() => window.location.reload()} style={{ background:`rgba(244,241,236,.06)`, border:`1px solid rgba(244,241,236,.15)`, color:C.cream, borderRadius:7, width:30, height:30, cursor:'pointer', fontSize:15, display:'flex', alignItems:'center', justifyContent:'center' }}>↻</button>
             </div>
@@ -2632,7 +2632,7 @@ export default function App() {
                 }}>
                   <div style={{ fontSize:44 }}>📥</div>
                   <div style={{ color:C.cream, fontWeight:800, fontSize:15 }}>Suelta la foto acá</div>
-                  <div style={{ color:C.creamDim, fontSize:11 }}>imágenes o un video · también funciona Ctrl+V</div>
+                  <div style={{ color:C.creamDim, fontSize:12 }}>imágenes o un video · también funciona Ctrl+V</div>
                 </div>
               )}
               {/* Header chat */}
@@ -2659,7 +2659,7 @@ export default function App() {
                     return (
                       <button className="ia-toggle" onClick={handleToggleIA} disabled={togglingIA} aria-pressed={iaOn}
                         title={motivoIA ? `${motivoIA.largo} (toca para apagarla en este chat)` : iaOn ? 'La IA está respondiendo este chat — toca para APAGARLA' : 'La IA no responde este chat — toca para PRENDERLA'}
-                        style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, padding:'6px 11px', borderRadius:20, cursor: togglingIA ? 'default' : 'pointer', fontFamily:'inherit', fontWeight:800, fontSize:11, whiteSpace:'nowrap', border:`2px ${motivoIA ? 'dashed' : 'solid'} ${iaOn ? '#f59e0b' : C.creamFaint}`, background: iaOn ? 'rgba(245,158,11,.16)' : 'rgba(244,241,236,.06)', color: iaOn ? '#fbbf24' : C.cream, boxShadow: iaOn ? '0 0 10px rgba(245,158,11,.3)' : 'none', transition:'all .2s', opacity: togglingIA ? .6 : 1, marginLeft:'auto' }}>
+                        style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, padding:'6px 11px', borderRadius:20, cursor: togglingIA ? 'default' : 'pointer', fontFamily:'inherit', fontWeight:800, fontSize:12, whiteSpace:'nowrap', border:`2px ${motivoIA ? 'dashed' : 'solid'} ${iaOn ? '#f59e0b' : C.creamFaint}`, background: iaOn ? 'rgba(245,158,11,.16)' : 'rgba(244,241,236,.06)', color: iaOn ? '#fbbf24' : C.cream, boxShadow: iaOn ? '0 0 10px rgba(245,158,11,.3)' : 'none', transition:'all .2s', opacity: togglingIA ? .6 : 1, marginLeft:'auto' }}>
                         <span style={{ width:9, height:9, borderRadius:'50%', flexShrink:0, background: iaOn ? '#f59e0b' : C.creamDim, animation: iaOn ? 'pulse 2s infinite' : 'none' }}/>
                         <span>🤖 {togglingIA ? '…' : iaOn ? <>IA <b>PRENDIDA</b>{motivoIA ? ' ⚠️' : ''}</> : <>IA <b>APAGADA</b></>}</span>
                       </button>
@@ -2750,7 +2750,7 @@ export default function App() {
                 {/* ⚠️ Que se VEA que está trayendo historial. Sin aviso, subir en
                     un chat largo se siente como que la pantalla se trabó. */}
                 {cargandoMas && (
-                  <div style={{ textAlign:'center', padding:'10px 0', fontSize:11, color:C.creamFaint }}>
+                  <div style={{ textAlign:'center', padding:'10px 0', fontSize:12, color:C.creamFaint }}>
                     Trayendo mensajes anteriores…
                   </div>
                 )}
@@ -2774,7 +2774,7 @@ export default function App() {
                         <div style={{ display:'flex', alignItems:'center', gap:10, margin:'14px 0 8px' }}>
                           <div style={{ flex:1, height:1, background:C.border2 }} />
                           <button onClick={() => alternarMes(`${claveChat}|${t.clave}`)}
-                            style={{ background:C.surface2, border:`1px solid ${C.border2}`, color:C.cream, borderRadius:20, padding:'4px 14px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                            style={{ background:C.surface2, border:`1px solid ${C.border2}`, color:C.cream, borderRadius:20, padding:'4px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
                             {estaAbierto ? '▴ Ocultar' : '▾ Mostrar'} {t.nombre} · {t.msgs.length} {t.msgs.length === 1 ? 'mensaje' : 'mensajes'}
                           </button>
                           <div style={{ flex:1, height:1, background:C.border2 }} />
@@ -2786,7 +2786,7 @@ export default function App() {
                     <div key={msg.id} data-salto={claveSalto(msg.id)}>
                       {showDate && (
                         <div style={{ display:'flex', justifyContent:'center', margin:'12px 0 8px' }}>
-                          <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:11, color:C.creamFaint }}>{fmtDate(msg.timestamp)}</span>
+                          <span style={{ background:`rgba(244,241,236,.04)`, borderRadius:20, padding:'3px 14px', fontSize:12, color:C.creamFaint }}>{fmtDate(msg.timestamp)}</span>
                         </div>
                       )}
                       <MessageBubble msg={msg} allMsgs={activeConv.msgs} onResponder={responderA} onAbrirChat={openConv} onReenviar={setReenviando}
@@ -2832,7 +2832,7 @@ export default function App() {
               <div className="input-bar" style={{ position:'relative' }}>
                 {enPauta && (
                   <div title="El cliente llegó de un anuncio: Meta deja escribirle texto libre y gratis hasta que vence esta ventana, aunque ya pasaron 24 h."
-                    style={{ marginBottom:8, padding:'6px 12px', background:'rgba(244,241,236,.05)', border:'1px solid rgba(244,241,236,.15)', borderRadius:8, fontSize:11, color:C.cream, textAlign:'center' }}>
+                    style={{ marginBottom:8, padding:'6px 12px', background:'rgba(244,241,236,.05)', border:'1px solid rgba(244,241,236,.15)', borderRadius:8, fontSize:12, color:C.cream, textAlign:'center' }}>
                     🎯 Ventana de pauta — puedes escribirle gratis hasta el <b>{etiquetaVencePauta(activeConv?.pautaVenceEn)}</b>
                   </div>
                 )}
@@ -2840,16 +2840,16 @@ export default function App() {
                     el CRM por un pedido web sin pagar nace sin ningún entrante, y
                     justo ahí la plantilla es la única forma de escribirle. */}
                 {!windowOpen && activeConv?.msgs?.length > 0 && (
-                  <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)', borderRadius:8, fontSize:11, color:'#fbbf24', display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexWrap:'wrap' }}>
+                  <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)', borderRadius:8, fontSize:12, color:'#fbbf24', display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexWrap:'wrap' }}>
                     <span>⚠️ Ventana de 24h cerrada — solo plantilla</span>
-                    <button onClick={() => setShowTplModal(true)} style={{ background:C.cream, border:'none', color:C.bg, fontWeight:800, fontSize:11, padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>📋 Enviar plantilla</button>
+                    <button onClick={() => setShowTplModal(true)} style={{ background:C.cream, border:'none', color:C.bg, fontWeight:800, fontSize:12, padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit' }}>📋 Enviar plantilla</button>
                   </div>
                 )}
                 {/* Aviso de los adjuntos: lo que se pegó no servía, o ya no cabe
                     más. Va acá arriba, pegado a la caja, porque es la respuesta a
                     un Ctrl+V que si no se queda mudo. */}
                 {avisoAdjunto && (
-                  <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.25)', borderRadius:8, fontSize:11, color:'#fbbf24', display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{ marginBottom:8, padding:'7px 12px', background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.25)', borderRadius:8, fontSize:12, color:'#fbbf24', display:'flex', alignItems:'center', gap:8 }}>
                     <span style={{ flex:1 }}>{avisoAdjunto}</span>
                     <button onClick={() => avisarAdjunto('')} title="Cerrar"
                       style={{ background:'transparent', border:'none', color:'#a16207', fontSize:13, cursor:'pointer', lineHeight:1, flexShrink:0 }}>✕</button>
@@ -2880,13 +2880,13 @@ export default function App() {
                           {/* Botón eliminar individual */}
                           {!imgUploading && !imgResult && (
                             <button onClick={() => setImgFiles(prev => prev.filter((_,j) => j!==i))}
-                              style={{ position:'absolute', top:-4, right:-4, width:16, height:16, borderRadius:'50%', background:'#f87171', border:'none', color:'#fff', fontSize:9, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>✕</button>
+                              style={{ position:'absolute', top:-4, right:-4, width:16, height:16, borderRadius:'50%', background:'#f87171', border:'none', color:'#fff', fontSize:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>✕</button>
                           )}
                         </div>
                       ))}
                     </div>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                      <span style={{ fontSize:10, color:C.creamFaint }}>
+                      <span style={{ fontSize:11, color:C.creamFaint }}>
                         {imgUploading
                           ? `Enviando ${imgProgress}/${imgFiles.length}...`
                           : imgResult
@@ -2901,10 +2901,10 @@ export default function App() {
                       {!imgResult && (
                         <div style={{ display:'flex', gap:5 }}>
                           <button onClick={handleSendImage} disabled={imgUploading||!windowOpen}
-                            style={{ padding:'5px 10px', background:imgUploading?C.surface2:C.cream, border:'none', borderRadius:7, color:imgUploading?C.creamFaint:C.bg, fontSize:11, fontWeight:700, cursor:imgUploading?'default':'pointer', fontFamily:'inherit' }}>
+                            style={{ padding:'5px 10px', background:imgUploading?C.surface2:C.cream, border:'none', borderRadius:7, color:imgUploading?C.creamFaint:C.bg, fontSize:12, fontWeight:700, cursor:imgUploading?'default':'pointer', fontFamily:'inherit' }}>
                             {imgUploading?'⏳':'📤 Enviar'}
                           </button>
-                          <button onClick={cancelImage} style={{ padding:'5px 8px', background:'transparent', border:`1px solid ${C.border2}`, borderRadius:7, color:C.creamFaint, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>✕</button>
+                          <button onClick={cancelImage} style={{ padding:'5px 8px', background:'transparent', border:`1px solid ${C.border2}`, borderRadius:7, color:C.creamFaint, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>✕</button>
                         </div>
                       )}
                     </div>
@@ -2922,21 +2922,21 @@ export default function App() {
 
                   {showBtnPanel && (
                     <div style={{ position:'absolute', bottom:'100%', left:16, right:16, marginBottom:8, padding:'10px 12px', background:C.surface2, border:`1px solid rgba(244,241,236,.2)`, borderRadius:12, zIndex:50 }}>
-                      <div style={{ fontSize:10, color:C.cream, fontWeight:700, marginBottom:7, letterSpacing:'.06em' }}>🔘 BOTONES INTERACTIVOS</div>
+                      <div style={{ fontSize:11, color:C.cream, fontWeight:700, marginBottom:7, letterSpacing:'.06em' }}>🔘 BOTONES INTERACTIVOS</div>
                       {btnTexts.map((txt,i) => (
                         <div key={i} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
-                          <span style={{ fontSize:10, color:C.creamFaint, width:12, flexShrink:0 }}>{i+1}.</span>
+                          <span style={{ fontSize:11, color:C.creamFaint, width:12, flexShrink:0 }}>{i+1}.</span>
                           <input value={txt} onChange={e => setBtnTexts(prev=>prev.map((v,j)=>j===i?e.target.value:v))} placeholder={`Botón ${i+1}`} maxLength={20}
-                            style={{ flex:1, background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 9px', color:C.cream, fontSize:11, outline:'none', fontFamily:'inherit' }}
+                            style={{ flex:1, background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 9px', color:C.cream, fontSize:12, outline:'none', fontFamily:'inherit' }}
                             onFocus={e=>e.target.style.borderColor=C.cream} onBlur={e=>e.target.style.borderColor=C.border} />
                         </div>
                       ))}
                       {btnTexts.some(t=>t.trim()) && !input.trim() ? (
-                        <div style={{ marginTop:5, padding:'5px 9px', background:'rgba(245,158,11,.14)', border:'1px solid rgba(245,158,11,.35)', borderRadius:7, fontSize:10, color:'#f59e0b', fontWeight:600 }}>
+                        <div style={{ marginTop:5, padding:'5px 9px', background:'rgba(245,158,11,.14)', border:'1px solid rgba(245,158,11,.35)', borderRadius:7, fontSize:11, color:'#f59e0b', fontWeight:600 }}>
                           ⚠️ Falta escribir el mensaje (va arriba de los botones) — luego dale a ➤
                         </div>
                       ) : (
-                        <div style={{ fontSize:9, color:C.creamFaint, marginTop:3 }}>Escribe el mensaje abajo y dale a enviar · Máx 3 botones</div>
+                        <div style={{ fontSize:11, color:C.creamFaint, marginTop:3 }}>Escribe el mensaje abajo y dale a enviar · Máx 3 botones</div>
                       )}
                     </div>
                   )}
@@ -2950,10 +2950,10 @@ export default function App() {
                         borderRadius:'0 8px 8px 0', padding:'5px 10px',
                       }}>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:10, fontWeight:700, color:'#f59e0b' }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:'#f59e0b' }}>
                             Respondiendo a {citando.direccion === 'SALIENTE' ? 'ti' : (activeConv?.nombre || citando.telefono)}
                           </div>
-                          <div style={{ fontSize:11, color:C.creamDim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          <div style={{ fontSize:12, color:C.creamDim, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                             {citando.mensaje || `[${citando.tipo || 'archivo'}]`}
                           </div>
                         </div>
@@ -3001,7 +3001,7 @@ export default function App() {
                   <button onClick={() => fileRef.current?.click()} title="Adjuntar imagen o video — también puedes pegar con Ctrl+V o arrastrar la foto al chat"
                     style={{ width:42, height:42, flexShrink:0, background:imgFiles.length?`rgba(244,241,236,.1)`:C.surface2, border:`1px solid ${imgFiles.length?'rgba(244,241,236,.3)':C.border}`, borderRadius:11, cursor:'pointer', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center', color:imgFiles.length?C.cream:C.creamDim, transition:'all .15s', position:'relative' }}>
                     📎
-                    {imgFiles.length > 0 && <span style={{ position:'absolute', top:-4, right:-4, width:16, height:16, borderRadius:'50%', background:C.cream, color:C.bg, fontSize:8, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>{imgFiles.length}</span>}
+                    {imgFiles.length > 0 && <span style={{ position:'absolute', top:-4, right:-4, width:16, height:16, borderRadius:'50%', background:C.cream, color:C.bg, fontSize:11, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>{imgFiles.length}</span>}
                   </button>
                   <button onClick={() => setShowCarrusel(true)} title="Enviar productos del catálogo (carrusel)"
                     style={{ width:42, height:42, flexShrink:0, background:C.surface2, border:`1px solid ${C.border}`, borderRadius:11, cursor:'pointer', fontSize:17, display:'flex', alignItems:'center', justifyContent:'center', color:C.creamDim, transition:'all .15s' }}>🛍️</button>
@@ -3086,7 +3086,7 @@ export default function App() {
           }}>
             <div style={{ padding:'12px 14px', borderBottom:`1px solid ${C.border}` }}>
               <div style={{ fontSize:13, fontWeight:800, color:C.cream }}>↪ Reenviar a otro chat</div>
-              <div style={{ fontSize:11, color:'#94a3b8', marginTop:3, wordBreak:'break-word' }}>{resumenDeReenvio(reenviando)}</div>
+              <div style={{ fontSize:12, color:'#94a3b8', marginTop:3, wordBreak:'break-word' }}>{resumenDeReenvio(reenviando)}</div>
             </div>
             <div style={{ padding:10, borderBottom:`1px solid ${C.border}` }}>
               <input autoFocus value={buscaReenvio} onChange={(e) => setBuscaReenvio(e.target.value)}
@@ -3109,7 +3109,7 @@ export default function App() {
                     cursor: d.puede && !reenviandoAhora ? 'pointer' : 'not-allowed', fontFamily:'inherit', fontSize:12, fontWeight:700,
                   }}>
                   <span>{d.nombre}</span>
-                  <span style={{ display:'block', fontSize:10, fontWeight:600, color:'#64748b', marginTop:2 }}>
+                  <span style={{ display:'block', fontSize:11, fontWeight:600, color:'#64748b', marginTop:2 }}>
                     {d.puede ? d.telefono : `${d.telefono} · ${d.motivo}`}
                   </span>
                 </button>

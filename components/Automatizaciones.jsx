@@ -219,7 +219,7 @@ export default function Automatizaciones({ active }) {
                   ningún flujo manda nada, sin tener que despublicarlos uno por uno.
                 </div>
                 {!flujosOn && (
-                  <div style={{ fontSize: 11, fontWeight: 700, marginTop: 4, color: C.red }}>⛔ APAGADOS — ningún flujo está mandando nada</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: C.red }}>⛔ APAGADOS — ningún flujo está mandando nada</div>
                 )}
               </div>
               <Switch on={flujosOn} onClick={() => togFlujos(!flujosOn)} />
@@ -246,8 +246,8 @@ export default function Automatizaciones({ active }) {
                 }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 13, color: C.cream }}>{c.etiqueta}</div>
-                    <div style={{ fontSize: 11, color: C.creamDim }}>{c.titulo}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, color: on ? C.green : C.red }}>
+                    <div style={{ fontSize: 12, color: C.creamDim }}>{c.titulo}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2, color: on ? C.green : C.red }}>
                       {/* "on" solo dice que ESTE candado no está bloqueando. No es
                           prueba de que el bot esté respondiendo: puede seguir mudo
                           por el interruptor maestro, por el modo del chat, o porque
@@ -262,7 +262,7 @@ export default function Automatizaciones({ active }) {
                 </div>
               )
             })}
-            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 12, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: C.creamDim, marginTop: 12, lineHeight: 1.5 }}>
               ⚠️ Ojo: esto NO es el único interruptor del bot. Hay otro más general,
               aparte de esta pantalla, que puede tener al bot completamente callado en
               los dos números a la vez. Apagar aquí SÍ detiene el bot en ese número,
@@ -332,23 +332,23 @@ export default function Automatizaciones({ active }) {
             {/* Horarios editables */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 4 }}>
               {[0, 1, 2].map(i => (
-                <label key={i} style={{ fontSize: 11, color: C.creamDim }}>
+                <label key={i} style={{ fontSize: 12, color: C.creamDim }}>
                   Toque {i + 1}: a las
                   <input type="number" min={1} max={167} value={(rc.horas || [3, 12, 20])[i] ?? ''} onChange={e => setHoraToque(i, e.target.value)} style={{ ...inputNum, margin: '0 6px' }} />
                   h de su último mensaje
                 </label>
               ))}
-              <label style={{ fontSize: 11, color: C.creamDim }}>
+              <label style={{ fontSize: 12, color: C.creamDim }}>
                 Esperar al menos
                 <input type="number" min={1} max={12} value={rc.silencio_min_h ?? 3} onChange={e => setCampoReact('silencio_min_h', Number(e.target.value))} style={{ ...inputNum, margin: '0 6px' }} />
                 h desde que escribió el vendedor
               </label>
-              <label style={{ fontSize: 11, color: C.creamDim }}>
+              <label style={{ fontSize: 12, color: C.creamDim }}>
                 Separar los toques
                 <input type="number" min={2} max={12} value={rc.entre_toques_h ?? 4} onChange={e => setCampoReact('entre_toques_h', Number(e.target.value))} style={{ ...inputNum, margin: '0 6px' }} />
                 h como mínimo
               </label>
-              <label style={{ fontSize: 11, color: C.creamDim }}>
+              <label style={{ fontSize: 12, color: C.creamDim }}>
                 Solo entre las
                 <input type="number" min={6} max={12} value={rc.hora_desde ?? 8} onChange={e => setCampoReact('hora_desde', Number(e.target.value))} style={{ ...inputNum, margin: '0 6px' }} />
                 y las
@@ -356,21 +356,21 @@ export default function Automatizaciones({ active }) {
                 h (Ecuador)
               </label>
             </div>
-            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 6 }}>Límites de seguridad: nunca antes de las 06:00 ni después de las 22:00, y nunca más de 3 toques por ventana. Deja un texto vacío para no mandar ese toque.</div>
-            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 4 }}>🎯 Un toque a <b style={{ color: C.cream }}>24 h o más</b> (hasta 167 h = 7 días) solo le llega a quien vino de un <b style={{ color: C.cream }}>anuncio</b> y mientras su ventana de pauta siga abierta. A los demás se les salta.</div>
+            <div style={{ fontSize: 12, color: C.creamDim, marginTop: 6 }}>Límites de seguridad: nunca antes de las 06:00 ni después de las 22:00, y nunca más de 3 toques por ventana. Deja un texto vacío para no mandar ese toque.</div>
+            <div style={{ fontSize: 12, color: C.creamDim, marginTop: 4 }}>🎯 Un toque a <b style={{ color: C.cream }}>24 h o más</b> (hasta 167 h = 7 días) solo le llega a quien vino de un <b style={{ color: C.cream }}>anuncio</b> y mientras su ventana de pauta siga abierta. A los demás se les salta.</div>
             {[...(rc.incluir_sin_etapa ? [['pregunto', '❓ Solo preguntó']] : []), ['cotizando', '💬 Cotizando'], ['esperando_pago', '💳 Esperando pago']].map(([etapa, titulo]) => (
               <div key={etapa} style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: C.cream, marginBottom: 6 }}>{titulo}</div>
                 {(rc.horas || [3, 12, 20]).map((h, i) => (
                   <div key={i} style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 11, color: C.creamDim, marginBottom: 3 }}>Toque {i + 1} · a las {h} h</div>
+                    <div style={{ fontSize: 12, color: C.creamDim, marginBottom: 3 }}>Toque {i + 1} · a las {h} h</div>
                     <textarea value={((rc.textos || {})[etapa] || [])[i] || ''} onChange={e => setTextoReact(etapa, i, e.target.value)}
                       rows={2} style={{ ...inputBase, resize: 'vertical' }} />
                   </div>
                 ))}
               </div>
             ))}
-            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 6 }}>Los textos se guardan con el botón Guardar de abajo.</div>
+            <div style={{ fontSize: 12, color: C.creamDim, marginTop: 6 }}>Los textos se guardan con el botón Guardar de abajo.</div>
           </Card>
 
           {/* ── ENCUESTA a chats callados (cron cada hora) ── */}
@@ -396,7 +396,7 @@ export default function Automatizaciones({ active }) {
                       <span style={{ fontSize: 18 }}>{icon}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 800, color: t.activo ? color : C.creamDim }}>{label}</div>
-                        <div style={{ fontSize: 11, color: C.creamDim, marginTop: 2 }}>{ayuda}</div>
+                        <div style={{ fontSize: 12, color: C.creamDim, marginTop: 2 }}>{ayuda}</div>
                       </div>
                       <Switch on={!!t.activo} onClick={() => togSegT(key, !t.activo, t)} />
                     </div>
@@ -414,7 +414,7 @@ export default function Automatizaciones({ active }) {
                       {/* Botones de respuesta rápida (opcionales). Lo que el cliente
                           toque entra al chat como texto y lo devuelve a PENDIENTES. */}
                       <div style={{ marginTop: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: C.creamDim, marginBottom: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.creamDim, marginBottom: 6 }}>
                           🔘 Botones de respuesta (opcional, máx 3 · 20 letras c/u)
                         </div>
                         {bs.map((title, i) => (
@@ -422,7 +422,7 @@ export default function Automatizaciones({ active }) {
                             <input value={title} maxLength={20} placeholder={`Botón ${i + 1}`}
                               onChange={e => setBoton(key, t, i, e.target.value)}
                               style={{ ...inputBase, padding: '8px 10px', resize: 'none' }} />
-                            <span style={{ fontSize: 10, color: C.creamFaint, width: 34, textAlign: 'right' }}>{title.length}/20</span>
+                            <span style={{ fontSize: 11, color: C.creamFaint, width: 34, textAlign: 'right' }}>{title.length}/20</span>
                             <button onClick={() => delBoton(key, t, i)} title="Quitar botón"
                               style={{ background: 'transparent', border: `1px solid ${C.border2}`, color: C.creamDim, borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>✕</button>
                           </div>
@@ -434,7 +434,7 @@ export default function Automatizaciones({ active }) {
                           </button>
                         )}
                         {bs.length > 0 && (
-                          <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 6 }}>
+                          <div style={{ fontSize: 12, color: C.creamFaint, marginTop: 6 }}>
                             Con botones el mensaje sale como interactivo de WhatsApp. La respuesta llega al chat como texto y lo pone en PENDIENTES; ningún botón hace nada solo.
                           </div>
                         )}
@@ -444,7 +444,7 @@ export default function Automatizaciones({ active }) {
                 )
               })}
 
-              <div style={{ fontSize: 11, color: C.creamDim, marginTop: 4, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: C.creamDim, marginTop: 4, lineHeight: 1.5 }}>
                 ⚠️ Pasadas las 24h la ventana se cierra y ya no se envía gratis (reenganche por plantilla = próximamente). El cron corre cada hora en punto.
               </div>
             </>)}

@@ -74,7 +74,7 @@ export function StatusPill({ estado }) {
   const s = map[estado] || map.leido
   return (
     <span style={{
-      fontSize: 10, fontWeight: 700, padding: '2px 7px',
+      fontSize: 11, fontWeight: 700, padding: '2px 7px',
       borderRadius: 20, background: s.bg, color: s.color,
     }}>{s.label}</span>
   )
@@ -84,7 +84,7 @@ export function StatusPill({ estado }) {
 // sent → ✓ gris · delivered → ✓✓ gris · read → ✓✓ azul · failed → ⚠ rojo.
 export function Ticks({ estado }) {
   if (estado === 'failed') {
-    return <span title="No se pudo entregar" style={{ fontSize: 11, color: '#f87171', fontWeight: 700 }}>⚠</span>
+    return <span title="No se pudo entregar" style={{ fontSize: 12, color: '#f87171', fontWeight: 700 }}>⚠</span>
   }
   const doble = estado === 'read' || estado === 'delivered'
   const azul  = estado === 'read'
@@ -133,7 +133,7 @@ function IABadge({ modoIA }) {
       title={ia ? 'IA atendiendo' : 'Atiende un humano'}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-        fontSize: 9, fontWeight: 800, letterSpacing: '.04em', lineHeight: 1,
+        fontSize: 11, fontWeight: 800, letterSpacing: '.04em', lineHeight: 1,
         color: c, background: `${c}1e`, border: `1px solid ${c}55`,
         borderRadius: 20, padding: '2px 6px',
       }}
@@ -145,13 +145,16 @@ function IABadge({ modoIA }) {
 
 // Marcas de gestión de la fila (bandeja/temperatura/etapa/📌/pedido…). Las arma
 // lib/gestion.js `chipsDeChat`; acá solo se pintan.
-function FilaChips({ chips }) {
-  if (!chips?.length) return null
+// `delante`: el 🧑/🤖, que antes iba junto al nombre y lo dejaba cortado
+// (20-nov-2026, al subir la letra a un tamaño legible).
+function FilaChips({ chips, delante = null }) {
+  if (!chips?.length && !delante) return null
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-      {chips.map(ch => (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: 4 }}>
+      {delante}
+      {(chips || []).map(ch => (
         <span key={ch.key} title={ch.titulo} style={{
-          fontSize: 9.5, fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap',
+          fontSize: 11, fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap',
           color: ch.color, background: `${ch.color}1a`, border: `1px solid ${ch.color}55`,
           borderRadius: 6, padding: '2px 6px', maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis',
           animation: ch.pulso ? 'pulse 2s infinite' : 'none',
@@ -171,7 +174,7 @@ function CanalBadge({ label, distinto }) {
     <span
       title={distinto ? `Este chat está en el número ${label} — al abrirlo se cambia de pestaña` : `Número ${label}`}
       style={{
-        fontSize: 9, fontWeight: 800, letterSpacing: '.02em', flexShrink: 0,
+        fontSize: 11, fontWeight: 800, letterSpacing: '.02em', flexShrink: 0,
         color, background: distinto ? 'rgba(251,191,36,.14)' : 'rgba(244,241,236,.06)',
         border: `1px solid ${distinto ? 'rgba(251,191,36,.4)' : C.border2}`,
         borderRadius: 6, padding: '1px 6px',
@@ -206,7 +209,7 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
     (searching || msgSnippet != null || conv.last?.direccion === 'ENTRANTE')
   const LineaOrigen = () => (
     <div style={{
-      fontSize: 11, color: C.cream, marginTop: 3,
+      fontSize: 12, color: C.cream, marginTop: 3,
       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190,
     }} title={conv.origenAnuncio}>🎯 {conv.origenAnuncio}</div>
   )
@@ -228,17 +231,14 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: C.cream, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{highlight(conv.nombre, search)}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            <IABadge modoIA={modoIA} />
-            <span style={{ fontSize: 11, color: C.creamFaint }}>{fmtTime(conv.last?.timestamp)}</span>
-          </div>
+          <span style={{ fontSize: 12, color: C.creamFaint, whiteSpace: 'nowrap', flexShrink: 0 }}>{fmtTime(conv.last?.timestamp)}</span>
         </div>
-        <FilaChips chips={chips} />
+        <FilaChips chips={chips} delante={<IABadge modoIA={modoIA} />} />
         {msgSnippet != null ? (
           <div style={{ marginTop: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, color: C.creamFaint, fontFamily: 'monospace' }}>{etiquetaTelefono(conv.telefono, conv.username)}</span>
-              {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
+              <span style={{ fontSize: 12, color: C.creamFaint, fontFamily: 'monospace' }}>{etiquetaTelefono(conv.telefono, conv.username)}</span>
+              {info && <span style={{ fontSize: 11, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
               <CanalBadge label={canalLabel} distinto={canalDistinto} />
             </div>
             {mostrarOrigen && <LineaOrigen />}
@@ -251,7 +251,7 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
           {mostrarOrigen && <LineaOrigen />}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: C.creamDim, whiteSpace: 'nowrap' }}>📱 {highlight('+' + conv.telefono, search)}</span>
-            {info && <span style={{ fontSize: 9, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
+            {info && <span style={{ fontSize: 11, fontWeight: 800, color: info.color, background: `${info.color}1e`, border: `1px solid ${info.color}44`, borderRadius: 6, padding: '1px 6px', flexShrink: 0 }}>{info.label}</span>}
             <CanalBadge label={canalLabel} distinto={canalDistinto} />
           </div>
           </>
@@ -285,7 +285,7 @@ export function ContactRow({ conv, isActive, onClick, search = '', estado, modoI
             {conv.unread > 0 && (
               <span style={{
                 background: C.cream, color: C.bg,
-                borderRadius: 10, fontSize: 11, fontWeight: 800,
+                borderRadius: 10, fontSize: 12, fontWeight: 800,
                 padding: '1px 7px', marginLeft: 6, flexShrink: 0,
               }}>{conv.unread}</span>
             )}
@@ -396,7 +396,7 @@ function MediaContent({ tipo, mediaUrl, mediaId, nombre = '', mensajeId = '', tr
         <audio controls preload="metadata" src={src} style={{ width: '100%', minWidth: 280, height: 40, display: 'block', borderRadius: 10, outline: 'none', accentColor: C.cream }} />
         {/* Respaldo: si el reproductor inline falla (caché/navegador), este link
             abre el audio en pestaña nueva, donde siempre suena. */}
-        <a href={src} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 11, color: C.cream, textDecoration: 'none', fontWeight: 600 }}>
+        <a href={src} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 12, color: C.cream, textDecoration: 'none', fontWeight: 600 }}>
           🎧 Abrir audio ↗
         </a>
         {mensajeId && <TranscribirNota src={src} mensajeId={mensajeId} transcripcion={transcripcion} />}
@@ -407,7 +407,7 @@ function MediaContent({ tipo, mediaUrl, mediaId, nombre = '', mensajeId = '', tr
     <div style={{ marginBottom: 6, maxWidth: '100%' }}>
       <video controls preload="metadata" src={src} style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 10, display: 'block', border: `1px solid ${C.border2}` }} />
       {/* Respaldo: si el reproductor inline falla, abre el video en pestaña nueva. */}
-      <a href={src} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 11, color: C.cream, textDecoration: 'none', fontWeight: 600 }}>
+      <a href={src} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 12, color: C.cream, textDecoration: 'none', fontWeight: 600 }}>
         🎬 Abrir video ↗
       </a>
     </div>
@@ -463,7 +463,7 @@ function QuotedMessage({ contextoId, allMsgs, esReaccion = false, onIrA = null }
     // todo con reacciones a mensajes anteriores a nuestro historial.
     if (esReaccion) return null
     return (
-      <div style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, fontSize: 11, color: C.creamDim, fontStyle: 'italic' }}>
+      <div style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, fontSize: 12, color: C.creamDim, fontStyle: 'italic' }}>
         ↩️ Respondió a un mensaje anterior
       </div>
     )
@@ -477,7 +477,7 @@ function QuotedMessage({ contextoId, allMsgs, esReaccion = false, onIrA = null }
       onClick={onIrA ? (e) => { e.stopPropagation(); onIrA(contextoId) } : undefined}
       title={onIrA ? 'Ir al mensaje original' : undefined}
       style={{ borderLeft: `3px solid rgba(244,241,236,.4)`, background: 'rgba(0,0,0,.3)', borderRadius: '0 8px 8px 0', padding: '5px 10px', marginBottom: 6, overflow: 'hidden', cursor: onIrA ? 'pointer' : 'inherit' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.cream, marginBottom: 2 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.cream, marginBottom: 2 }}>
         {cited.direccion === 'SALIENTE' ? 'Tú' : cited.nombre || cited.telefono}
       </div>
       {isImage && citedSrc ? (
@@ -537,7 +537,7 @@ function ReferralCard({ referral, texto = '' }) {
     const n = Number(String(producto?.precio ?? '').replace(',', '.'))
     return Number.isFinite(n) && n > 0 ? (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`) : ''
   })()
-  const etiqueta = { fontSize: 10, fontWeight: 800, letterSpacing: '.04em' }
+  const etiqueta = { fontSize: 11, fontWeight: 800, letterSpacing: '.04em' }
 
   return (
     <div style={{ border: '1px solid rgba(245,158,11,.45)', background: 'rgba(245,158,11,.08)', borderRadius: 12, padding: 10, marginBottom: 8, maxWidth: '100%' }}>
@@ -572,7 +572,7 @@ function ReferralCard({ referral, texto = '' }) {
                 </div>
               )}
               {producto && !producto.enShopify && (
-                <div style={{ fontSize: 10, color: '#8a8170', marginTop: 2 }}>No está en Shopify con ese nombre: sin foto</div>
+                <div style={{ fontSize: 11, color: '#8a8170', marginTop: 2 }}>No está en Shopify con ese nombre: sin foto</div>
               )}
             </>
           ) : (
@@ -591,13 +591,13 @@ function ReferralCard({ referral, texto = '' }) {
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ ...etiqueta, color: '#8a8170' }}>📣 CREATIVO QUE VIO</div>
           {r.body && (
-            <div style={{ fontSize: 11, color: C.creamDim, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', whiteSpace: 'pre-wrap' }}>{r.body}</div>
+            <div style={{ fontSize: 12, color: C.creamDim, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', whiteSpace: 'pre-wrap' }}>{r.body}</div>
           )}
           <div style={{ display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             {r.source_url && (
-              <a href={r.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600, textDecoration: 'none' }}>Ver anuncio ↗</a>
+              <a href={r.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#f59e0b', fontWeight: 600, textDecoration: 'none' }}>Ver anuncio ↗</a>
             )}
-            {r.source_id && <span style={{ fontSize: 10, color: '#8a8170' }}>ID: {r.source_id}</span>}
+            {r.source_id && <span style={{ fontSize: 11, color: '#8a8170' }}>ID: {r.source_id}</span>}
           </div>
         </div>
       </div>
@@ -655,13 +655,13 @@ function CarruselCards({ c }) {
               ? <img src={p.foto} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
               : <div style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>🛍️</div>}
             <div style={{ padding: '4px 5px' }}>
-              <div style={{ fontSize: 10.5, color: C.cream, lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.nombre || p.retailerId}</div>
-              {p.precio && <div style={{ fontSize: 10.5, color: C.cream, fontWeight: 800 }}>{p.precio}</div>}
+              <div style={{ fontSize: 11, color: C.cream, lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.nombre || p.retailerId}</div>
+              {p.precio && <div style={{ fontSize: 11, color: C.cream, fontWeight: 800 }}>{p.precio}</div>}
             </div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 10, color: C.creamDim, marginTop: 2 }}>
+      <div style={{ fontSize: 11, color: C.creamDim, marginTop: 2 }}>
         🛍️ Carrusel · {c.carrusel.length} productos{c.via === 'plantilla' ? ' · por plantilla' : ''}
       </div>
     </div>
@@ -676,8 +676,8 @@ function ProductoReferido({ p }) {
       {p.imagen
         ? <img src={p.imagen} alt="" style={{ width: 38, height: 38, objectFit: 'cover', borderRadius: 6 }} />
         : <span style={{ fontSize: 20 }}>🛍️</span>}
-      <div style={{ fontSize: 11.5, color: C.cream, minWidth: 0 }}>
-        <div style={{ fontSize: 9.5, color: C.creamDim, fontWeight: 800 }}>PREGUNTA POR</div>
+      <div style={{ fontSize: 12, color: C.cream, minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: C.creamDim, fontWeight: 800 }}>PREGUNTA POR</div>
         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>{p.nombre || `Producto ${p.retailerId}`}</div>
       </div>
     </div>
@@ -717,7 +717,7 @@ function PedidoCard({ pedido }) {
             <div style={{ fontSize: 13, color: C.cream, fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-word' }}>
               {it.nombre || 'Producto no identificado'}
             </div>
-            <div style={{ fontSize: 11, color: C.creamDim, marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: C.creamDim, marginTop: 2 }}>
               {it.cant} × {money(it.precio)}
               {it.color ? ` · ${it.color}` : ''}
               {it.cant > 1 ? ` · ${money(it.total)}` : ''}
@@ -725,7 +725,7 @@ function PedidoCard({ pedido }) {
             {/* Sin nombre, el id es lo ÚNICO que identifica el producto: se
                 muestra para que se pueda buscar a mano en el catálogo. */}
             {!it.nombre && (
-              <div style={{ fontSize: 10, color: C.creamFaint, marginTop: 1, fontFamily: 'monospace' }}>
+              <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 1, fontFamily: 'monospace' }}>
                 {it.retailerId}
               </div>
             )}
@@ -744,7 +744,7 @@ function PedidoCard({ pedido }) {
       </div>
       {/* ⚠️ La talla NO viene en el pedido: Meta no la manda y el catálogo la
           trae vacía. Hay que preguntársela al cliente SIEMPRE. */}
-      <div style={{ fontSize: 10, color: C.creamFaint, marginTop: 5 }}>
+      <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 5 }}>
         ⚠️ El pedido no trae la talla — hay que preguntarla
       </div>
     </div>
@@ -783,11 +783,11 @@ function UbicacionCard({ u }) {
           {/* La dirección desplaza las coordenadas: se muestran igual, porque son
               el dato con el que se busca el sitio si el nombre no alcanza. */}
           {u.direccion && (
-            <div style={{ fontSize: 11, color: C.creamFaint, marginTop: 1 }}>{coords}</div>
+            <div style={{ fontSize: 12, color: C.creamFaint, marginTop: 1 }}>{coords}</div>
           )}
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6,
-            fontSize: 11, fontWeight: 700, color: C.accent, borderBottom: `1px solid ${C.border2}`,
+            fontSize: 12, fontWeight: 700, color: C.accent, borderBottom: `1px solid ${C.border2}`,
           }}>↗ Abrir en Google Maps</div>
         </div>
       </div>
@@ -809,7 +809,7 @@ export function AvisoInterno({ msg }) {
         background: 'rgba(245,158,11,.13)', border: '1px solid rgba(245,158,11,.6)',
         color: '#fde68a', fontSize: 13, lineHeight: 1.45, boxShadow: '0 0 0 3px rgba(245,158,11,.08)',
       }}>
-        <div style={{ fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', opacity: .75, marginBottom: 4 }}>
+        <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', opacity: .75, marginBottom: 4 }}>
           Aviso interno · el cliente no lo ve
         </div>
         {lineas.map((l, i) => (
@@ -826,7 +826,7 @@ export function AvisoInterno({ msg }) {
             <img src={msg.mediaUrl} alt="Comprobante" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 8, display: 'block' }} />
           </a>
         )}
-        {hora && <div style={{ fontSize: 10, opacity: .6, textAlign: 'right', marginTop: 4 }}>{hora}</div>}
+        {hora && <div style={{ fontSize: 11, opacity: .6, textAlign: 'right', marginTop: 4 }}>{hora}</div>}
       </div>
     </div>
   )
@@ -890,7 +890,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
       style={{
         alignSelf: 'center', flexShrink: 0, margin: '0 4px',
         background: 'linear-gradient(135deg,#10b981,#059669)', border: '1px solid rgba(16,185,129,.4)',
-        color: '#fff', borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 800,
+        color: '#fff', borderRadius: 14, padding: '4px 10px', fontSize: 12, fontWeight: 800,
         cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
       }}>🧾 Crear pedido</button>
   ) : null
@@ -957,7 +957,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
             style={{
               marginTop: 7, padding: '5px 11px', borderRadius: 14,
               background: C.surface2, border: `1px solid ${C.border2}`,
-              color: C.cream, fontSize: 11, fontWeight: 700,
+              color: C.cream, fontSize: 12, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
             }}>↗ Revisar conversación en el número anterior</button>
         )}
@@ -985,7 +985,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
         })()}
         {!hasText && !hasMedia && !msg.botones && <p style={{ margin: 0, fontSize: 13, color: C.creamFaint, fontStyle: 'italic' }}>{msg.tipo ? `[${msg.tipo}]` : '[mensaje]'}</p>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5, marginTop: 4 }}>
-          <span style={{ fontSize: 10, color: C.creamFaint }}>
+          <span style={{ fontSize: 11, color: C.creamFaint }}>
           {(() => {
           const d = parseDate(msg.timestamp)
           const today = new Date()
@@ -1011,7 +1011,7 @@ export function MessageBubble({ msg, allMsgs, onResponder, onAbrirChat, onReenvi
               style={{
                 background:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.45)',
                 color:'#f59e0b', borderRadius:14, padding:'3px 12px',
-                fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
               }}>↩ Responder</button>
           </div>
         )}
