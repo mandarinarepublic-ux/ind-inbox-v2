@@ -485,6 +485,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
   // 🔎 Buscador de respuestas (no se guarda: al volver arranca vacío).
   const [buscarResp,    setBuscarResp]    = useState('')
   const [newGrupo,      setNewGrupo]      = useState('')
+  // 🔎 Con algo escrito, la búsqueda es en TODAS las respuestas, sin importar el botón
+  // de grupo elegido (pedido de Rodrigo, 22-nov-2026). Tocar un botón borra la búsqueda.
+  const grupoVisto = buscarResp.trim() ? TODAS : grupoFiltro
   const setGrupoFiltro = (g) => {
     setGrupoFiltroEstado(g); guardarGrupo(g)
     // La respuesta nueva nace en el grupo que estás mirando.
@@ -1018,9 +1021,9 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                 return (
                   <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:8 }}>
                     {botones.map(b => {
-                      const on = (grupoFiltro || TODAS) === b.id
+                      const on = (grupoVisto || TODAS) === b.id
                       return (
-                        <button key={b.id} onClick={() => setGrupoFiltro(b.id)}
+                        <button key={b.id} onClick={() => { setBuscarResp(''); setGrupoFiltro(b.id) }}
                           style={{ padding:'4px 9px', borderRadius:14, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
                             background: on ? 'rgba(244,241,236,.12)' : 'rgba(244,241,236,.03)',
                             border: `1px solid ${on ? 'rgba(244,241,236,.4)' : C.border}`,
@@ -1035,7 +1038,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
             </div>
 
             <div style={{ padding:'0 12px', display:'flex', flexDirection:'column', gap:5 }}>
-              {(() => { const visibles = indicesVisibles(replies, grupoFiltro, buscarResp); const verSet = new Set(visibles); return replies.map((reply, idx) => {
+              {(() => { const visibles = indicesVisibles(replies, grupoVisto, buscarResp); const verSet = new Set(visibles); return replies.map((reply, idx) => {
                 if (!verSet.has(idx)) return null
                 const imgs = getImgUrls(reply)
                 const arriba = vecinaVisible(visibles, idx, -1)
@@ -1096,7 +1099,7 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                         )}
                         <div className="rr-fila" style={{ padding:'5px 7px', display:'flex', alignItems:'flex-start', gap:3 }}>
                           <span style={{ flex:1, fontSize:12, color:C.creamDim, lineHeight:1.35, overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>
-                            {imgs.filter(a=>a.tipo!=='audio').length>0&&`🖼×${imgs.filter(a=>a.tipo!=='audio').length} `}{imgs.filter(a=>a.tipo==='audio').length>0&&`🎤×${imgs.filter(a=>a.tipo==='audio').length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{reply.carrusel?.length>0&&<span style={{ color:C.cream, fontWeight:700 }}>{`🛍️×${reply.carrusel.length} `}</span>}{(grupoFiltro || TODAS) === TODAS && GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)) ? `${GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)).emoji} ` : ''}{reply.text}
+                            {imgs.filter(a=>a.tipo!=='audio').length>0&&`🖼×${imgs.filter(a=>a.tipo!=='audio').length} `}{imgs.filter(a=>a.tipo==='audio').length>0&&`🎤×${imgs.filter(a=>a.tipo==='audio').length} `}{reply.botones?.length>0&&<span style={{ color:'#f59e0b', fontWeight:700 }}>{`🔘×${reply.botones.length} `}</span>}{reply.carrusel?.length>0&&<span style={{ color:C.cream, fontWeight:700 }}>{`🛍️×${reply.carrusel.length} `}</span>}{(grupoVisto || TODAS) === TODAS && GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)) ? `${GRUPOS_RESPUESTA.find(g => g.id === normalizarGrupo(reply.grupo)).emoji} ` : ''}{reply.text}
                           </span>
                           <div className="rr-acciones" style={{ display:'flex', gap:2, flexShrink:0 }}>
                             <button onClick={() => reordenar(idx, arriba)} disabled={arriba < 0 || hayAltaPendiente}
@@ -1119,10 +1122,10 @@ export default function RightPanel({ activeConv, onQuickReply, onSendText, onSen
                   </div>
                 )
               }) })()}
-              {visibles_vacio(replies, grupoFiltro, buscarResp) && (
+              {visibles_vacio(replies, grupoVisto, buscarResp) && (
                 <div style={{ fontSize:12, color:C.creamDim, padding:'8px 4px' }}>
                   {!buscarResp.trim() ? 'No hay respuestas en este grupo. Crea una abajo o elige el grupo al editar ✏️.'
-                    : conteoPorGrupo(replies, buscarResp)[TODAS] > 0 && (grupoFiltro || TODAS) !== TODAS
+                    : conteoPorGrupo(replies, buscarResp)[TODAS] > 0 && (grupoVisto || TODAS) !== TODAS
                       ? <>Nada con “{buscarResp.trim()}” en este grupo. <span onClick={() => setGrupoFiltro(TODAS)} style={{ color:C.cream, textDecoration:'underline', cursor:'pointer' }}>Ver en Todas ({conteoPorGrupo(replies, buscarResp)[TODAS]})</span></>
                       : <>Ninguna respuesta tiene “{buscarResp.trim()}”.</>}
                 </div>
