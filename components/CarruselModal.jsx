@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { fetchCatalogoCarrusel } from '@/lib/api-client'
 import { MIN_TARJETAS, MAX_TARJETAS, MAX_TEXTO } from '@/lib/carrusel'
+import { useCerrarConEsc } from '@/lib/cerrar-con-esc'
 
 // Paleta IND (crema sobre negro, como `C` en Components.jsx). `verde` es el acento: acá, crema.
 const P = { bg: '#111111', borde: '#2A2A2A', texto: '#F4F1EC', tenue: '#A09A90', muy: '#6b645b', verde: '#F4F1EC' }
@@ -11,6 +12,7 @@ const P = { bg: '#111111', borde: '#2A2A2A', texto: '#F4F1EC', tenue: '#A09A90',
 // `modoElegir`: para guardar productos en una RESPUESTA RÁPIDA. Sin texto (el texto es
 // el de la respuesta) y `onEnviar(null, productos)` solo devuelve la selección.
 export default function CarruselModal({ nombreCliente, onEnviar, onCerrar, ventanaCerrada = false, canal = '', modoElegir = false, inicial = [] }) {
+  useCerrarConEsc(onCerrar)   // ⎋ igual que tocar el fondo
   const [productos, setProductos] = useState(null)
   const [error, setError] = useState('')
   const [q, setQ] = useState('')

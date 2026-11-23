@@ -8,12 +8,14 @@
 // Van en ventana FIJA y no en un desplegable: la tira de botones de la cabecera
 // scrollea en horizontal y recorta cualquier cosa que cuelgue de ella.
 import React, { useState } from 'react'
+import { useCerrarConEsc } from '@/lib/cerrar-con-esc'
 
 // Paleta IND (crema sobre negro, como `C` en Components.jsx). `verde` es el acento: acá, crema.
 const P = { bg: '#111111', borde: '#2A2A2A', texto: '#F4F1EC', tenue: '#A09A90', muy: '#6b645b', verde: '#F4F1EC' }
 export const COLORES_ETIQUETA = ['#25d366', '#1877f2', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#14b8a6', '#94a3b8']
 
 function Ventana({ titulo, onCerrar, children }) {
+  useCerrarConEsc(onCerrar)   // ⎋ igual que tocar el fondo
   return (
     <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 360, maxHeight: '80vh', overflowY: 'auto', background: P.bg, border: `1px solid ${P.borde}`, borderRadius: 14, padding: 16, fontFamily: 'inherit' }}>

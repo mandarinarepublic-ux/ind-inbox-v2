@@ -11,6 +11,7 @@ import { leerCarrusel } from '@/lib/carrusel'
 import { urlDeDescarga, nombreDeDescarga } from '@/lib/descarga'
 import { restoProductoTocado } from '@/lib/producto-tocado'
 import TranscribirNota from '@/components/TranscribirNota'
+import { useCerrarConEsc } from '@/lib/cerrar-con-esc'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -311,11 +312,9 @@ function ContactRowBase({ conv, isActive, onClick, search = '', estado, modoIA, 
  * puntería sobre el fondo o sobre una X sería fricción sin motivo.
  */
 function VisorFoto({ src, onCerrar }) {
-  useEffect(() => {
-    const alTeclear = (e) => { if (e.key === 'Escape') onCerrar() }
-    window.addEventListener('keydown', alTeclear)
-    return () => window.removeEventListener('keydown', alTeclear)
-  }, [onCerrar])
+  // ⎋ Por la pila común (lib/cerrar-con-esc.js): si la foto está encima de otra
+  // ventana, Esc cierra solo la foto.
+  useCerrarConEsc(onCerrar)
 
   return (
     <div
