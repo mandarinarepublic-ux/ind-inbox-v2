@@ -49,6 +49,13 @@ era solo de presentación: se quitan los cambios de estilo y el resto se compara
 - **Respuestas rápidas, buscador** (`cff51e3`, 22-nov): busca siempre en todos los grupos;
   tocar un grupo borra la búsqueda.
 - **Scroll** (`9671a41`, 22-nov): mismo arreglo que MANDI. Probado en pantalla solo en MANDI.
+- **Tanda 3** (22-nov), port de MANDI; el detalle y las trampas están en su handoff:
+  - errores con el siguiente paso (`09dc61b`). Acá `/api/saliente` ya devolvía `code`, así que
+    solo cambió el cliente;
+  - Esc cierra ventanas (`4ba73c3`), probado en prod;
+  - Contactos y carrusel no dibujan lo que está fuera de pantalla (`ccd8499` + `e8d31a6`):
+    las 400 filas miden 61 px en prod;
+  - «…» (`4b9fece`).
 
 ## PENDIENTE (IND)
 - **Firma del webhook: SOLO OBSERVA.** Los registros dicen `[firma] sin-secreto`: falta
@@ -62,4 +69,5 @@ era solo de presentación: se quitan los cambios de estilo y el resto se compara
     variable es igual, el valor no tiene por qué serlo.
 - **Revisar en el celular:** pestañas, selector de etapa, «‹ Chats».
 - **Probar con un cliente real:** Atendido → siguiente; la bandeja nueva.
-- **web-design-guidelines, tanda 3 (higiene):** la misma que en MANDI; sin aprobar todavía.
+- **web-design-guidelines, tanda 3:** HECHA (ver arriba). Rodrigo descartó «nombres para
+  lectores de pantalla» y `prefers-reduced-motion`.
