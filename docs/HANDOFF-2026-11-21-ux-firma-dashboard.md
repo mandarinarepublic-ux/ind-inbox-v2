@@ -37,10 +37,18 @@ era solo de presentación: se quitan los cambios de estilo y el resto se compara
   - aviso pegado abajo;
   - Social sin bajar solo;
   - «➤» deshabilitado que se ve deshabilitado;
-  - `overscroll-behavior`;
+  - `overscroll-behavior` — ☠️ en `body *` rompió la rueda del mouse sobre filas y tarjetas;
+    desde `9671a41` va SOLO en `.msgs-scroll` (el hilo);
   - `color-scheme: dark`;
   - fecha «20 Nov»;
   - la foto que carga te vuelve a bajar si estabas abajo.
+- **web-design-guidelines, tanda 2: rendimiento** (`eb98952`, port de MANDI `5398a4c` +
+  `1c23d78`). Por letra: **11 ms**. Filas, burbujas y pestañas ocultas (Contactos, Autos, INDI,
+  Flujos) memorizadas; funciones por `ultimasRef`; ⏱ en `ContadorVentana`. Detalle y trampas
+  en el handoff de MANDI.
+- **Respuestas rápidas, buscador** (`cff51e3`, 22-nov): busca siempre en todos los grupos;
+  tocar un grupo borra la búsqueda.
+- **Scroll** (`9671a41`, 22-nov): mismo arreglo que MANDI. Probado en pantalla solo en MANDI.
 
 ## PENDIENTE (IND)
 - **Firma del webhook: SOLO OBSERVA.** Los registros dicen `[firma] sin-secreto`: falta
@@ -54,4 +62,4 @@ era solo de presentación: se quitan los cambios de estilo y el resto se compara
     variable es igual, el valor no tiene por qué serlo.
 - **Revisar en el celular:** pestañas, selector de etapa, «‹ Chats».
 - **Probar con un cliente real:** Atendido → siguiente; la bandeja nueva.
-- **web-design-guidelines, tandas 2 y 3:** las mismas que en MANDI (ver el handoff de MANDI).
+- **web-design-guidelines, tanda 3 (higiene):** la misma que en MANDI; sin aprobar todavía.
