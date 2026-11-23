@@ -288,7 +288,7 @@ export default function SocialInbox({ active: isVisible }) {
               <div style={{ fontSize:13, fontWeight:800, color:'#e2e8f0' }}>Social Inbox</div>
               <div style={{ fontSize:11, color:'#25d366', display:'flex', alignItems:'center', gap:3 }}>
                 <span style={{ width:5, height:5, borderRadius:'50%', background:'#25d366', display:'inline-block' }} />
-                {loading ? 'Cargando...' : `${convs.length} conversaciones`}
+                {loading ? 'Cargando…' : `${convs.length} conversaciones`}
               </div>
             </div>
           </div>
@@ -309,7 +309,7 @@ export default function SocialInbox({ active: isVisible }) {
         {/* Lista */}
         <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
           {loading ? (
-            <div style={{ padding:28, textAlign:'center', color:'#2a3f55', fontSize:12 }}>Cargando...</div>
+            <div style={{ padding:28, textAlign:'center', color:'#2a3f55', fontSize:12 }}>Cargando…</div>
           ) : filtered.length === 0 ? (
             <div style={{ padding:28, textAlign:'center', color:'#2a3f55', fontSize:12 }}>Sin conversaciones</div>
           ) : filtered.map(conv => (

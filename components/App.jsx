@@ -214,7 +214,7 @@ function EmojiPicker({ onSelect, onClose }) {
     <div style={{ position:'absolute', bottom:'100%', left:0, right:0, marginBottom:8, background:C.surface2, border:`1px solid ${C.border2}`, borderRadius:14, zIndex:60, overflow:'hidden', boxShadow:'0 8px 32px rgba(0,0,0,.8)' }}>
       <div style={{ padding:'8px 10px 6px', borderBottom:`1px solid ${C.border}`, display:'flex', gap:6, alignItems:'center' }}>
         <span style={{ fontSize:13, color:C.creamMuted }}>🔍</span>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar emoji..." autoFocus
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar emoji…" autoFocus
           style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.cream, fontSize:12, fontFamily:'Outfit,sans-serif' }} />
         <button onClick={onClose} style={{ background:'transparent', border:'none', color:C.creamMuted, cursor:'pointer', fontSize:15, padding:0, lineHeight:1 }}>✕</button>
       </div>
@@ -2639,7 +2639,7 @@ export default function App() {
               <div style={{ position:'relative', marginBottom:6 }}>
                 <span style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:C.creamMuted, fontSize:12, pointerEvents:'none' }}>🔍</span>
                 <input value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder={searchMode === 'mensaje' ? 'Buscar en mensajes (ej: Hoodie)...' : 'Buscar nombre o número...'}
+                  placeholder={searchMode === 'mensaje' ? 'Buscar en mensajes (ej: Hoodie)…' : 'Buscar nombre o número…'}
                   style={{ width:'100%', padding:'7px 28px 7px 28px', background:C.surface2, border:`1px solid ${searchMode==='mensaje'?'rgba(96,165,250,.4)':C.border}`, borderRadius:8, color:C.cream, fontSize:12, outline:'none' }} />
                 {search && <button onClick={() => setSearch('')} style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'transparent', border:'none', color:C.creamMuted, cursor:'pointer', fontSize:13, padding:0, lineHeight:1 }}>✕</button>}
               </div>
@@ -2668,11 +2668,11 @@ export default function App() {
             <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
               {loading ? (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:48, gap:12 }}>
-                  <Spinner size={24} /><span style={{ fontSize:12, color:C.creamMuted }}>Cargando...</span>
+                  <Spinner size={24} /><span style={{ fontSize:12, color:C.creamMuted }}>Cargando…</span>
                 </div>
               ) : buscando ? (
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:48, gap:12 }}>
-                  <Spinner size={20} /><span style={{ fontSize:12, color:C.creamMuted }}>Buscando en todo el historial...</span>
+                  <Spinner size={20} /><span style={{ fontSize:12, color:C.creamMuted }}>Buscando en todo el historial…</span>
                 </div>
               ) : filtered.length === 0 && hayLogroPendientes({ bandeja: filtro.bandeja, buscando: isSearching, totalPendientes, lastSyncMs: lastSync ? lastSync.getTime() : NaN }) ? (
                 // 🎉 Pendientes vacío DE VERDAD (lib/siguiente-chat.js): solo con una
@@ -2944,7 +2944,7 @@ export default function App() {
                   <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:4 }}>
                     <div style={{ background:C.surface2, borderRadius:'18px 18px 4px 18px', padding:'9px 14px', border:`1px solid ${C.border2}` }}>
                       <span style={{ color:C.creamDim, fontSize:12, animation:'blink 1s infinite' }}>
-                        {enFila > 1 ? `Enviando... (${enFila} en fila)` : 'Enviando...'}
+                        {enFila > 1 ? `Enviando… (${enFila} en fila)` : 'Enviando…'}
                       </span>
                     </div>
                   </div>
@@ -3099,7 +3099,7 @@ export default function App() {
                     )}
                     <textarea ref={taRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
                       onPaste={handlePaste}
-                      placeholder={getModoIA(activeConv?.telefono) && !motivoIA ? '🤖 IA respondiendo automáticamente...' : esCelular ? 'Escribe un mensaje...' : 'Escribe un mensaje... (Ctrl+Enter para enviar)'}
+                      placeholder={getModoIA(activeConv?.telefono) && !motivoIA ? '🤖 IA respondiendo automáticamente…' : esCelular ? 'Escribe un mensaje…' : 'Escribe un mensaje… (Ctrl+Enter para enviar)'}
                       rows={2}
                       style={{ width:'100%', background:'transparent', border:'none', outline:'none', color:C.cream, fontSize:14, resize:'none', lineHeight:1.5, minHeight:44, maxHeight:120, overflowY:'auto' }} />
                   </div>
@@ -3151,10 +3151,10 @@ export default function App() {
           ) : (
             <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, position:'relative' }}>
               <div style={{ fontSize:52, opacity:.05 }}>💬</div>
-              <p className="vacio-pc" style={{ color:C.creamMuted, fontSize:13, fontWeight:700 }}>{loading?'Cargando...':'Selecciona una conversación'}</p>
+              <p className="vacio-pc" style={{ color:C.creamMuted, fontSize:13, fontWeight:700 }}>{loading?'Cargando…':'Selecciona una conversación'}</p>
               {/* En el celular: botón grande al centro en vez de un ☰ chico en la esquina. */}
               <button className="mob-ham" onClick={() => setShowSidebar(true)} style={{ background:C.cream, border:'none', color:C.bg, borderRadius:12, minHeight:48, padding:'0 22px', cursor:'pointer', fontSize:15, fontWeight:800, fontFamily:'inherit', alignItems:'center', justifyContent:'center', gap:8 }}>
-                {loading ? 'Cargando...' : (totalPendientes > 0 ? `Ver chats (${totalPendientes} pendiente${totalPendientes === 1 ? '' : 's'})` : 'Ver chats')}
+                {loading ? 'Cargando…' : (totalPendientes > 0 ? `Ver chats (${totalPendientes} pendiente${totalPendientes === 1 ? '' : 's'})` : 'Ver chats')}
               </button>
             </div>
           )}
