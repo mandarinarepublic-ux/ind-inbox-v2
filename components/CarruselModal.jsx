@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { fetchCatalogoCarrusel } from '@/lib/api-client'
 import { MIN_TARJETAS, MAX_TARJETAS, MAX_TEXTO } from '@/lib/carrusel'
 import { useCerrarConEsc } from '@/lib/cerrar-con-esc'
+import { explicarError } from '@/lib/error-con-paso'
 
 // Paleta IND (crema sobre negro, como `C` en Components.jsx). `verde` es el acento: acá, crema.
 const P = { bg: '#111111', borde: '#2A2A2A', texto: '#F4F1EC', tenue: '#A09A90', muy: '#6b645b', verde: '#F4F1EC' }
@@ -47,7 +48,7 @@ export default function CarruselModal({ nombreCliente, onEnviar, onCerrar, venta
     const r = await onEnviar(modoElegir ? null : texto.trim(), elegidos)
     setEnviando(false)
     if (r?.ok) onCerrar()
-    else setError(r?.error || 'No se pudo enviar')
+    else setError(explicarError(r, 'el carrusel').texto)
   }
 
   return (

@@ -12,6 +12,7 @@ import { urlDeDescarga, nombreDeDescarga } from '@/lib/descarga'
 import { restoProductoTocado } from '@/lib/producto-tocado'
 import TranscribirNota from '@/components/TranscribirNota'
 import { useCerrarConEsc } from '@/lib/cerrar-con-esc'
+import { explicarError } from '@/lib/error-con-paso'
 
 // URLs de Meta (WhatsApp) exigen el token en la cabecera → se sirven por /api/media.
 // Drive y demás pasan sin cambios.
@@ -1050,12 +1051,12 @@ export function Toast({ result }) {
     // debajo del último mensaje y, con el hilo subido, «No se pudo enviar» no se veía.
     <div role="status" aria-live="polite" style={{ display: 'flex', justifyContent: 'center', marginTop: 8, animation: 'up .2s ease', position: 'sticky', bottom: 8, zIndex: 5, pointerEvents: 'none' }}>
       <span style={{
-        fontSize: 12, padding: '5px 16px', borderRadius: 20,
+        fontSize: 12, padding: '5px 16px', borderRadius: 20, maxWidth: 'min(560px, 92%)', textAlign: 'center',
         background: result.ok ? '#1c1b19' : '#2a0f12',   // sólido: va encima de los mensajes
         color: result.ok ? C.cream : '#f87171',
         border: `1px solid ${result.ok ? 'rgba(244,241,236,.2)' : 'rgba(239,68,68,.2)'}`,
       }}>
-        {custom ? custom : (result.ok ? '✓ Enviado' : '✗ No se pudo enviar — reintenta')}
+        {custom ? custom : (result.ok ? '✓ Enviado' : explicarError(result).texto)}
       </span>
     </div>
   )
