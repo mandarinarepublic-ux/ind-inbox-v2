@@ -314,6 +314,10 @@ export default function App() {
   // derecho (escritorio o cajón) abre el PEDIDO MANUAL con estos datos.
   // { telefono, datos: prefillPedido(...), n: marca de tiempo del clic }.
   const [prefillPedido, setPrefillPedido] = useState(null)
+  // 📌 Una foto del cliente elegida como PAGO o PRODUCTO en la burbuja:
+  // { telefono, destino, url, n }. RightPanel la mete en el PEDIDO MANUAL (lo
+  // abre con ella, o la suma al que ya está abierto).
+  const [fotoPedido, setFotoPedido] = useState(null)
   const [rightWidth,   setRightWidth]   = useState(300) // ancho del panel derecho (px), redimensionable
   const [imgFiles,     setImgFiles]     = useState([]) // array de { file, preview }
   const [imgUploading, setImgUploading] = useState(false)
@@ -2479,6 +2483,10 @@ export default function App() {
       setPrefillPedido({ telefono: activeConv?.telefono, datos: prefillDeFormulario(datos), n: Date.now() })
       if (window.matchMedia?.('(max-width: 767px)').matches) setShowRight(true)
     },
+    usarFotoEnPedido: (destino, url) => {
+      setFotoPedido({ telefono: activeConv?.telefono, destino, url, n: Date.now() })
+      if (window.matchMedia?.('(max-width: 767px)').matches) setShowRight(true)
+    },
   }
 
   return (
@@ -2983,7 +2991,8 @@ export default function App() {
                         reaccionCliente={suyas.get(String(msg.id)) || ''}
                         onReaccionar={windowOpen && puedeReaccionar(msg) ? (emoji) => ultimasRef.current.reaccionar(msg, emoji) : null}
                         onIrACita={(id) => ultimasRef.current.irACita(id)}
-                        onCrearPedido={(datos) => ultimasRef.current.crearPedidoDesde(datos)} />
+                        onCrearPedido={(datos) => ultimasRef.current.crearPedidoDesde(datos)}
+                        onUsarFoto={(destino, url) => ultimasRef.current.usarFotoEnPedido(destino, url)} />
                     </div>
                   )
                       })}
@@ -3230,7 +3239,7 @@ export default function App() {
                 onMouseLeave={e => e.currentTarget.style.background = C.border}
               />
               <div className="right-col" style={{ width:'auto', flex:1, borderLeft:'none' }}>
-                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} prefillPedido={prefillPedido} onPedidoManual={alPedidoManualEscritorio} onVerPedido={alVerPedidoEscritorio} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={avisarHoja} />
+                <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} prefillPedido={prefillPedido} fotoPedido={fotoPedido} onPedidoManual={alPedidoManualEscritorio} onVerPedido={alVerPedidoEscritorio} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={avisarHoja} />
               </div>
             </div>
           )}
@@ -3239,7 +3248,7 @@ export default function App() {
               <div style={{ display:'flex', justifyContent:'flex-end', padding:'10px 10px 0' }}>
                 <button onClick={cerrarCajonDerecho} style={{ background:'transparent', border:'none', color:C.creamMuted, cursor:'pointer', fontSize:17 }}>✕</button>
               </div>
-              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} prefillPedido={prefillPedido} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={avisarHoja} />
+              <RightPanel activeConv={activeConv} contactInfo={currentContact} onQuickReply={handleQuickReply} onSendText={handleSendText} onSendImage={handleSendAIImage} onSendProducto={handleSendProducto} onUpdateContact={handleUpdateContact} windowOpen={windowOpen} ventanaPautaHasta={enPauta ? activeConv?.pautaVenceEn : null} prefillPedido={prefillPedido} fotoPedido={fotoPedido} onPedidoManual={alPedidoManualCajon} onVerPedido={alVerPedidoCajon} onEnviarHojaPedido={handleEnviarHojaPedido} onEnviandoHoja={avisarHoja} />
             </div>
           )}
 
