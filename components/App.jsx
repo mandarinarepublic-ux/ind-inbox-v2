@@ -38,7 +38,7 @@ import PushToggle from '@/components/PushToggle'
 import AvisoSesion from '@/components/AvisoSesion'
 import AvisoBloqueoCuenta from '@/components/AvisoBloqueoCuenta'
 import { actualizarNoLeidos, notificar } from '@/lib/notif'
-import { hayQueConfirmarDescarte, AVISO_DESCARTAR_PEDIDO, anchoPanelPedido, anchoPanelMinimo, bytesDeDataUrl, MAX_HOJA_BYTES } from '@/lib/pedido-manual'
+import { hayQueConfirmarDescarte, AVISO_DESCARTAR_PEDIDO, anchoPanelPedido, anchoPanelMinimo, bytesDeDataUrl, MAX_HOJA_BYTES, TOPE_ENVIO_HOJA_MS, MSG_HOJA_SIN_CONFIRMAR } from '@/lib/pedido-manual'
 import { decidirArrastre } from '@/lib/arrastre'
 import { decidirPegado, decidirAdjuntos, TOPE_FOTOS } from '@/lib/adjuntos'
 import { piezasDeReenvio, destinosParaReenviar, resumenDeReenvio } from '@/lib/reenvio'
@@ -361,8 +361,8 @@ export default function App() {
       return
     }
     setHojaEnviando(h => (v.estado === 'enviando' && h?.id === v.id && h?.tel === v.tel && h.estado !== 'enviando') ? h : v)
-    if (v.estado === 'error') {
-      hojaTimerRef.current = setTimeout(() => setHojaEnviando(h => (h?.id === v.id && h?.estado === 'error' ? null : h)), 12000)
+    if (v.estado === 'error' || v.estado === 'duda') {
+      hojaTimerRef.current = setTimeout(() => setHojaEnviando(h => (h?.id === v.id && h?.estado === v.estado ? null : h)), v.estado === 'duda' ? 20000 : 12000)
     }
   }
   // Botón ⇅ de 🔴: false = la regla de siempre (compararEspera), true = el que
@@ -1808,13 +1808,17 @@ export default function App() {
   // del CRM (ver `handleEnviarHojaPedido`). Es el mismo código de siempre, ni
   // una línea distinta: no hay dos formas de mandar una foto en este inbox.
   const subirYEnviarFoto = async (telefono, nombre, file) => {
-    let url = ''
-    try {
-      const fd = new FormData(); fd.append('file', file)
-      const res  = await fetch('/api/upload-foto', { method:'POST', body:fd })
-      const data = await res.json()
-      if (res.ok && data.url) url = data.url
-    } catch { /* seguimos por media id */ }
+    // Las DOS subidas van a la vez (23-nov-2026): antes una esperaba a la otra y
+    // con datos móviles la foto del pedido tardaba el doble. `sendImageFile`
+    // espera esta url recién cuando la necesita, después de subir a Meta.
+    const url = (async () => {
+      try {
+        const fd = new FormData(); fd.append('file', file)
+        const res  = await fetch('/api/upload-foto', { method:'POST', body:fd })
+        const data = await res.json()
+        return res.ok && data.url ? data.url : ''
+      } catch { return '' /* seguimos por media id */ }
+    })()
     return sendImageFile(telefono, nombre, file, url)
   }
 
@@ -2343,19 +2347,30 @@ export default function App() {
     const tel = activeConv?.telefono || ''
     const id = hoja?.pedidoId ? String(hoja.pedidoId) : ''
     if (tel && id) avisarHoja({ tel, id, estado: 'enviando' })
-    const r = await enviarHojaPedidoAlChat(hoja)
+    const exito = () => {
+      avisarHoja({ tel, id, estado: 'ok' })
+      hojaTimerRef.current = setTimeout(() => {
+        Promise.resolve(load()).catch(() => {}).finally(() =>
+          setHojaEnviando(h => (h?.id === id && h?.estado === 'ok' ? null : h)))
+      }, 3000)
+    }
+    // ⏱️ Tope (TOPE_ENVIO_HOJA_MS): con datos móviles flojos la subida podía
+    // colgarse y el aviso quedaba "Enviando…" para siempre. Pasado el tope NO se
+    // reintenta (saldría dos veces): se dice que no se confirmó. Si el envío
+    // termina bien DESPUÉS, el aviso se corrige solo a ✅.
+    const envio = enviarHojaPedidoAlChat(hoja)
+    let vencio = false, tope
+    const r = await Promise.race([
+      envio,
+      new Promise(res => { tope = setTimeout(() => { vencio = true; res({ ok: false, incierto: true, error: MSG_HOJA_SIN_CONFIRMAR }) }, TOPE_ENVIO_HOJA_MS) }),
+    ])
+    clearTimeout(tope)
+    if (vencio) envio.then(tarde => { if (tarde?.ok && tel && id) exito() }).catch(() => {})
     // El aviso del chat (ver `avisarHoja`) muestra el resultado; el ✅ se queda
     // hasta que la foto ya está pintada en el hilo.
     if (tel && id) {
-      if (r?.ok) {
-        avisarHoja({ tel, id, estado: 'ok' })
-        hojaTimerRef.current = setTimeout(() => {
-          Promise.resolve(load()).catch(() => {}).finally(() =>
-            setHojaEnviando(h => (h?.id === id && h?.estado === 'ok' ? null : h)))
-        }, 3000)
-      } else {
-        avisarHoja({ tel, id, estado: 'error', msg: r?.error || 'No se pudo enviar la hoja' })
-      }
+      if (r?.ok) exito()
+      else avisarHoja({ tel, id, estado: r?.incierto ? 'duda' : 'error', msg: r?.error || 'No se pudo enviar la hoja' })
     }
     return r
   }
@@ -2368,7 +2383,7 @@ export default function App() {
     if (!windowOpen) return { ok: false, error: 'la ventana de 24 h está cerrada' }
     const peso = bytesDeDataUrl(hoja.imagen)
     if (peso > MAX_HOJA_BYTES) {
-      return { ok: false, error: `la hoja pesa ${(peso / 1048576).toFixed(1)} MB y WhatsApp acepta hasta 5 MB` }
+      return { ok: false, error: `la hoja pesa ${(peso / 1048576).toFixed(1)} MB y el inbox acepta hasta ${MAX_HOJA_BYTES / 1048576} MB` }
     }
     // El chat es el que está abierto, que es el mismo del pedido que se está
     // mirando: `RightPanel` cierra VER PEDIDO al cambiar de teléfono, así que
@@ -3017,10 +3032,12 @@ export default function App() {
                     donde se mira. En VERDE a pedido de Rodrigo: es "en proceso". */}
                 {hojaAqui && (
                   <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:4 }} role="status" aria-live="polite">
-                    <div style={{ background: hojaAqui.estado === 'error' ? 'rgba(248,113,113,.12)' : 'rgba(37,211,102,.12)', borderRadius:'18px 18px 4px 18px', padding:'9px 14px', border:`1px solid ${hojaAqui.estado === 'error' ? 'rgba(248,113,113,.45)' : 'rgba(37,211,102,.45)'}`, maxWidth:'85%' }}>
-                      <span style={{ color: hojaAqui.estado === 'error' ? '#f87171' : '#25d366', fontSize:12, fontWeight:800, letterSpacing:'.04em', animation: hojaAqui.estado === 'enviando' ? 'blink 1s infinite' : 'none' }}>
+                    <div style={{ background: hojaAqui.estado === 'error' ? 'rgba(248,113,113,.12)' : hojaAqui.estado === 'duda' ? 'rgba(245,158,11,.12)' : 'rgba(37,211,102,.12)', borderRadius:'18px 18px 4px 18px', padding:'9px 14px', border:`1px solid ${hojaAqui.estado === 'error' ? 'rgba(248,113,113,.45)' : hojaAqui.estado === 'duda' ? 'rgba(245,158,11,.45)' : 'rgba(37,211,102,.45)'}`, maxWidth:'85%' }}>
+                      <span style={{ color: hojaAqui.estado === 'error' ? '#f87171' : hojaAqui.estado === 'duda' ? '#fbbf24' : '#25d366', fontSize:12, fontWeight:800, letterSpacing:'.04em', animation: hojaAqui.estado === 'enviando' ? 'blink 1s infinite' : 'none' }}>
                         {hojaAqui.estado === 'ok'
                           ? `✅ FOTO DEL PEDIDO ${hojaAqui.id} ENVIADA`
+                          : hojaAqui.estado === 'duda'
+                            ? `⚠️ La foto del pedido ${hojaAqui.id} ${hojaAqui.msg}`
                           : hojaAqui.estado === 'error'
                             ? `❌ NO se envió la foto del pedido ${hojaAqui.id}: ${hojaAqui.msg || 'error desconocido'}`
                             : `📤 ENVIANDO FOTO DEL PEDIDO ${hojaAqui.id}…${enFila > 1 ? ` (+${enFila - 1} en fila)` : ''}`}
