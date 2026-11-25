@@ -261,6 +261,7 @@ export default function App() {
   const [canal,        setCanal]        = useState(CANAL_POR_DEFECTO)
   const [pendientes,   setPendientes]   = useState({})   // { phoneId: nº pendientes }
   const [showTplModal, setShowTplModal] = useState(false)  // plantilla desde el chat (fuera de 24h)
+  const [plantillaContacto, setPlantillaContacto] = useState(null) // {telefono, nombre}: contacto compartido sin chat
   // Reenviar: el mensaje elegido, el buscador de destino y el candado del envío.
   const [reenviando, setReenviando] = useState(null)
   const [buscaReenvio, setBuscaReenvio] = useState('')
@@ -1242,6 +1243,22 @@ export default function App() {
       return
     }
     openConv(telefono)
+  }
+
+  // 👤 «Abrir chat» en un CONTACTO que compartió el cliente (ContactosCard).
+  // Reusa los caminos de siempre, no inventa otro:
+  //   1/2. ya existe chat o ficha → irAResultadoBusqueda, que abre acá si está
+  //        en esta pestaña o salta con cuidado a la del otro número;
+  //   3.   número nuevo → no hay chat que abrir, y a un número que nunca escribió
+  //        solo se le puede mandar PLANTILLA: se abre el mismo modal de plantillas
+  //        (sale por la pestaña activa, que es por donde nos lo compartieron).
+  const abrirContactoCompartido = (telefono, nombre = '') => {
+    const t9 = String(telefono).replace(/\D/g, '').slice(-9)
+    if (t9.length < 7) return
+    const mismo = (t) => String(t).replace(/\D/g, '').slice(-9) === t9
+    const existente = convs.find(c => mismo(c.telefono))?.telefono || Object.keys(contacts).find(mismo)
+    if (existente) { irAResultadoBusqueda(existente); return }
+    setPlantillaContacto({ telefono: String(telefono).replace(/\D/g, ''), nombre })
   }
 
   // Desde la pestaña CONTACTOS: vuelve al chat y abre la conversación (match por
@@ -2493,7 +2510,7 @@ export default function App() {
   const displayName        = (tel) => contacts[tel]?.alias || convs.find(c=>c.telefono===tel)?.nombre || contacts[tel]?.nombre || tel
 
   ultimasRef.current = {
-    openConv, responderA, irACita, reaccionar, setReenviando, irAResultadoBusqueda, abrirChatDesdeContactos,
+    openConv, responderA, irACita, reaccionar, setReenviando, irAResultadoBusqueda, abrirChatDesdeContactos, abrirContactoCompartido,
     crearPedidoDesde: (datos) => {
       setPrefillPedido({ telefono: activeConv?.telefono, datos: prefillDeFormulario(datos), n: Date.now() })
       if (window.matchMedia?.('(max-width: 767px)').matches) setShowRight(true)
@@ -3007,7 +3024,8 @@ export default function App() {
                         onReaccionar={windowOpen && puedeReaccionar(msg) ? (emoji) => ultimasRef.current.reaccionar(msg, emoji) : null}
                         onIrACita={(id) => ultimasRef.current.irACita(id)}
                         onCrearPedido={(datos) => ultimasRef.current.crearPedidoDesde(datos)}
-                        onUsarFoto={(destino, url) => ultimasRef.current.usarFotoEnPedido(destino, url)} />
+                        onUsarFoto={(destino, url) => ultimasRef.current.usarFotoEnPedido(destino, url)}
+                        onAbrirContacto={(tel, nombre) => ultimasRef.current.abrirContactoCompartido(tel, nombre)} />
                     </div>
                   )
                       })}
@@ -3366,6 +3384,15 @@ export default function App() {
       {adminEtiquetas && (
         <AdminEtiquetas etiquetas={etiquetas} onCrear={crearEtiqueta} onEditar={editarEtiqueta}
           onCerrar={() => setAdminEtiquetas(false)} />
+      )}
+      {/* 👤 Contacto compartido con un número que todavía no tiene chat: plantilla */}
+      {plantillaContacto && (
+        <PlantillaModal
+          telefono={plantillaContacto.telefono}
+          nombre={plantillaContacto.nombre}
+          onClose={() => setPlantillaContacto(null)}
+          flash={(m) => { setTplToast(m); setTimeout(() => setTplToast(null), 3000) }}
+        />
       )}
       {tplToast && (
         <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:C.surface2, border:`1px solid ${C.border2}`, color:C.cream, padding:'10px 18px', borderRadius:10, fontSize:13, fontWeight:700, zIndex:600, boxShadow:'0 8px 30px rgba(0,0,0,.6)', maxWidth:'86vw', textAlign:'center' }}>{tplToast}</div>
